@@ -2,7 +2,21 @@
 
 Airfield charts for DCS World, built from the game's own data.
 
-**Status: capture tooling.** The DCS F10 map (Alt mode) draws all the pavement of an airfield as flat fills, along with buildings, guidance lines and parking numbers. This repository contains the tool that captures that map, base by base, in the DCS terrain frame (`x` North, `z` East, in metres). Converting the captures into a vector chart is the next work item.
+**Status: work in progress.** The DCS F10 map (Alt mode) draws all the pavement of an airfield as flat fills, along with buildings, guidance lines and parking numbers. This repository contains the tool that captures that map, base by base, in the DCS terrain frame (`x` North, `z` East, in metres). The whole Syria theatre is captured (80 airbases, 144 heliports). Turning the captures into vector charts works in a prototype, shown below; the renderer is not in this repository yet.
+
+The goal is to share a complete set of charts for every airfield, as PDF and PNG, ready for print and for the DCS kneeboard.
+
+## Work in progress: first charts
+
+Early mock-ups, generated with no manual drawing: pavement and buildings are vectorised from the F10 capture; runways are detected from their markings; runway designators, parking positions and numbers, and tower frequencies come from the game data (read through [pydcs](https://github.com/pydcs/dcs)). Hardened shelters are recognised on the map. **Not final** — text sizes, taxiway names, magnetic bearings, ILS/TACAN data and the page layout are still being worked on.
+
+| Konya (Syria) | Ramat David (Syria) |
+|---|---|
+| ![Konya, work in progress](docs/examples/konya_wip.png) | ![Ramat David, work in progress](docs/examples/ramat_david_wip.png) |
+
+Detail view, Konya main apron:
+
+![Konya apron detail, work in progress](docs/examples/konya_detail_wip.png)
 
 ## Contents
 
