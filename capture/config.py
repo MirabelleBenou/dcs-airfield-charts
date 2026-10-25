@@ -8,7 +8,8 @@ Ordre de recherche du fichier JSON :
   2. variable d'environnement  DCS_CHARTS_CONFIG
   3. config.json dans le dossier de ce fichier (capture/config.json)
 
-Cles : work_dir (obligatoire), dcs_install (obligatoire), screen (facultatif : [largeur, hauteur]).
+Cles : work_dir (obligatoire), dcs_install (obligatoire), screen (facultatif : [largeur, hauteur]),
+annee (facultatif : annee de la declinaison magnetique du rendu, defaut 1985), osm_dir (facultatif : defaut <work_dir>/osm).
 Modele : config.example.json.
 """
 import json
@@ -29,6 +30,8 @@ class Config(NamedTuple):
     terrains: Path                          # dcs_install / Mods / terrains (doit exister)
     screen: Optional[Tuple[int, int]]       # None : taille de l'ecran principal, lue par mss
     source: Path                            # fichier de configuration lu
+    annee: float = 1985.0                   # rendu : annee de la declinaison magnetique (decimale acceptee)
+    osm_dir: Optional[Path] = None          # rendu : noms de taxiways OSM (defaut : work_dir / 'osm')
 
 
 def _fail(message):
@@ -102,6 +105,18 @@ def load_config(argv, environ=None, default_path=None):
             _fail(f'Fichier de configuration {src} : "screen" doit etre [largeur, hauteur] en pixels.\n{hint}')
         screen = (s[0], s[1])
 
+    annee = 1985.0
+    if data.get('annee') is not None:
+        a = data['annee']
+        if isinstance(a, bool) or not isinstance(a, (int, float)) or not 1900 <= a <= 2100:
+            _fail(f'Fichier de configuration {src} : "annee" doit etre un nombre (par exemple 1985 ou 1987.5).\n{hint}')
+        annee = float(a)
+    osm_dir = None
+    if data.get('osm_dir') is not None:
+        if not isinstance(data['osm_dir'], str) or not data['osm_dir'].strip():
+            _fail(f'Fichier de configuration {src} : "osm_dir" doit etre un chemin.\n{hint}')
+        osm_dir = _path(data['osm_dir'])
+
     terrains = dcs_install / 'Mods' / 'terrains'
     if not terrains.is_dir():
         _fail(f'Fichier de configuration {src} : dossier des terrains introuvable : {terrains}\n'
@@ -110,4 +125,4 @@ def load_config(argv, environ=None, default_path=None):
         work_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         _fail(f'Fichier de configuration {src} : "work_dir" inutilisable : {work_dir} ({e})\n{hint}')
-    return Config(work_dir, dcs_install, terrains, screen, src), rest
+    return Config(work_dir, dcs_install, terrains, screen, src, annee, osm_dir or work_dir / 'osm'), rest

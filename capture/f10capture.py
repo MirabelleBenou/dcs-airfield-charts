@@ -52,6 +52,7 @@ N_CALIB_IMAGES = 6           # 2 coins x 3 images
 MB_PER_AIRBASE, MB_PER_HELIPORT = 60, 5
 DISK_MARGIN = 1.5
 MODES = ('map', 'alt', 'sat')
+GEOREF_VERSION = 2     # 2 : mosaic_coverage_m corrigee du recadrage de l'ecran (lot rendu-v1)
 
 
 # ---------- hook ----------
@@ -319,8 +320,8 @@ def is_heliport_file(path):
     return Path(path).stat().st_size <= MIN_RN4_BYTES
 
 
-def rn4_extent(path):
-    """Emprise d'un .rn4 (cadrage 3.3). Retourne dict ou None si aucun point.
+def rn4_points(path):
+    """Points retenus d'un .rn4 (cadrage 3.3), tableau (N, 3) de colonnes x, y, z ; (0, 3) si aucun point.
     Fichier de helistation (<= 5 Ko) : chaque triplet valide est un point, sans test du triplet suivant."""
     data = Path(path).read_bytes()
     n = len(data)
@@ -351,12 +352,18 @@ def rn4_extent(path):
     py = np.concatenate(py) if py else np.empty(0)
     pz = np.concatenate(pz) if pz else np.empty(0)
     if px.size == 0:
-        return None
+        return np.empty((0, 3))
     mx, mz = np.median(px), np.median(pz)
     sel = (np.abs(px - mx) < 6000) & (np.abs(pz - mz) < 6000)
-    px, py, pz = px[sel], py[sel], pz[sel]
-    if px.size == 0:
+    return np.stack([px[sel], py[sel], pz[sel]], axis=1)
+
+
+def rn4_extent(path):
+    """Emprise d'un .rn4 (cadrage 3.3). Retourne dict ou None si aucun point."""
+    pts = rn4_points(path)
+    if pts.shape[0] == 0:
         return None
+    px, py, pz = pts[:, 0], pts[:, 1], pts[:, 2]
     x0, x1, z0, z1 = float(px.min()), float(px.max()), float(pz.min()), float(pz.max())
     return {'x_min': x0, 'x_max': x1, 'z_min': z0, 'z_max': z1, 'y_max': float(py.max()),
             'center': [(x0 + x1) / 2, (z0 + z1) / 2], 'size_m': [x1 - x0, z1 - z0], 'n_points': int(px.size)}
@@ -477,6 +484,16 @@ def cmd_index(theatre):
     for e in airbases + heliports:
         if 'erreur' in e:
             print('  ERREUR', e['name'], e['kind'], e['erreur'])
+
+
+def corrected_coverage(cover, mpp):
+    """Georeferencement (cadrage 4.1) : la mosaique place chaque image comme si son centre etait la camera, alors que le
+    recadrage de l'ecran n'est pas centre (marges haut M_T, droite M_R). Le contenu est donc decale : x_min et x_max
+    diminuent de (M_T - M_B)/2 x mpp, z_min et z_max de (M_R - M_L)/2 x mpp."""
+    dx = (MARGIN_T - MARGIN_B) / 2 * mpp
+    dz = (MARGIN_R - MARGIN_L) / 2 * mpp
+    return {'x_min': cover['x_min'] - dx, 'x_max': cover['x_max'] - dx,
+            'z_min': cover['z_min'] - dz, 'z_max': cover['z_max'] - dz}
 
 
 def build_mosaic(tiles, fw, fh, odir, mpp):
@@ -663,7 +680,8 @@ def capture_base(theatre, base, strict=False, prog=None):
     total = time.perf_counter() - T0
     (odir / 'tiles.json').write_text(json.dumps(tiles, indent=1), encoding='utf-8')
     W, H, x_top, z_left = build_mosaic(tiles, fw, fh, odir, MPP)
-    cover = {'x_min': x_top - H * MPP, 'x_max': x_top, 'z_min': z_left, 'z_max': z_left + W * MPP}
+    cover = corrected_coverage({'x_min': x_top - H * MPP, 'x_max': x_top, 'z_min': z_left, 'z_max': z_left + W * MPP},
+                               MPP)
     meas = ({'measures': cal['measures'], 'mean': cal['mean'], 'max_spread_rel': cal['max_spread_rel']}
             if cal else None)
     base_json = {'base': rn4.stem, 'theatre': theatre, 'kind': kind, 'calibrated': cal is not None,
@@ -679,6 +697,7 @@ def capture_base(theatre, base, strict=False, prog=None):
                  'alt_cmd': alt, 'y_max_rn4': ext['y_max'], 'm_per_px_predicted': mpp_pred,
                  'm_per_px_measured': meas,
                  'm_per_px': MPP, 'align_deg': cal['align_deg_max'] if cal else None,
+                 'georef_version': GEOREF_VERSION,
                  'margins_px_lthr_b': [MARGIN_L, MARGIN_T, MARGIN_R, MARGIN_B],
                  'tile_px': [usable_px()[0], usable_px()[1]], 'mosaic_px': [W, H],
                  'n_captures': len(tiles), 'n_not_stable': sum(1 for t in tiles if not t['stable']),

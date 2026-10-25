@@ -1,5 +1,7 @@
 {
   "work_dir": "~/DCS_Airfield_Charts",
   "dcs_install": "C:/Program Files/Eagle Dynamics/DCS World",
-  "screen": [1920, 1080]
+  "screen": [1920, 1080],
+  "annee": 1985,
+  "osm_dir": "~/DCS_Airfield_Charts/osm"
 }
