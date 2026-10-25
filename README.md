@@ -27,6 +27,10 @@ Les chemins (`ROOT`, `TERRAINS`) et la taille d'écran sont pour l'instant écri
 - Image alignée sur la grille DCS (écart < 0,01°), raccords entre images ≤ 1 px, environ 1 s par image.
 - Échelle : 0,33555 mm/px par mètre d'altitude caméra. **DCS maintient la caméra F10 à au moins ~500 m du sol** ; d'où l'altitude `max(1350, sol + 700)` et un étalonnage à chaque base.
 
+## Licence
+
+MIT — voir `LICENSE`.
+
 ## Remerciements
 
 Le principe — piloter la caméra F10 depuis `Export.lua` et capturer l'écran — vient du générateur de cartes de [DCS Olympus](https://github.com/Pax1601/DCSOlympus). Aucun code n'en est repris.
