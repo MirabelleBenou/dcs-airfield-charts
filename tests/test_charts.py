@@ -40,8 +40,6 @@ def test_c1_konya_two_runways_east_one_ok_west_to_the_west(charts):
     assert np.mean([r_west.p0[1], r_west.p1[1]]) < np.mean([r_east.p0[1], r_east.p1[1]])      # 01L/19R la plus a l'ouest
 
 
-@pytest.mark.xfail(strict=True, reason='ECART C1 (addendum 2) : avec le prolongement borne a 900 m au-dela des bouts de la '
-                   'candidate de Hough (1 221 m sur 3 368 m), la piste 01L/19R mesure 3 036 m au lieu de 3 368 m (+- 20)')
 def test_c1_konya_west_runway_length(charts):
     data = charts['Konya'][0]
     r_west = data.runways[{e.name: e for e in data.ends}['01L'].rw]
@@ -282,3 +280,47 @@ def test_c8_files(charts, tmp_path):
         out = tmp_path / f'{base}_charts.pdf'
         export.merge_pdfs(pdfs, out)
         assert len(PdfReader(str(out)).pages) == expected[base]
+
+
+# ---------- C17 (addendum 3) ----------
+def rotation_of(g):
+    m = re.search(r'rotate\(([-\d.]+)\)', g)
+    return float(m.group(1))
+
+
+@pytest.mark.parametrize('base', ['Konya', 'Adana', 'Ramat_David'])
+def test_c17_bearing_texts_perpendicular_not_upside_down_and_clear_of_runways(charts, base):
+    from shapely.geometry import Polygon
+    data, pages = charts[base]
+    info = pages[0].info
+    runways = [Polygon(p) for p in info['runway_polys']]
+    designators = [Polygon(p) for p in info['designator_polys']]
+    assert len(runways) == len(data.runways) and len(info['bearing_boxes']) == len(data.ends)
+    for name, box in info['bearing_boxes']:
+        poly = Polygon(box)
+        assert not any(poly.intersects(r) for r in runways), (base, name)
+        assert not any(poly.intersects(d) for d in designators), (base, name)
+    # orientation : ligne de base perpendiculaire a l'axe (meme angle que le designateur, a 180 deg pres), jamais a l'envers
+    root = ET.fromstring(pages[0].svg.encode('utf-8'))
+    layer = [g for g in root if g.get(INK_LABEL) == 'Runway bearings'][0]
+    rots = [float(re.search(r'rotate\(([-\d.]+)\)', g.get('transform')).group(1)) for g in layer]
+    assert len(rots) == len(data.ends)
+    assert all(-90.0 <= r <= 90.0 for r in rots)
+    for e, r in zip(data.ends, rots):
+        d = (r - e.az_grid) % 180.0
+        assert min(d, 180.0 - d) < 0.02, (base, e.name)
+
+
+@pytest.mark.parametrize('base', ['Konya', 'Adana', 'Ramat_David'])
+def test_c17_parking_symbol_radii(charts, base):
+    pages = charts[base][1]
+    root = ET.fromstring(pages[0].svg.encode('utf-8'))
+    plan = [g for g in root if g.get(INK_LABEL) == 'Parking']
+    if plan:
+        radii = {float(c.get('r')) for c in plan[0].iter(SVG + 'circle')}
+        assert radii == {0.45}
+    for p in pages:
+        r = ET.fromstring(p.svg.encode('utf-8'))
+        for ins in [g for g in r if g.get(INK_LABEL) == 'Insets']:
+            circles = [c for c in ins.iter(SVG + 'circle') if c.get('r') not in ('2.5',)]       # repere cercle P<n> du plan : 2,5
+            assert {float(c.get('r')) for c in circles} <= {0.6}

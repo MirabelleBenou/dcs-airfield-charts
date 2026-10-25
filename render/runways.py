@@ -29,7 +29,7 @@ THRESH_PAVED_FRACTION = 0.30
 THRESH_WIDEN_M = 6.0
 EXTEND_GAP_M = HOUGH_GAP_M          # interruption toleree en prolongeant le candidat le long de l'axe
 EXTEND_STEP_M = 4.0
-EXTEND_MAX_M = 900.0                # prolongement maximal au-dela de chaque bout de la candidate de Hough (addendum 2)
+EXTEND_MAX_M = 6000.0               # prolongement maximal de chaque cote de la candidate (addendum 3 : borne de 900 m levee)
 
 
 @dataclass

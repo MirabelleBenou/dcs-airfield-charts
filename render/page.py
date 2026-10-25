@@ -17,7 +17,9 @@ VERSION = 'v1'
 PLAN_MARGIN_M = 80.0
 ROW_PITCH, LAST_ROW_Y = 3.46, 194.2
 LEGEND_Y, FOOTER_RULE_Y, FOOTER_Y = 198.9, 201.2, 203.7
-SYM = {'open': 0.55, 'shelter': 0.80, 'heli': 0.68}      # rayons (mm) des symboles de parking sur le plan
+SYM_PLAN_R = 0.45       # rayon (mm) des trois symboles de parking sur le 10-9 (addendum 3)
+SYM_INSET_R = 0.6       # rayon (mm) dans les encarts
+STROKE_SHELTER, STROKE_HELI = 0.2, 0.25
 CORNER_PAD = 2.0
 CORNER_PAD_Y = 5.5
 FRAME_CELL = layout.CELL_MM
@@ -65,8 +67,18 @@ def runway_polygon(rw, grow=0.0):
     return [p0 + n * h, p1 + n * h, p1 - n * h, p0 - n * h]
 
 
+def rot_box(cx, cy, w, h, ang_deg):
+    """Rectangle w x h (mm) centre en (cx, cy), tourne de ang_deg (sens horaire a l'ecran, comme rotate() en SVG) :
+    quatre coins. La ligne de base du texte suit (cos a, sin a)."""
+    a = math.radians(ang_deg)
+    bx, by = math.cos(a), math.sin(a)
+    ux, uy = by, -bx                                  # haut du texte
+    return [(cx + sx * bx * w / 2 + sy * ux * h / 2, cy + sx * by * w / 2 + sy * uy * h / 2)
+            for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+
+
 # ---------- scene (plan et encarts) ----------
-def draw_scene(view, data, rings_pav, rings_bld, parkings, layers, sym=1.0, mark_w=0.30, designators=True):
+def draw_scene(view, data, rings_pav, rings_bld, parkings, layers, sym_r=SYM_PLAN_R, mark_w=0.30, designators=True, boxes=None):
     """Remplit `layers` (dict calque -> liste de chaines) : revetement, pistes, marquages, batiments, parkings."""
     s = view.s
     if rings_pav:
@@ -76,6 +88,8 @@ def draw_scene(view, data, rings_pav, rings_bld, parkings, layers, sym=1.0, mark
     for i, rw in enumerate(data.runways):
         poly = [view.pt(*p) for p in runway_polygon(rw)]
         runs.append('<polygon points="' + ' '.join(f'{f(a)},{f(b)}' for a, b in poly) + f'" fill="{INK}"/>')
+        if boxes is not None:
+            boxes.append(('runway', poly))
         u, n, L = rw_axes(rw)
         P0 = np.array(rw.p0)
         a, b = view.pt(*(P0 + u * 200)), view.pt(*(P0 + u * (L - 200)))
@@ -111,6 +125,8 @@ def draw_scene(view, data, rings_pav, rings_bld, parkings, layers, sym=1.0, mark
                 continue
             marks.append(f'<g transform="translate({f(X)} {f(Y)}) rotate({f(e.az_grid, 2)})">'
                          + text(0, fs * CAP_HEIGHT / 2, e.name, fs, 'bold', '#FFFFFF', 'middle') + '</g>')
+            if boxes is not None:
+                boxes.append(('designator', rot_box(X, Y, text_width(e.name, 'bold', fs), fs * CAP_HEIGHT, e.az_grid)))
     layers['Runways'].extend(runs)
     layers['Runway markings'].extend(marks)
     if rings_bld:
@@ -118,13 +134,13 @@ def draw_scene(view, data, rings_pav, rings_bld, parkings, layers, sym=1.0, mark
         layers['Buildings'].append(f'<path d="{d}" fill="{BUILD}" fill-rule="evenodd"/>')
     for p in parkings:
         X, Y = view.pt(p.x, p.z)
-        r = SYM[p.kind] * sym
+        r = sym_r
         if p.kind == 'open':
             layers['Parking'].append(circle(X, Y, r, INK))
         elif p.kind == 'shelter':
-            layers['Parking'].append(circle(X, Y, r, '#FFFFFF', INK, 0.25 * sym))
+            layers['Parking'].append(circle(X, Y, r, '#FFFFFF', INK, STROKE_SHELTER))
         else:
-            layers['Parking'].append(circle(X, Y, r, '#FFFFFF', INK, 0.3 * sym))
+            layers['Parking'].append(circle(X, Y, r, '#FFFFFF', INK, STROKE_HELI))
 
 
 def number_elems(parkings, view, size, dot_r, clip=None):
@@ -288,7 +304,7 @@ def footer(doc, data, osm):
     doc.add(L, text(X1, FOOTER_Y, 'PAS POUR LA NAVIGATION RÉELLE', pt(6.1), 'bold', INK, 'end'))
 
 
-def legend(doc, y, x_left=None, x_right=None, note=None):
+def legend(doc, y, x_left=None, x_right=None, note=None, sym_r=SYM_PLAN_R):
     """Legende des parkings (symboles dessines, pas de glyphes de police) ; alignee a gauche (x_left) ou a droite (x_right) ;
     `note` : texte secondaire aligne a droite sur la meme ligne."""
     L = 'Runway table'
@@ -301,12 +317,13 @@ def legend(doc, y, x_left=None, x_right=None, note=None):
     for (kind, t), w in zip(items, widths):
         cx, cy = x + 1.2, y - 1.0
         if kind == 'open':
-            doc.add(L, circle(cx, cy, 0.8, INK))
+            doc.add(L, circle(cx, cy, sym_r, INK))
         elif kind == 'shelter':
-            doc.add(L, rect(cx - 1.3, cy - 1.3, 2.6, 2.6, BUILD, extra='rx="0.6"'))
-            doc.add(L, circle(cx, cy, 0.8, '#FFFFFF', INK, 0.25))
+            h = sym_r * 1.9
+            doc.add(L, rect(cx - h, cy - h, 2 * h, 2 * h, BUILD, extra='rx="0.6"'))
+            doc.add(L, circle(cx, cy, sym_r, '#FFFFFF', INK, STROKE_SHELTER))
         else:
-            doc.add(L, circle(cx, cy, 0.85, '#FFFFFF', INK, 0.3))
+            doc.add(L, circle(cx, cy, sym_r, '#FFFFFF', INK, STROKE_HELI))
         doc.add(L, text(x + 3.6, y, t, size, 'regular', INK2))
         x += w + gap
     if note:

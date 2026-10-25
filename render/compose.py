@@ -7,9 +7,9 @@ from shapely.geometry import Polygon
 
 from . import geo, layout, vector
 from .fonts import CAP_HEIGHT, pt, text_width
-from .page import (CORNER_PAD, CORNER_PAD_Y, FRAME_CELL, FRAME_W, FRAME_X, FT, LAST_ROW_Y, LEGEND_Y, PAGE_H, PAGE_W, PLAN_MARGIN_M,
+from .page import (SYM_INSET_R, SYM_PLAN_R, CORNER_PAD, CORNER_PAD_Y, FRAME_CELL, FRAME_W, FRAME_X, FT, LAST_ROW_Y, LEGEND_Y, PAGE_H, PAGE_W, PLAN_MARGIN_M,
                    ROW_PITCH, X0, X1, PageOut, View, cells_from_mask, draw_scene, edge_ticks, footer, header,
-                   legend, north_block, number_elems, rw_axes, runway_table, runway_polygon, scale_block)
+                   legend, north_block, number_elems, rot_box, rw_axes, runway_table, runway_polygon, scale_block)
 from .svgdoc import BAND, INK, INK2, TAXI, Doc, circle, f, line, rect, slug, text
 
 NORTH_WH = (16.0, 20.0)
@@ -19,6 +19,7 @@ RW_EXT_M, RW_EXT_W = 120.0, 8.0
 RUNWAY_FREE_M = 20.0
 PARKING_FREE_MM = 2.5
 NUM_SIZE = pt(6.0)
+BEARING_GAP_M = 70.0
 
 
 def ground_bbox(rings, parkings):
@@ -137,8 +138,8 @@ def draw_inset(doc, box, data, parkings_all, clip_prefix='clip-inset'):
         rings_b = vector.mask_rings(data.masks['bld'], g, vector.BUILDING_SIMPLIFY_M, (r0, r1, c0, c1))
     members = [parkings_all[i] for i in z.members]
     lay = {k: [] for k in ('Pavement', 'Runways', 'Runway markings', 'Buildings', 'Parking')}
-    draw_scene(view, data, rings_p, rings_b, members, lay, sym=1.25, mark_w=0.35)
-    nums, _ = number_elems(members, view, NUM_SIZE, 0.8 * 1.25,
+    draw_scene(view, data, rings_p, rings_b, members, lay, sym_r=SYM_INSET_R, mark_w=0.35)
+    nums, _ = number_elems(members, view, NUM_SIZE, SYM_INSET_R,
                            clip=(box.x, box.y, box.x + box.w, box.y + box.h))
     cid = f'{clip_prefix}-{z.label}'
     doc.defs.append(f'<clipPath id="{cid}"><rect x="{f(box.x)}" y="{f(box.y)}" width="{f(box.w)}" height="{f(box.h)}"/></clipPath>')
@@ -228,28 +229,35 @@ def build_pages(data, log=print):
 
     # ---- plan
     lay = {k: [] for k in ('Pavement', 'Runways', 'Runway markings', 'Buildings', 'Parking')}
-    draw_scene(view, data, data.pav_rings, data.bld_rings, parkings, lay)
+    scene_boxes = []
+    draw_scene(view, data, data.pav_rings, data.bld_rings, parkings, lay, boxes=scene_boxes)
     for k, v in lay.items():
         for e in v:
             doc.add(k, e)
     n_numbers = 0
     if mode == 1:
-        nums, n_numbers = number_elems(parkings, view, NUM_SIZE, SYM_R(), clip=None)
+        nums, n_numbers = number_elems(parkings, view, NUM_SIZE, SYM_PLAN_R, clip=None)
         for e in nums:
             doc.add('Parking numbers', e)
     navaids(doc, view, frame, data)
+    bear_boxes = []
+    size_b = pt(6.4)
     for e in data.ends:
+        # ligne de base perpendiculaire a l'axe (haut du texte = sens d'atterrissage, comme le designateur), ramenee dans
+        # [-90 ; +90] ; centre dans l'axe a 70 m + la demi-hauteur du texte (en m a l'echelle du plan) avant le seuil
         u = np.array([math.cos(math.radians(e.az_grid)), math.sin(math.radians(e.az_grid))])
-        q = np.array(e.pos) - u * 70.0
+        half_h_m = size_b * CAP_HEIGHT / 2 / s
+        q = np.array(e.pos) - u * (BEARING_GAP_M + half_h_m)
         X, Y = view.pt(*q)
-        rot = math.degrees(math.atan2(-u[0], u[1]))
-        if rot > 90:
-            rot -= 180
-        elif rot <= -90:
-            rot += 180
-        size = pt(6.4)
+        rot = e.az_grid % 360.0
+        if 90.0 < rot <= 270.0:
+            rot -= 180.0
+        elif rot > 270.0:
+            rot -= 360.0
+        label = f'{e.mag:05.1f}°'
         doc.add('Runway bearings', f'<g transform="translate({f(X)} {f(Y)}) rotate({f(rot, 2)})">'
-                + text(0, size * CAP_HEIGHT / 2, f'{e.mag:05.1f}°', size, 'bold', INK, 'middle') + '</g>')
+                + text(0, size_b * CAP_HEIGHT / 2, label, size_b, 'bold', INK, 'middle') + '</g>')
+        bear_boxes.append((e.name, rot_box(X, Y, text_width(label, 'bold', size_b), size_b * CAP_HEIGHT, rot)))
 
     # ---- encarts sur le plan
     inset_rects = []
@@ -269,7 +277,7 @@ def build_pages(data, log=print):
         ways = []
         for w in data.osm_ways:
             ways.append((w['ref'], view.pts(w['pts_xz']), w['length']))
-        forbidden = [rn, rs] + inset_rects
+        forbidden = [(r[0] - 1.5, r[1] - 1.5, r[2] + 1.5, r[3] + 1.5) for r in (rn, rs)] + inset_rects
         for rw in data.runways:
             u, n, L = rw_axes(rw)
             P0, P1 = np.array(rw.p0) - u * RW_EXT_M, np.array(rw.p1) + u * RW_EXT_M
@@ -305,7 +313,9 @@ def build_pages(data, log=print):
 
     pages = [PageOut('10-9', doc.render(), {'mode': mode, 'zones': len(zones), 'labels': placed, 'n_numbers': n_numbers,
                                           'scale': s, 'frame': frame, 'f': decision.get('f'),
-                                          'reduced': decision.get('reduced', {}), 'inset_rects': inset_rects})]
+                                          'reduced': decision.get('reduced', {}), 'inset_rects': inset_rects,
+                                          'bearing_boxes': bear_boxes, 'runway_polys': [b for k, b in scene_boxes if k == 'runway'],
+                                          'designator_polys': [b for k, b in scene_boxes if k == 'designator']})]
 
     # ---- pages de parkings
     if mode == 3:
@@ -317,12 +327,8 @@ def build_pages(data, log=print):
             n = 0
             for b in pg:
                 n += draw_inset(d2, b, data, parkings)
-            legend(d2, 199.3, x_left=X0, note='NUMÉROS DE PARKING TELS QUE DANS DCS')
+            legend(d2, 199.3, x_left=X0, note='NUMÉROS DE PARKING TELS QUE DANS DCS', sym_r=SYM_INSET_R)
             footer(d2, data, False)
             pages.append(PageOut(f'10-9{letter}', d2.render(), {'insets': [b.zone.label for b in pg], 'n_numbers': n,
                                                               'k': {b.zone.label: b.k for b in pg}}))
     return pages
-
-
-def SYM_R():
-    return 0.8
