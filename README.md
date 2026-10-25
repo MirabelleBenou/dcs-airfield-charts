@@ -9,7 +9,7 @@ Airfield charts for DCS World, built from the game's own data.
 | Path | Role |
 |---|---|
 | `capture/hook/ChartsCaptureHook.lua` | DCS export hook: a small local server (`127.0.0.1:47123`) that places the F10 camera directly above a point, with its axes aligned to the DCS grid; releases the camera after 5 s without a command |
-| `capture/f10capture.py` | captures a whole base: extent read from its `.rn4`, camera altitude adapted to the terrain, scale calibration, image grid, mosaic; theatre index |
+| `capture/f10capture.py` | captures a whole base: extent read from its `.rn4`, camera altitude adapted to the terrain, scale calibration (falls back to the predicted scale if calibration fails), image grid, mosaic; `index <Theatre>` lists every airbase and heliport of a theatre; `theatre <Theatre>` captures them all in one resumable pass (about 45 min for Syria) |
 | `capture/f10probe.py` | the original probe (link, stabilisation, scale, alignment) |
 
 ## Installation (Windows)

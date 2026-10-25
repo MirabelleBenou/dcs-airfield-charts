@@ -5,11 +5,14 @@ Usage (python -I f10capture.py ...) :
   capture <Theatre> <Base> [<Base> ...]  -> out/<theatre>/<Base>/{tiles/,tiles.json,mosaic.png,base.json}
   modes   <Theatre> <Base> [map|alt|sat] -> out/<theatre>/<Base>/modes/<mode>.png (une capture par mode ;
                                             sans mode : les trois, avec attente de Entree entre chaque)
+  theatre <Theatre> [--force]            -> capture de tout l'index (bases et helistations), voir CADRAGE_CAPTURE_SYRIA_v1.md
+  disk    <Theatre>                      -> volume estime des entrees restantes et place libre du disque
 Option : --config <chemin> (sinon variable DCS_CHARTS_CONFIG, sinon capture/config.json ; voir config.example.json)
 """
 import ctypes
 import json
 import math
+import shutil
 import socket
 import sys
 import time
@@ -45,6 +48,9 @@ TIMEOUT_S = 10.0
 KEEPALIVE_S = 2.0      # le hook relache la camera apres 5 s sans requete
 EST_PER_CAPTURE_S = 1.03
 MIN_RN4_BYTES = 5 * 1024
+N_CALIB_IMAGES = 6           # 2 coins x 3 images
+MB_PER_AIRBASE, MB_PER_HELIPORT = 60, 5
+DISK_MARGIN = 1.5
 MODES = ('map', 'alt', 'sat')
 
 
@@ -233,7 +239,7 @@ def grab():
     img = np.asarray(shot)[:, :, :3][:, :, ::-1].copy()   # BGRA -> RGB
     screen = screen_size()
     if (img.shape[1], img.shape[0]) != screen:
-        raise SystemExit(f'ARRET : ecran {img.shape[1]}x{img.shape[0]} au lieu de {screen[0]}x{screen[1]}')
+        raise AskCdP(f'ARRET : ecran {img.shape[1]}x{img.shape[0]} au lieu de {screen[0]}x{screen[1]}')
     return img
 
 
@@ -309,16 +315,30 @@ def _valid(x, y, z):
                 & (np.abs(x) > 1000) & (np.abs(x) < 3e6) & (np.abs(z) > 1000) & (np.abs(z) < 3e6))
 
 
+def is_heliport_file(path):
+    return Path(path).stat().st_size <= MIN_RN4_BYTES
+
+
 def rn4_extent(path):
-    """Emprise d'un .rn4 (cadrage 3.3). Retourne dict ou None si aucun point."""
+    """Emprise d'un .rn4 (cadrage 3.3). Retourne dict ou None si aucun point.
+    Fichier de helistation (<= 5 Ko) : chaque triplet valide est un point, sans test du triplet suivant."""
     data = Path(path).read_bytes()
     n = len(data)
+    heli = n <= MIN_RN4_BYTES
     px, py, pz = [], [], []
     for a in range(8):
         m = (n - a) // 8
-        if m < 6:
+        if m < (3 if heli else 6):
             continue
         arr = np.frombuffer(data, dtype='<f8', count=m, offset=a)
+        if heli:
+            x, y, z = arr[:m - 2], arr[1:m - 1], arr[2:m]
+            with np.errstate(all='ignore'):
+                keep = _valid(x, y, z)
+            px.append(x[keep])
+            py.append(y[keep])
+            pz.append(z[keep])
+            continue
         x, y, z = arr[:m - 5], arr[1:m - 4], arr[2:m - 3]
         x2, y2, z2 = arr[3:m - 2], arr[4:m - 1], arr[5:m]
         with np.errstate(all='ignore'):
@@ -396,39 +416,67 @@ def find_rn4(theatre, base):
     raise SystemExit(f'ARRET : {base}.rn4 introuvable dans {d}')
 
 
+def visit_order(entries):
+    """Plus proche voisin depuis l'entree la plus au nord-ouest (x - z maximal : x = Nord, z = Est).
+    Les entrees sans point (pas de centre) sont placees a la fin."""
+    pts = [e for e in entries if 'center' in e]
+    rest = [e['name'] for e in entries if 'center' not in e]
+    if not pts:
+        return rest
+    cur = max(pts, key=lambda e: (e['center'][0] - e['center'][1], e['name']))
+    pts.remove(cur)
+    order = [cur['name']]
+    while pts:
+        cx, cz = cur['center']
+        cur = min(pts, key=lambda e: (math.hypot(e['center'][0] - cx, e['center'][1] - cz), e['name']))
+        pts.remove(cur)
+        order.append(cur['name'])
+    return order + rest
+
+
 def cmd_index(theatre):
-    entries, skipped = [], 0
+    airbases, heliports = [], []
     for p in sorted(rn4_dir(theatre).glob('*.rn4'), key=lambda q: q.name.lower()):
-        if p.stat().st_size <= MIN_RN4_BYTES:
-            skipped += 1
-            continue
+        size = p.stat().st_size
+        kind = 'heliport' if is_heliport_file(p) else 'airbase'
         ext = rn4_extent(p)
         if ext is None:
-            entries.append({'name': p.stem, 'file_bytes': p.stat().st_size, 'erreur': 'aucun point valide'})
-            continue
-        alt, mpp = cam_params(ext)
-        g = plan_grid(zone_of(ext), mpp)
-        n = g['nrow'] * g['ncol']
-        entries.append({'name': p.stem, 'file_bytes': p.stat().st_size,
-                        'alt_cmd': alt, 'y_max_rn4': ext['y_max'], 'm_per_px_predicted': round(mpp, 5),
-                        'center': ext['center'], 'extent': {k: ext[k] for k in ('x_min', 'x_max', 'z_min', 'z_max')},
-                        'size_m': ext['size_m'], 'grid': [g['nrow'], g['ncol']], 'n_captures': n,
-                        'est_duration_s': round(n * EST_PER_CAPTURE_S, 1)})
-    ok = [e for e in entries if 'erreur' not in e]
-    res = {'theatre': theatre, 'rule': 'cadrage 3.3/3.4 + addendum 2 (altitude par base, echelle prevue)',
+            e = {'name': p.stem, 'kind': kind, 'file_bytes': size, 'erreur': 'aucun point valide'}
+        else:
+            alt, mpp = cam_params(ext)
+            g = plan_grid(zone_of(ext), mpp)
+            n = g['nrow'] * g['ncol']
+            e = {'name': p.stem, 'kind': kind, 'file_bytes': size, 'n_points_rn4': ext['n_points'],
+                 'alt_cmd': alt, 'y_max_rn4': ext['y_max'], 'm_per_px_predicted': round(mpp, 5),
+                 'center': ext['center'], 'extent': {k: ext[k] for k in ('x_min', 'x_max', 'z_min', 'z_max')},
+                 'size_m': ext['size_m'], 'grid': [g['nrow'], g['ncol']], 'n_captures': n,
+                 'n_calib_images': N_CALIB_IMAGES if kind == 'airbase' else 0,
+                 'est_duration_s': round(n * EST_PER_CAPTURE_S, 1)}
+        (airbases if kind == 'airbase' else heliports).append(e)
+    ok_a = [e for e in airbases if 'erreur' not in e]
+    ok_h = [e for e in heliports if 'erreur' not in e]
+    grid_a, grid_h = sum(e['n_captures'] for e in ok_a), sum(e['n_captures'] for e in ok_h)
+    calib = N_CALIB_IMAGES * len(ok_a)
+    res = {'theatre': theatre, 'rule': 'cadrage 3.3/3.4 + addendum 2 (altitude par base, echelle prevue) + capture-syria-v1',
            'alt_rule': f'max({ALT_MIN:.0f}, y_max + {ALT_ABOVE_GROUND:.0f})', 'm_per_px_per_alt_m': MPP_PER_ALT_M,
-           'n_bases': len(entries), 'n_ignored_small_rn4': skipped,
-           'total_n_captures': sum(e['n_captures'] for e in ok),
-           'total_est_duration_s': round(sum(e['est_duration_s'] for e in ok), 1),
-           'bases': entries}
+           'n_bases': len(airbases), 'n_heliports': len(heliports),
+           'n_entries_without_point': len(airbases) + len(heliports) - len(ok_a) - len(ok_h),
+           'total_n_captures_airbases': grid_a, 'total_n_captures_heliports': grid_h,
+           'total_n_captures': grid_a + grid_h, 'total_n_calib_images': calib,
+           'total_n_images': grid_a + grid_h + calib,
+           'est_s_per_image': EST_PER_CAPTURE_S,
+           'total_est_duration_s': round((grid_a + grid_h + calib) * EST_PER_CAPTURE_S, 1),
+           'order': visit_order(ok_a + ok_h) + [e['name'] for e in airbases + heliports if 'erreur' in e],
+           'bases': airbases, 'heliports': heliports}
     out = out_theatre(theatre)
     out.mkdir(parents=True, exist_ok=True)
     (out / 'index.json').write_text(json.dumps(res, indent=1), encoding='utf-8')
-    print(f"{theatre}: {len(entries)} bases (> 5 Ko), {skipped} rn4 ignores, "
-          f"{res['total_n_captures']} captures, ~{res['total_est_duration_s'] / 60:.1f} min")
-    for e in entries:
+    print(f"{theatre}: {len(airbases)} bases, {len(heliports)} helistations ({res['n_entries_without_point']} sans point), "
+          f"{res['total_n_captures']} images de grille ({grid_a} bases + {grid_h} helistations) + {calib} d'etalonnage "
+          f"= {res['total_n_images']} images, ~{res['total_est_duration_s'] / 60:.1f} min")
+    for e in airbases + heliports:
         if 'erreur' in e:
-            print('  ERREUR', e['name'], e['erreur'])
+            print('  ERREUR', e['name'], e['kind'], e['erreur'])
 
 
 def build_mosaic(tiles, fw, fh, odir, mpp):
@@ -449,6 +497,15 @@ def build_mosaic(tiles, fw, fh, odir, mpp):
 
 class AskCdP(Exception):
     """Arret necessitant une QUESTION au CdP (ADDENDUM 1)."""
+
+
+class EntryFailure(AskCdP):
+    """Echec propre a une entree (etalonnage hors tolerance, image non stable, aucun point) : la commande
+    `theatre` l'ecrit dans errors.json et passe a la suivante ; les autres commandes le traitent en QUESTION."""
+
+    def __init__(self, step, message):
+        super().__init__(message)
+        self.step = step
 
 
 def phase_shift(a, b):
@@ -479,16 +536,36 @@ def phase_shift(a, b):
     return float(dx), float(dy), peak
 
 
-def calibrate(zone, alt, mpp_pred, odir, label):
+class CalibrationFailed(Exception):
+    """Etalonnage en echec (tolerance ou image non stable) : capture_base replie sur l'echelle prevue
+    (ADDENDUM 1 capture-syria-v1). `result` : mesures obtenues (dict) ou None."""
+
+    def __init__(self, reason, result=None):
+        super().__init__(reason)
+        self.result = result
+
+
+def calibrate(zone, alt, mpp_pred, odir, label, prog=None):
     """Etalonnage (addendum 2) : coins NO puis SE de la zone ; a chaque coin capture, +200 m en x, +200 m en z.
-    Retourne dict (mesures, moyenne, alignement). Leve AskCdP si une regle de l'addendum est enfreinte."""
+    Retourne dict (mesures, moyenne, alignement). Leve CalibrationFailed si une regle de l'addendum est enfreinte
+    ou si une image n'est pas stable."""
     corners = (('nw', zone['x_max'], zone['z_min']), ('se', zone['x_min'], zone['z_max']))
     meas, aligns, peaks, detail = [], [], [], {}
+
+    def shot(x, z):
+        if prog:
+            prog.step()
+        r = move_and_stabilize(x, z, alt)
+        if not r[3]:
+            raise CalibrationFailed(f'image non stable apres {r[1]:.1f} s (x {x:.0f}, z {z:.0f})')
+        return crop(r[0])
+
     for name, cx, cz in corners:
-        set_status(f'CAPTURE {label} calibration {name.upper()}')
-        c0 = crop(move_and_stabilize(cx, cz, alt)[0])
-        cxi = crop(move_and_stabilize(cx + CALIB_STEP_M, cz, alt)[0])
-        czi = crop(move_and_stabilize(cx, cz + CALIB_STEP_M, alt)[0])
+        if not prog:
+            set_status(f'CAPTURE {label} calibration {name.upper()}')
+        c0 = shot(cx, cz)
+        cxi = shot(cx + CALIB_STEP_M, cz)
+        czi = shot(cx, cz + CALIB_STEP_M)
         for tag, im in (('c0', c0), ('cx', cxi), ('cz', czi)):
             save_png(im, odir / 'calib' / f'{name}_{tag}.png')
         ax, ay, p1 = phase_shift(c0, cxi)     # x (Nord) +200 m
@@ -518,28 +595,45 @@ def calibrate(zone, alt, mpp_pred, odir, label):
     if not all(d['orientation_ok'] for d in detail.values()):
         problems.append('orientation image inattendue (Nord pas en haut / Est pas a droite)')
     if problems:
-        raise AskCdP(f'Etalonnage {label} : ' + ' ; '.join(problems) + f'. Mesures {[round(m, 5) for m in meas]}, '
-                     f'moyenne {mean:.5f}, prevue {mpp_pred:.5f}, pics {[round(p, 3) for p in peaks]}. '
-                     f'Details : {odir / "calib.json"}')
+        msg = (f'Etalonnage {label} : ' + ' ; '.join(problems) + f'. Mesures {[round(m, 5) for m in meas]}, '
+               f'moyenne {mean:.5f}, prevue {mpp_pred:.5f}, pics {[round(p, 3) for p in peaks]}. '
+               f'Details : {odir / "calib.json"}')
+        raise CalibrationFailed(msg, res)
     return res
 
 
-def capture_base(theatre, base):
+def capture_base(theatre, base, strict=False, prog=None):
+    """Capture d'une entree (base : etalonnee ; helistation : sans etalonnage, echelle prevue).
+    Etalonnage en echec (tolerance ou image non stable) : repli sur l'echelle prevue (calibrated false, calib_fallback).
+    strict (commande theatre) : aucun point, image de grille non stable -> EntryFailure.
+    prog : Progress de la commande theatre (STATUS a chaque image)."""
     rn4 = find_rn4(theatre, base)
+    kind = 'heliport' if is_heliport_file(rn4) else 'airbase'
     ext = rn4_extent(rn4)
     if ext is None:
+        if strict:
+            raise EntryFailure('rn4', f'aucun point valide dans {rn4}')
         raise SystemExit(f'ARRET : aucun point valide dans {rn4}')
     zone = zone_of(ext)
     alt, mpp_pred = cam_params(ext)
     odir = out_theatre(theatre) / rn4.stem
     odir.mkdir(parents=True, exist_ok=True)
-    print(f"{rn4.stem}: altitude {alt:.0f} m (y_max {ext['y_max']:.0f}), echelle prevue {mpp_pred:.4f} m/px")
-    cal = calibrate(zone, alt, mpp_pred, odir, rn4.stem)
-    MPP = cal['mean']
-    print(f"  etalonnage : {[round(m, 4) for m in cal['measures']]} -> {MPP:.5f} m/px "
-          f"(ecart max {cal['max_spread_rel'] * 100:.2f} %, vs prevue {cal['dev_vs_predicted_rel'] * 100:.2f} %, "
-          f"align {cal['align_deg_max']:.3f} deg)")
+    print(f"{rn4.stem} ({kind}): altitude {alt:.0f} m (y_max {ext['y_max']:.0f}), echelle prevue {mpp_pred:.4f} m/px")
+    cal, fallback, fallback_meas = None, None, None
+    if kind == 'airbase':
+        try:
+            cal = calibrate(zone, alt, mpp_pred, odir, rn4.stem, prog)
+        except CalibrationFailed as f:
+            fallback, fallback_meas = str(f), f.result
+            print(f"  ETALONNAGE EN ECHEC -> repli sur l'echelle prevue {mpp_pred:.5f} m/px : {fallback}")
+    MPP = cal['mean'] if cal else mpp_pred
+    if cal:
+        print(f"  etalonnage : {[round(m, 4) for m in cal['measures']]} -> {MPP:.5f} m/px "
+              f"(ecart max {cal['max_spread_rel'] * 100:.2f} %, vs prevue {cal['dev_vs_predicted_rel'] * 100:.2f} %, "
+              f"align {cal['align_deg_max']:.3f} deg)")
     g = plan_grid(zone, MPP)
+    if prog:
+        prog.set_total((prog.k if fallback else N_CALIB_IMAGES if kind == 'airbase' else 0) + g['nrow'] * g['ncol'])
     fh, fw = g['footprint_m']
     n_total = g['nrow'] * g['ncol']
     print(f"  emprise {ext['size_m'][0]:.0f}x{ext['size_m'][1]:.0f} m, grille {g['nrow']}x{g['ncol']} = {n_total} captures")
@@ -549,9 +643,14 @@ def capture_base(theatre, base):
         for j, zz in enumerate(g['zs']):
             tt = time.perf_counter()
             name = f'r{i}_c{j}'
-            set_status(f'CAPTURE {rn4.stem} {len(tiles) + 1}/{n_total}')
+            if prog:
+                prog.step()
+            else:
+                set_status(f'CAPTURE {rn4.stem} {len(tiles) + 1}/{n_total}')
             n_inc = len(_fg_incidents)
             img, delay, n, ok, cmd = move_and_stabilize(xx, zz, alt)
+            if strict and not ok:
+                raise EntryFailure('capture', f'image {name} non stable apres {delay:.1f} s (plafond {TIMEOUT_S:.0f} s)')
             tile = crop(img)
             save_png(tile, odir / 'tiles' / f'{name}.png')
             times.append(time.perf_counter() - tt)
@@ -565,15 +664,21 @@ def capture_base(theatre, base):
     (odir / 'tiles.json').write_text(json.dumps(tiles, indent=1), encoding='utf-8')
     W, H, x_top, z_left = build_mosaic(tiles, fw, fh, odir, MPP)
     cover = {'x_min': x_top - H * MPP, 'x_max': x_top, 'z_min': z_left, 'z_max': z_left + W * MPP}
-    base_json = {'base': rn4.stem, 'theatre': theatre, 'rn4': str(rn4), 'extent_rn4': ext,
+    meas = ({'measures': cal['measures'], 'mean': cal['mean'], 'max_spread_rel': cal['max_spread_rel']}
+            if cal else None)
+    base_json = {'base': rn4.stem, 'theatre': theatre, 'kind': kind, 'calibrated': cal is not None,
+                 **({'calib_fallback': fallback,
+                     'calib_fallback_measures': fallback_meas and {k: fallback_meas[k] for k in (
+                         'measures', 'mean', 'max_spread_rel', 'dev_vs_predicted_rel', 'align_deg_max', 'peaks')}}
+                    if fallback else {}),
+                 'rn4': str(rn4), 'extent_rn4': ext,
                  'zone_captured': zone, 'mosaic_coverage_m': cover,
                  'zone_fully_covered': bool(cover['x_min'] <= zone['x_min'] and cover['x_max'] >= zone['x_max']
                                             and cover['z_min'] <= zone['z_min'] and cover['z_max'] >= zone['z_max']),
                  'grid': [g['nrow'], g['ncol']], 'footprint_m': [fh, fw], 'step_m': g['step_m'],
                  'alt_cmd': alt, 'y_max_rn4': ext['y_max'], 'm_per_px_predicted': mpp_pred,
-                 'm_per_px_measured': {'measures': cal['measures'], 'mean': cal['mean'],
-                                       'max_spread_rel': cal['max_spread_rel']},
-                 'm_per_px': MPP, 'align_deg': cal['align_deg_max'],
+                 'm_per_px_measured': meas,
+                 'm_per_px': MPP, 'align_deg': cal['align_deg_max'] if cal else None,
                  'margins_px_lthr_b': [MARGIN_L, MARGIN_T, MARGIN_R, MARGIN_B],
                  'tile_px': [usable_px()[0], usable_px()[1]], 'mosaic_px': [W, H],
                  'n_captures': len(tiles), 'n_not_stable': sum(1 for t in tiles if not t['stable']),
@@ -582,6 +687,7 @@ def capture_base(theatre, base):
     (odir / 'base.json').write_text(json.dumps(base_json, indent=1), encoding='utf-8')
     print(f"  total {total:.1f}s, moyenne {base_json['mean_s']}s, max {base_json['max_s']}s, "
           f"non stables {base_json['n_not_stable']}, zone couverte {base_json['zone_fully_covered']}")
+    return base_json
 
 
 def cmd_capture(theatre, bases):
@@ -590,6 +696,169 @@ def cmd_capture(theatre, bases):
             capture_base(theatre, b)
     finally:
         hook_release()
+
+
+# ---------- commande theatre (CADRAGE_CAPTURE_SYRIA_v1.md) ----------
+def load_index(theatre):
+    p = out_theatre(theatre) / 'index.json'
+    if not p.is_file():
+        raise SystemExit(f'ARRET : {p} introuvable (lancer d\'abord : index {theatre})')
+    idx = json.loads(p.read_text(encoding='utf-8'))
+    return idx, {e['name']: e for e in idx['bases'] + idx['heliports']}
+
+
+def entry_done(theatre, name):
+    """base.json present et complet (lisible, n_captures renseigne) et mosaique presente."""
+    d = out_theatre(theatre) / name
+    try:
+        bj = json.loads((d / 'base.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return False
+    return isinstance(bj.get('n_captures'), int) and (d / 'mosaic.png').is_file()
+
+
+def entry_images(e):
+    return 0 if 'erreur' in e else e['n_captures'] + (N_CALIB_IMAGES if e['kind'] == 'airbase' else 0)
+
+
+def disk_check(theatre, names, by_name):
+    """Estime le volume (60 Mo par base, 5 Mo par helistation) ; AskCdP si la place libre < 1,5 x l'estimation."""
+    est = sum((MB_PER_AIRBASE if by_name[n]['kind'] == 'airbase' else MB_PER_HELIPORT) for n in names) * 1024 * 1024
+    free = shutil.disk_usage(CFG.work_dir).free
+    print(f'volume estime {est / 1e9:.2f} Go, place libre {free / 1e9:.1f} Go (seuil {DISK_MARGIN} x estimation)')
+    if free < DISK_MARGIN * est:
+        raise AskCdP(f'Place disque insuffisante : libre {free / 1e9:.2f} Go < {DISK_MARGIN} x {est / 1e9:.2f} Go estimes')
+    return est, free
+
+
+def cmd_disk(theatre):
+    idx, by_name = load_index(theatre)
+    todo = [n for n in idx['order'] if not entry_done(theatre, n)]
+    print(f'{len(todo)} entrees a faire sur {len(idx["order"])}')
+    disk_check(theatre, todo, by_name)
+
+
+class Progress:
+    """STATUS a chaque image : CAPTURE <i>/<N> <Nom> <n>/<total> | reste ~<min> min (n compte aussi l'etalonnage)."""
+
+    def __init__(self, plan):
+        self.plan, self.N = plan, len(plan)
+        self.plan_total = sum(plan.values())
+        self.i, self.name, self.k, self.entry_total, self.done = 0, '', 0, 0, 0
+        self.waited, self.t_first = 0.0, None
+
+    def begin(self, i, name):
+        if name == self.name:
+            self.done -= self.k             # reprise apres QUESTION : les images de l'essai precedent ne comptent plus
+        self.i, self.name, self.k = i, name, 0
+        self.entry_total = self.plan[name]
+
+    def set_total(self, total):
+        self.plan_total += total - self.entry_total
+        self.entry_total = total
+
+    def step(self):
+        now = time.perf_counter()
+        if self.t_first is None:
+            self.t_first = now
+        self.k += 1
+        self.done += 1
+        rate = EST_PER_CAPTURE_S if self.done < 2 else (now - self.t_first - self.waited) / (self.done - 1)
+        left = max(0, self.plan_total - self.done + 1) * rate / 60
+        set_status(f'CAPTURE {self.i}/{self.N} {self.name} {self.k}/{self.entry_total} | reste ~{left:.0f} min')
+
+
+def dir_size(d):
+    return sum(f.stat().st_size for f in Path(d).rglob('*') if f.is_file())
+
+
+def log_error(theatre, name, step, message):
+    p = out_theatre(theatre) / 'errors.json'
+    errs = json.loads(p.read_text(encoding='utf-8')) if p.is_file() else []
+    errs = [e for e in errs if e['name'] != name]
+    errs.append({'name': name, 'step': step, 'message': message, 'timestamp': datetime.now().isoformat(timespec='seconds')})
+    p.write_text(json.dumps(errs, indent=1, ensure_ascii=False), encoding='utf-8')
+
+
+def clear_error(theatre, name):
+    p = out_theatre(theatre) / 'errors.json'
+    if p.is_file():
+        errs = [e for e in json.loads(p.read_text(encoding='utf-8')) if e['name'] != name]
+        p.write_text(json.dumps(errs, indent=1, ensure_ascii=False), encoding='utf-8')
+
+
+def cmd_theatre(theatre, force=False):
+    idx, by_name = load_index(theatre)
+    order = idx['order']
+    todo = [n for n in order if force or not entry_done(theatre, n)]
+    skipped = [n for n in order if n not in todo]
+    t_start = datetime.now()
+    prog = Progress({n: entry_images(by_name[n]) for n in todo})
+    stats = {'done': [], 'failed': [], 'bytes': 0}
+
+    def question(text):
+        hook_release()
+        ask(text)
+        print('QUESTION ecrite :', text)
+        t = time.perf_counter()
+        ans = wait_file('ANSWER')
+        prog.waited += time.perf_counter() - t
+        print('ANSWER :', ans.strip())
+        return ans
+
+    try:
+        disk_check(theatre, todo, by_name)
+    except AskCdP as e:
+        question(f'{type(e).__name__}: {e}')
+    print(f'{len(todo)} entrees a capturer, {len(skipped)} sautees (deja faites), ~{prog.plan_total} images')
+    first_airbase_done = False
+    try:
+        for i, name in enumerate(todo, 1):
+            e = by_name[name]
+            while True:
+                prog.begin(i, name)
+                try:
+                    if 'erreur' in e:
+                        raise EntryFailure('rn4', e['erreur'])
+                    capture_base(theatre, name, strict=True, prog=prog)
+                    clear_error(theatre, name)
+                    stats['done'].append(name)
+                    break
+                except EntryFailure as f:
+                    hook_release()
+                    log_error(theatre, name, f.step, str(f))
+                    stats['failed'].append(name)
+                    print(f'ECHEC {name} ({f.step}) : {f}')
+                    break
+                except (Exception, SystemExit) as g:      # echec general : le CdP decide, puis on reprend l'entree
+                    question(f'{type(g).__name__}: {g} | entree {name} ({i}/{len(todo)}), reprise de l\'entree apres ANSWER')
+            hook_release()
+            d = out_theatre(theatre) / name
+            if d.is_dir():
+                stats['bytes'] += dir_size(d)
+            if name in stats['done'] and e['kind'] == 'airbase' and not first_airbase_done:
+                first_airbase_done = True
+                set_status(f'ATTENTE_GO_2 | {name}')
+                t = time.perf_counter()
+                wait_file('GO')
+                prog.waited += time.perf_counter() - t
+    finally:
+        hook_release()
+    t_end = datetime.now()
+    wall = (t_end - t_start).total_seconds()
+    work = wall - prog.waited
+    run = {'theatre': theatre, 'start': t_start.isoformat(timespec='seconds'), 'end': t_end.isoformat(timespec='seconds'),
+           'duration_s': round(wall, 1), 'waited_s': round(prog.waited, 1), 'working_duration_s': round(work, 1),
+           'n_entries_total': len(order), 'n_entries_done': len(stats['done']), 'n_entries_skipped': len(skipped),
+           'n_entries_failed': len(stats['failed']), 'done': stats['done'], 'skipped': skipped, 'failed': stats['failed'],
+           'n_images': prog.done, 'mean_s_per_image': round(work / prog.done, 3) if prog.done else None,
+           'est_s_per_image': EST_PER_CAPTURE_S, 'est_images_index': prog.plan_total,
+           'est_duration_index_s': round(prog.plan_total * EST_PER_CAPTURE_S, 1),
+           'bytes_written': stats['bytes'], 'foreground_incidents': len(_fg_incidents), 'force': force}
+    (out_theatre(theatre) / 'run.json').write_text(json.dumps(run, indent=1), encoding='utf-8')
+    set_status('TERMINE')
+    print(f"termine : {len(stats['done'])} faites, {len(skipped)} sautees, {len(stats['failed'])} en echec, "
+          f"{prog.done} images, {wall / 60:.1f} min ({stats['bytes'] / 1e6:.0f} Mo)")
 
 
 def cmd_modes(theatre, base, modes):
@@ -641,6 +910,10 @@ def main(argv):
         cmd_check(theatre, argv[3])
     elif cmd == 'index' and len(argv) == 3:
         cmd_index(theatre)
+    elif cmd == 'disk' and len(argv) == 3:
+        cmd_disk(theatre)
+    elif cmd == 'theatre' and len(argv) in (3, 4) and (len(argv) == 3 or argv[3] == '--force'):
+        cmd_theatre(theatre, force=len(argv) == 4)
     elif cmd == 'capture' and len(argv) >= 4:
         cmd_capture(theatre, argv[3:])
     elif cmd == 'modes' and len(argv) >= 4:
