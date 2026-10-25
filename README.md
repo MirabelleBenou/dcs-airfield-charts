@@ -1,49 +1,49 @@
 # DCS Airfield Charts
 
-Plans d'aérodromes pour DCS World, tirés des données du jeu.
+Airfield charts for DCS World, built from the game's own data.
 
-**État : outillage de capture.** La carte F10 de DCS (mode Alt) dessine tout le revêtement d'un aérodrome en aplat, ainsi que les bâtiments, les lignes de guidage et les numéros de parking. Ce dépôt contient l'outil qui capture cette carte, base par base, dans le repère terrain de DCS (`x` Nord, `z` Est, en mètres). La conversion en plan vectoriel est le chantier suivant.
+**Status: capture tooling.** The DCS F10 map (Alt mode) draws all the pavement of an airfield as flat fills, along with buildings, guidance lines and parking numbers. This repository contains the tool that captures that map, base by base, in the DCS terrain frame (`x` North, `z` East, in metres). Converting the captures into a vector chart is the next work item.
 
-## Contenu
+## Contents
 
-| Chemin | Rôle |
+| Path | Role |
 |---|---|
-| `capture/hook/ChartsCaptureHook.lua` | hook d'export DCS : petit serveur local (`127.0.0.1:47123`) qui place la caméra F10 à la verticale d'un point, axes alignés sur la grille DCS ; relâche la caméra après 5 s sans ordre |
-| `capture/f10capture.py` | capture d'une base entière : emprise lue dans son `.rn4`, altitude caméra adaptée au terrain, étalonnage de l'échelle, grille d'images, mosaïque ; index d'un théâtre |
-| `capture/f10probe.py` | la sonde d'origine (liaison, stabilisation, échelle, alignement) |
+| `capture/hook/ChartsCaptureHook.lua` | DCS export hook: a small local server (`127.0.0.1:47123`) that places the F10 camera directly above a point, with its axes aligned to the DCS grid; releases the camera after 5 s without a command |
+| `capture/f10capture.py` | captures a whole base: extent read from its `.rn4`, camera altitude adapted to the terrain, scale calibration, image grid, mosaic; theatre index |
+| `capture/f10probe.py` | the original probe (link, stabilisation, scale, alignment) |
 
 ## Installation (Windows)
 
-1. Copier `ChartsCaptureHook.lua` dans `Saved Games\DCS...\Scripts\ChartsCapture\`.
-2. Ajouter en fin de `Saved Games\DCS...\Scripts\Export.lua` :
+1. Copy `ChartsCaptureHook.lua` to `Saved Games\DCS...\Scripts\ChartsCapture\`.
+2. Append to the end of `Saved Games\DCS...\Scripts\Export.lua`:
    `dofile(lfs.writedir()..[[Scripts\ChartsCapture\ChartsCaptureHook.lua]])`
-3. Python 3.12+ avec `numpy`, `mss`, `pillow`.
-4. Configurer les chemins (voir ci-dessous).
-5. Lancer une mission sur le théâtre voulu, ouvrir la F10 en mode Alt, masquer étiquettes et unités, DCS au premier plan ; puis `python -I capture/f10capture.py capture <Théâtre> <Base>`.
+3. Python 3.12+ with `numpy`, `mss`, `pillow`.
+4. Set up the configuration (see below).
+5. Start a mission on the theatre you want, open the F10 map in Alt mode, hide labels and units, keep DCS in the foreground; then run `python -I capture/f10capture.py capture <Theatre> <Base>`.
 
 ### Configuration
 
-Copier `capture/config.example.json` en `capture/config.json` (ignoré par git) et l'adapter à son PC :
+Copy `capture/config.example.json` to `capture/config.json` (ignored by git) and adapt it to your PC:
 
-| Clé | Rôle |
+| Key | Meaning |
 |---|---|
-| `work_dir` | dossier de travail (obligatoire) : les scripts y écrivent `out/` et `sync/` ; créé s'il n'existe pas |
-| `dcs_install` | dossier d'installation de DCS World (obligatoire) : les terrains sont lus dans `<dcs_install>/Mods/terrains`, qui doit exister |
-| `screen` | taille de l'écran en pixels, `[largeur, hauteur]` (facultatif : on peut l'omettre, c'est alors celle de l'écran principal) |
+| `work_dir` | working folder (required): the scripts write `out/` and `sync/` there; created if it does not exist |
+| `dcs_install` | DCS World installation folder (required): terrains are read from `<dcs_install>/Mods/terrains`, which must exist |
+| `screen` | screen size in pixels, `[width, height]` (optional: it can be left out, in which case the size of the primary screen is used) |
 
-Le fichier est cherché, dans cet ordre : option `--config <chemin>` sur la ligne de commande, sinon variable d'environnement `DCS_CHARTS_CONFIG`, sinon `capture/config.json`. Le `~` est développé. Si le fichier manque ou est incomplet, le script s'arrête avec un message qui le dit.
+The file is looked up in this order: the `--config <path>` command-line option, otherwise the `DCS_CHARTS_CONFIG` environment variable, otherwise `capture/config.json`. `~` is expanded. If the file is missing or incomplete, the script stops with a message saying so.
 
-## Ce qu'on a mesuré
+## What we measured
 
-- Image alignée sur la grille DCS (écart < 0,01°), raccords entre images ≤ 1 px, environ 1 s par image.
-- Échelle : 0,33555 mm/px par mètre d'altitude caméra. **DCS maintient la caméra F10 à au moins ~500 m du sol** ; d'où l'altitude `max(1350, sol + 700)` et un étalonnage à chaque base.
+- Image aligned with the DCS grid (deviation < 0.01°), seams between images ≤ 1 px, about 1 s per image.
+- Scale: 0.33555 mm/px per metre of camera altitude. **DCS keeps the F10 camera at least ~500 m above the ground**; hence the altitude `max(1350, ground + 700)` and a calibration for each base.
 
 ## Licence
 
-MIT — voir `LICENSE`.
+MIT — see `LICENSE`.
 
-## Remerciements
+## Acknowledgements
 
-Le principe — piloter la caméra F10 depuis `Export.lua` et capturer l'écran — vient du générateur de cartes de [DCS Olympus](https://github.com/Pax1601/DCSOlympus). Aucun code n'en est repris.
+The principle — driving the F10 camera from `Export.lua` and capturing the screen — comes from the map generator of [DCS Olympus](https://github.com/Pax1601/DCSOlympus). No code is taken from it.
 
-DCS World est une marque d'Eagle Dynamics SA. Ce projet n'est ni fait ni soutenu par Eagle Dynamics.
+DCS World is a trademark of Eagle Dynamics SA. This project is neither made nor endorsed by Eagle Dynamics.
