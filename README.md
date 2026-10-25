@@ -6,17 +6,25 @@ Airfield charts for DCS World, built from the game's own data.
 
 The goal is to share a complete set of charts for every airfield, as PDF and PNG, ready for print and for the DCS kneeboard.
 
-## Work in progress: first charts
+## Example charts
 
-Early mock-ups, generated with no manual drawing: pavement and buildings are vectorised from the F10 capture; runways are detected from their markings; runway designators, parking positions and numbers, and tower frequencies come from the game data (read through [pydcs](https://github.com/pydcs/dcs)). Hardened shelters are recognised on the map. **Not final** — text sizes, taxiway names, magnetic bearings, ILS/TACAN data and the page layout are still being worked on.
+Three Syria airfields, rendered by `render/build_chart.py` from the F10 capture and the game files, with no manual drawing (work in progress: the full set is not published yet). A5 portrait, magnetic declination for **1985** (the default; `--annee` changes it).
 
-| Konya (Syria) | Ramat David (Syria) |
+| Airfield | Pages | PDF |
+|---|---|---|
+| Konya (LTAN) | 10-9, parking pages 10-9A and 10-9B | [LTAN_Konya_charts.pdf](docs/examples/LTAN_Konya_charts.pdf) |
+| Adana Sakirpasa (LTAF) | 10-9, parking insets inside the plan | [LTAF_Adana_charts.pdf](docs/examples/LTAF_Adana_charts.pdf) |
+| Ramat David (LLRD) | 10-9, parking page 10-9A | [LLRD_Ramat_David_charts.pdf](docs/examples/LLRD_Ramat_David_charts.pdf) |
+
+| Konya 10-9 | Konya 10-9A |
 |---|---|
-| ![Konya, work in progress](docs/examples/konya_wip.png) | ![Ramat David, work in progress](docs/examples/ramat_david_wip.png) |
+| ![Konya 10-9](docs/examples/konya_10-9.png) | ![Konya 10-9A](docs/examples/konya_10-9A.png) |
 
-Detail view, Konya main apron:
+| Adana 10-9 | Ramat David 10-9 |
+|---|---|
+| ![Adana 10-9](docs/examples/adana_10-9.png) | ![Ramat David 10-9](docs/examples/ramat_david_10-9.png) |
 
-![Konya apron detail, work in progress](docs/examples/konya_detail_wip.png)
+What a chart shows: pavement, runways and their markings, buildings and hardened shelters (vectorised from the F10 map); runway designators, magnetic bearings, lengths and threshold elevations; tower frequencies, TACAN, VOR, NDB and ILS (from the game files); every parking spot with its number as in DCS; real taxiway names where OpenStreetMap has them; latitude/longitude ticks, true and magnetic north, a scale in feet and metres. SVG pages are organised as Inkscape layers.
 
 ## Contents
 
