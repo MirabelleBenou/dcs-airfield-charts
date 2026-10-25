@@ -29,6 +29,7 @@ THRESH_PAVED_FRACTION = 0.30
 THRESH_WIDEN_M = 6.0
 EXTEND_GAP_M = HOUGH_GAP_M          # interruption toleree en prolongeant le candidat le long de l'axe
 EXTEND_STEP_M = 4.0
+EXTEND_MAX_M = 900.0                # prolongement maximal au-dela de chaque bout de la candidate de Hough (addendum 2)
 
 
 @dataclass
@@ -230,7 +231,7 @@ def extend_range(line, width, sam, pav, clear):
     out = []
     for sign, start in ((-1, line['u0']), (1, line['u1'])):
         u, last_ok = start, start
-        while abs(u - last_ok) <= EXTEND_GAP_M and abs(u - start) < 6000:
+        while abs(u - last_ok) <= EXTEND_GAP_M and abs(u - start) < EXTEND_MAX_M:
             u += sign * EXTEND_STEP_M
             if paved_fraction(line, width, sam, pav, clear, np.array([u]))[0] >= THRESH_PAVED_FRACTION:
                 last_ok = u

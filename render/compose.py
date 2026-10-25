@@ -222,7 +222,9 @@ def build_pages(data, log=print):
     decision = layout.decide_mode(zones, s, occ, origin, frame, zone_center_mm)
     mode = decision['mode']
     log(f'{len(zones)} zones ' + ', '.join(f'{z.label}:{z.count}' for z in zones) + f' -> regle {mode}'
-        + (f' (f={decision["f"]})' if 'f' in decision else ''))
+        + (f' (f={decision["f"]})' if 'f' in decision else '')
+        + (' encarts reduits : ' + ', '.join(f'{lab} k={k:.2f}' for lab, k in decision['reduced'].items())
+           if decision.get('reduced') else ''))
 
     # ---- plan
     lay = {k: [] for k in ('Pavement', 'Runways', 'Runway markings', 'Buildings', 'Parking')}
@@ -253,7 +255,7 @@ def build_pages(data, log=print):
     inset_rects = []
     if mode == 2:
         for b in decision['boxes']:
-            draw_inset(doc, b, data, parkings)
+            n_numbers += draw_inset(doc, b, data, parkings)
             inset_rects.append((b.x - 0.3, b.y - layout.TITLE_MM - 0.3, b.x + b.w + 0.3, b.y + b.h + 0.3))
         for z in zones:
             X, Y = view.pt(*z.center)
@@ -302,7 +304,8 @@ def build_pages(data, log=print):
     footer(doc, data, osm)
 
     pages = [PageOut('10-9', doc.render(), {'mode': mode, 'zones': len(zones), 'labels': placed, 'n_numbers': n_numbers,
-                                          'scale': s, 'frame': frame, 'f': decision.get('f')})]
+                                          'scale': s, 'frame': frame, 'f': decision.get('f'),
+                                          'reduced': decision.get('reduced', {}), 'inset_rects': inset_rects})]
 
     # ---- pages de parkings
     if mode == 3:
@@ -316,7 +319,8 @@ def build_pages(data, log=print):
                 n += draw_inset(d2, b, data, parkings)
             legend(d2, 199.3, x_left=X0, note='NUMÉROS DE PARKING TELS QUE DANS DCS')
             footer(d2, data, False)
-            pages.append(PageOut(f'10-9{letter}', d2.render(), {'insets': [b.zone.label for b in pg], 'n_numbers': n}))
+            pages.append(PageOut(f'10-9{letter}', d2.render(), {'insets': [b.zone.label for b in pg], 'n_numbers': n,
+                                                              'k': {b.zone.label: b.k for b in pg}}))
     return pages
 
 

@@ -3,3 +3,6 @@ sync/
 __pycache__/
 *.pyc
 capture/config.json
+.pytest_cache/
+charts/
+osm/

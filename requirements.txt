@@ -1,0 +1,19 @@
+# Python 3.12+
+# capture (Windows)
+numpy>=1.26
+pillow>=10.0
+mss>=9.0
+# rendering (render/)
+opencv-python-headless>=4.8
+scikit-image>=0.22
+scipy>=1.11
+shapely>=2.0
+pyproj>=3.6
+ppigrf>=2.1.0
+fonttools>=4.40
+CairoSVG>=2.7
+pypdf>=4.0
+# game facts: pinned commit, imported as a library (LGPL)
+pydcs @ git+https://github.com/pydcs/dcs@84f6335d2b10207ff556dae35ef9c1fea3eee964
+# tests
+pytest>=8.0

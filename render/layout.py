@@ -111,15 +111,16 @@ class InsetBox:
     h: float                      # hauteur du cadre (hors titre), mm
     x: float = 0.0                # coin haut-gauche du cadre sur la page (le titre est au-dessus)
     y: float = 0.0
+    k: float = 1.0                # facteur de reduction propre de l'encart (addendum 2), 1 = aucun
 
     @property
     def total_h(self):
         return self.h + TITLE_MM
 
 
-def make_inset(zone, f, max_w=None, max_h=None):
-    """Encart d'une zone a l'echelle de lecture x f ; ramene a (max_w, max_h) s'il est plus grand."""
-    s = zone.s_read * f
+def make_inset(zone, f, max_w=None, max_h=None, k_own=1.0):
+    """Encart d'une zone a l'echelle de lecture x f x k_own ; ramene a (max_w, max_h) s'il est plus grand."""
+    s = zone.s_read * f * k_own
     gx = zone.x1 - zone.x0 + 2 * INSET_PAD_M
     gz = zone.z1 - zone.z0 + 2 * INSET_PAD_M
     w, h = gz * s, gx * s
@@ -130,7 +131,7 @@ def make_inset(zone, f, max_w=None, max_h=None):
         k = min(1.0, max_w / w, (max_h - TITLE_MM) / h)
         if k < 1.0:
             s, w, h = s * k, w * k, h * k
-    return InsetBox(zone, s, w, h)
+    return InsetBox(zone, s, w, h, k=k_own)
 
 
 def f_values():
@@ -238,19 +239,55 @@ def pack_both(sizes, W, H):
     return rows, 'rows'
 
 
-def plan_pages(zones):
-    """Pages 10-9A... : encarts a leur echelle de lecture x f commun (f >= 0,65), le moins de pages possible,
-    puis le plus grand f qui garde ce nombre de pages."""
-    ux, uy, W, H = USABLE
-    best = None
-    results = {}
-    for f in f_values():
-        boxes = [make_inset(z, f, W, H) for z in zones]
-        pages, kind = pack_both([(b.w, b.total_h) for b in boxes], W, H)
-        results[f] = (boxes, pages, kind)
+K_MIN, K_STEP = 0.70, 0.01
+
+
+def _layout_pages(zones, f, ks):
+    """Encarts a f commun et facteurs propres `ks` (indice de zone -> k) ; retourne (boxes, pages, sens)."""
+    _, _, W, H = USABLE
+    boxes = [make_inset(z, f, W, H, ks.get(i, 1.0)) for i, z in enumerate(zones)]
+    pages, kind = pack_both([(b.w, b.total_h) for b in boxes], W, H)
+    return boxes, pages, kind
+
+
+def _best_f(zones, ks):
+    """Le plus grand f de [0,65 ; 1] qui donne le nombre minimal de pages (pour ces facteurs propres)."""
+    results = {f: _layout_pages(zones, f, ks) for f in f_values()}
     n_min = min(len(r[1]) for r in results.values())
     f = max(f for f, r in results.items() if len(r[1]) == n_min)
-    boxes, pages, kind = results[f]
+    return f, results[f], n_min
+
+
+def reduction_plan(zones):
+    """Addendum 2 : si, a f = 0,65, il faut encore une page de plus, les plus grands encarts (par aire) sont reduits un par
+    un, du plus grand au plus petit, d'un facteur propre k dans [0,70 ; 1], tant que cela fait gagner une page.
+    Retourne {indice de zone: k} (vide si aucune reduction ne fait gagner une page)."""
+    f0 = F_MIN
+    n0 = len(_layout_pages(zones, f0, {})[1])
+    if n0 <= 1:
+        return {}
+    area = [(lambda b: b.w * b.total_h)(make_inset(z, f0, USABLE[2], USABLE[3])) for z in zones]
+    order = sorted(range(len(zones)), key=lambda i: -area[i])
+    ks = {}
+    n_ks = int(round((1.0 - K_MIN) / K_STEP))
+    for i in order:
+        # le k le moins fort qui fait gagner une page ; sinon k minimal, et l'on passe a l'encart suivant
+        for step in range(1, n_ks + 1):
+            k = round(1.0 - step * K_STEP, 4)
+            trial = dict(ks)
+            trial[i] = k
+            if len(_layout_pages(zones, f0, trial)[1]) < n0:
+                return trial
+        ks[i] = K_MIN
+    return {}
+
+
+def plan_pages(zones):
+    """Pages 10-9A... : encarts a leur echelle de lecture x f commun (f >= 0,65), le moins de pages possible, puis le plus
+    grand f qui garde ce nombre de pages ; reduction propre des plus grands encarts si elle fait gagner une page."""
+    ux, uy, W, H = USABLE
+    ks = reduction_plan(zones)
+    f, (boxes, pages, kind), _ = _best_f(zones, ks)
     out = []
     for pg in pages:
         lst = []
@@ -260,7 +297,7 @@ def plan_pages(zones):
             lst.append(b)
         lst.sort(key=lambda b: (b.y, b.x))
         out.append(lst)
-    return {'f': f, 'pages': out, 'dir': kind}
+    return {'f': f, 'pages': out, 'dir': kind, 'reduced': {zones[i].label: k for i, k in sorted(ks.items())}}
 
 
 # ---------- numeros et etiquettes ----------
