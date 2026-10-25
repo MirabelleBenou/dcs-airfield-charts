@@ -8,23 +8,23 @@ The goal is to share a complete set of charts for every airfield, as PDF and PNG
 
 ## Example charts
 
-Three Syria airfields, rendered by `render/build_chart.py` from the F10 capture and the game files, with no manual drawing (work in progress: the full set is not published yet). A5 portrait, magnetic declination for **1985** (the default; `--annee` changes it).
+Three Syria airfields, rendered by `render/build_chart.py` from the F10 capture and the game files, with no manual drawing (work in progress: the full set is not published yet). A5 portrait, magnetic declination for **1985** (the default; `--annee` changes it). Every page comes as **SVG** (vector, organised as Inkscape layers; editing needs the Barlow Condensed fonts from `render/fonts/`), **PNG** (1748 × 2480 px, 300 dpi, ready for the DCS kneeboard) and **PDF** (one file per airfield, all pages).
 
-| Airfield | Pages | PDF |
-|---|---|---|
-| Konya (LTAN) | 10-9, parking pages 10-9A and 10-9B | [LTAN_Konya_charts.pdf](docs/examples/LTAN_Konya_charts.pdf) |
-| Adana Sakirpasa (LTAF) | 10-9, parking insets inside the plan | [LTAF_Adana_charts.pdf](docs/examples/LTAF_Adana_charts.pdf) |
-| Ramat David (LLRD) | 10-9, parking page 10-9A | [LLRD_Ramat_David_charts.pdf](docs/examples/LLRD_Ramat_David_charts.pdf) |
+| Airfield | PDF (all pages) | 10-9 (airfield) | Parking pages |
+|---|---|---|---|
+| Konya (LTAN) | [LTAN_Konya_charts.pdf](docs/examples/syria/LTAN_Konya_charts.pdf) | [SVG](docs/examples/syria/LTAN_Konya_10-9.svg) · [PNG](docs/examples/syria/LTAN_Konya_10-9.png) | 10-9A: [SVG](docs/examples/syria/LTAN_Konya_10-9A.svg) · [PNG](docs/examples/syria/LTAN_Konya_10-9A.png) — 10-9B: [SVG](docs/examples/syria/LTAN_Konya_10-9B.svg) · [PNG](docs/examples/syria/LTAN_Konya_10-9B.png) |
+| Adana Sakirpasa (LTAF) | [LTAF_Adana_charts.pdf](docs/examples/syria/LTAF_Adana_charts.pdf) | [SVG](docs/examples/syria/LTAF_Adana_10-9.svg) · [PNG](docs/examples/syria/LTAF_Adana_10-9.png) | none: parking insets inside the plan |
+| Ramat David (LLRD) | [LLRD_Ramat_David_charts.pdf](docs/examples/syria/LLRD_Ramat_David_charts.pdf) | [SVG](docs/examples/syria/LLRD_Ramat_David_10-9.svg) · [PNG](docs/examples/syria/LLRD_Ramat_David_10-9.png) | 10-9A: [SVG](docs/examples/syria/LLRD_Ramat_David_10-9A.svg) · [PNG](docs/examples/syria/LLRD_Ramat_David_10-9A.png) |
 
 | Konya 10-9 | Konya 10-9A |
 |---|---|
-| ![Konya 10-9](docs/examples/konya_10-9.png) | ![Konya 10-9A](docs/examples/konya_10-9A.png) |
+| ![Konya 10-9](docs/examples/syria/LTAN_Konya_10-9.png) | ![Konya 10-9A](docs/examples/syria/LTAN_Konya_10-9A.png) |
 
 | Adana 10-9 | Ramat David 10-9 |
 |---|---|
-| ![Adana 10-9](docs/examples/adana_10-9.png) | ![Ramat David 10-9](docs/examples/ramat_david_10-9.png) |
+| ![Adana 10-9](docs/examples/syria/LTAF_Adana_10-9.png) | ![Ramat David 10-9](docs/examples/syria/LLRD_Ramat_David_10-9.png) |
 
-What a chart shows: pavement, runways and their markings, buildings and hardened shelters (vectorised from the F10 map); runway designators, magnetic bearings, lengths and threshold elevations; tower frequencies, TACAN, VOR, NDB and ILS (from the game files); every parking spot with its number as in DCS; real taxiway names where OpenStreetMap has them; latitude/longitude ticks, true and magnetic north, a scale in feet and metres. SVG pages are organised as Inkscape layers.
+What a chart shows: pavement, runways and their markings, buildings and hardened shelters (vectorised from the F10 map); runway designators, magnetic bearings, lengths and threshold elevations; tower frequencies, TACAN, VOR, NDB and ILS (from the game files); every parking spot with its number as in DCS; real taxiway names where OpenStreetMap has them; latitude/longitude ticks, true and magnetic north, a scale in feet and metres.
 
 ## Contents
 

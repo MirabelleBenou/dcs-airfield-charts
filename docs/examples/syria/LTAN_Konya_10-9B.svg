@@ -1,0 +1,463 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="148mm" height="210mm" viewBox="0 0 148 210">
+<defs><clipPath id="clip-inset-P3"><rect x="6" y="28.9" width="79.374" height="127.646"/></clipPath><clipPath id="clip-inset-P1"><rect x="88.374" y="28.9" width="48.147" height="79.724"/></clipPath><clipPath id="clip-inset-P6"><rect x="6" y="162.946" width="20.902" height="30.093"/></clipPath><clipPath id="clip-inset-P5"><rect x="29.902" y="162.946" width="20.134" height="21.066"/></clipPath><clipPath id="clip-inset-P7"><rect x="53.037" y="162.946" width="18.5" height="4.371"/></clipPath></defs>
+<g inkscape:groupmode="layer" id="layer-background" inkscape:label="Background">
+<rect x="0" y="0" width="148" height="210" fill="#FFFFFF"/>
+</g>
+<g inkscape:groupmode="layer" id="layer-insets" inkscape:label="Insets">
+<g inkscape:groupmode="layer" id="layer-inset-p3" inkscape:label="P3">
+<rect x="5.7" y="25.5" width="79.974" height="131.346" fill="#FFFFFF"/>
+<g clip-path="url(#clip-inset-P3)">
+<path d="M45.4 28.66 30.7 28.66 35.99 30.61 37.31 31.62 37.7 32.4 38.09 32.4 38.24 32.55 37.85 32.79 37.93 33.57 37.39 35.28 37.15 35.59 5.72 118.75 5.72 132.99 41.2 38.93 41.43 38.7 41.9 37.3 42.68 36.44 43.77 35.82 45.01 35.59 45.56 35.82 43.85 40.1 43.85 40.41 46.96 41.73 47.19 41.66 48.9 37.07 49.21 36.91 53.96 40.18 58.08 43.6 56.99 45.39 57.3 48.11 57.85 48.74 57.77 49.98 56.45 51.38 56.45 51.62 59.09 54.49 60.81 56.67 63.53 61.18 63.84 61.26 64.93 60.72 67.11 61.03 67.34 61.26 69.13 64.61 69.05 65 69.29 65.15 68.35 67.1 68.97 67.95 70.69 68.81 72.94 70.68 72.94 73.32 72.71 76.35 71.93 80.09 71.15 82.89 68.97 87.25 67.5 87.25 64.93 85.85 58.63 80.09 51.24 87.25 51.24 87.48 56.68 92.54 56.6 92.85 56.99 93.24 57.46 93.31 57.69 93.16 57.93 93.39 58.94 95.18 58.08 95.88 57.77 95.65 57.62 95.73 57.54 95.96 57.77 96.27 54.35 98.37 54.74 98.99 56.37 98.06 56.84 98.76 52.33 101.41 49.84 100.94 48.12 101.87 47.11 104.44 47.11 105.14 47.42 105.68 45.17 107.16 41.82 102.18 41.36 102.18 40.81 101.41 40.5 101.25 38.48 102.65 35.91 104.75 32.1 108.41 28.52 112.45 25.17 117.12 25.25 117.35 26.11 117.98 26.03 118.29 30.93 121.71 29.61 124.04 29.37 124.2 28.29 123.81 27.2 123.81 26.81 123.97 26.34 124.51 24.4 125.37 22.84 128.87 18.72 137.04 18.64 138.28 18.48 138.44 16.31 138.28 14.28 139.14 13.82 143.26 13.66 143.42 12.03 143.73 7.51 143.88 5.72 143.65 5.72 145.98 6.89 146.22 10.24 149.87 11.71 148.71 11.95 146.22 12.18 145.91 14.83 145.44 17.47 144.51 19.65 143.42 20.82 142.64 23.46 140.3 24.94 141.08 26.89 140.93 27.27 140.62 28.13 139.53 28.21 137.5 27.04 135.95 27.04 135.71 28.13 133.46 30.39 127.47 32.72 123.27 33.81 123.89 35.83 123.19 36.3 122.88 37.23 121.48 37 118.6 36.61 117.98 36.84 117.59 39.88 114.32 43.61 115.49 44.31 115.33 44.78 115.02 45.09 114.55 45.56 114.55 46.02 112.76 45.56 111.21 44.7 110.2 48.59 107.55 49.99 107.55 50.92 106.85 50.69 106.38 50.92 106.15 56.22 103.19 57.23 103.27 57.93 102.65 58.16 102.18 59.09 101.56 60.73 101.95 61.82 102.96 62.13 102.42 62.05 102.18 62.67 101.56 63.06 101.48 63.22 101.17 63.61 101.02 63.61 100.78 63.06 100.24 64.85 98.6 65.55 99.38 65.86 99.38 66.8 98.22 65.08 96.35 67.11 94.25 68.2 92.85 69.36 93.55 71.7 92.77 72.86 91.06 72.4 88.34 71.54 87.87 71.31 87.56 73.1 83.9 73.49 82.35 75.2 81.41 75.9 80.71 78.23 79.54 77.14 77.05 75.12 76.43 74.89 76.2 74.96 67.95 74.81 66.47 73.72 62.2 73.88 61.88 74.42 61.73 74.42 61.42 73.88 59.78 73.49 59.16 73.64 58.46 73.25 57.76 72.47 57.68 71.77 57.06 72.63 54.88 72.63 54.18 73.33 52.32 73.17 51.46 70.76 50.53 69.29 51.23 68.58 51.38 66.33 48.66 63.37 45.47 63.06 44.92 63.14 43.99 62.28 43.6 61.97 43.76 61.43 43.6 57.77 40.33 58.55 39.32 58 36.76 56.37 35.51 53.34 35.67 52.71 36.29 49.68 34.34 47.35 33.1 45.71 30.69ZM57.93 81.18 63.53 86.78 62.36 87.95 62.05 87.95 59.09 90.9 59.09 91.21 57.85 92.38 52.33 86.78ZM24.08 29.05 24.4 29.05 24.78 28.66 24.16 28.66ZM23.93 28.66 17.47 28.74 16.69 30.92 17.08 31.08 16.31 33.1 16.15 33.25 15.76 33.25 14.98 35.36 15.06 35.67 14.67 36.13 13.58 39.01 13.66 39.4 13.35 39.63 12.26 42.67 12.65 42.82 11.95 44.38 11.56 44.38 11.17 45.55 11.56 45.7 10.86 47.26 10.47 47.26 9.54 49.75 9.54 49.98 9.85 50.21 9.54 51.07 9.3 51.38 8.91 51.38 8.21 53.48 8.53 53.72 7.75 55.82 7.36 56.52 6.97 56.52 6.66 57.61 6.97 57.84 6.27 59.39 5.88 59.39 5.72 59.86 5.72 60.56 5.88 60.72 5.72 61.03 5.72 79.54 6.27 78.92 10.78 80.63 10.94 80.32 10.7 80.09 11.17 79.86 11.17 79.62 7.12 78.14 6.5 77.76 6.97 76.59 7.36 76.35 7.83 76.74 12.57 78.53 12.96 78.46 13.58 76.82 13.58 76.28 13.19 76.12 12.88 76.2 12.34 77.52 7.59 75.73 7.36 75.5 8.37 73.01 8.45 72.46 7.98 71.84 7.44 72.78 7.28 72.62 7.98 71.06 8.37 71.84 8.76 71.84 9.54 68.19 9.23 68.19 8.53 69.9 8.37 69.74 9.61 66.47 10.16 66.24 10.86 64.06 13.66 56.98 13.66 56.59 13.89 56.36 14.83 53.87 14.52 53.48 15.06 52.08 15.53 51.93 15.92 50.99 15.6 50.6 16.38 48.58 16.85 48.43 19.18 42.36 18.87 41.97 19.18 41.11 19.42 40.8 19.73 40.8 20.74 38.23 20.43 37.84 22.14 33.33 22.61 33.18 23.62 30.3 23.85 29.99 23.54 29.6Z" fill="#CCCCCC" fill-rule="evenodd"/>
+<polygon points="-39.85,120.093 118.961,-299.604 111.831,-302.303 -46.98,117.395" fill="#1A1A1A"/>
+<polygon points="138.683,-292.45 -20.296,128.895 -14.327,131.147 144.652,-290.198" fill="#1A1A1A"/>
+<line x1="-33.973" y1="93.792" x2="105.954" y2="-276.001" stroke="#FFFFFF" stroke-width="0.35" stroke-dasharray="4.002 2.668"/>
+<path d="M-43.631 117.806L-42.214 114.064M-44.486 117.483L-43.07 113.74M-45.342 117.159L-43.926 113.416M-46.198 116.835L-44.782 113.092M-42.633 118.184L-41.216 114.441M-41.777 118.508L-40.361 114.765M-40.921 118.832L-39.505 115.089M-40.065 119.156L-38.649 115.413" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M-31.717 83.521L-29.64 78.031M-28.865 84.6L-26.787 79.11" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<path d="M114.614 -300.394L113.197 -296.651M113.758 -300.718L112.342 -296.975M112.902 -301.041L111.486 -297.298M112.046 -301.365L110.63 -297.622M115.612 -300.016L114.196 -296.273M116.468 -299.692L115.051 -295.949M117.323 -299.368L115.907 -295.626M118.179 -299.045L116.763 -295.302" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M100.846 -266.809L98.769 -261.32M103.698 -265.73L101.621 -260.241" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<line x1="132.249" y1="-266.363" x2="-7.893" y2="105.06" stroke="#FFFFFF" stroke-width="0.35" stroke-dasharray="4.002 2.668"/>
+<path d="M141.884 -290.386L140.472 -286.642M142.546 -290.137L141.134 -286.393M143.208 -289.887L141.796 -286.143M143.87 -289.637L142.457 -285.893M140.886 -290.763L139.473 -287.019M140.224 -291.013L138.811 -287.269M139.562 -291.263L138.149 -287.519M138.9 -291.513L137.487 -287.768" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M129.77 -256.177L127.698 -250.686M127.383 -257.078L125.311 -251.587" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<path d="M-16.53 129.461L-15.117 125.717M-15.868 129.71L-14.455 125.966M-15.206 129.96L-13.793 126.216M-14.544 130.21L-13.131 126.466M-17.528 129.084L-16.116 125.34M-18.19 128.834L-16.777 125.09M-18.852 128.584L-17.439 124.84M-19.514 128.335L-18.101 124.591" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M-3.027 95.776L-0.955 90.284M-5.414 94.875L-3.342 89.383" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<g transform="translate(-39.874 109.387) rotate(20.73)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">01L</text></g>
+<g transform="translate(-13.78 120.661) rotate(20.67)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">01R</text></g>
+<g transform="translate(138.136 -281.963) rotate(200.67)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">19L</text></g>
+<g transform="translate(111.855 -291.596) rotate(200.73)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">19R</text></g>
+<path d="M11.79 148.71 10.08 150.18 12.26 152.75 12.65 153.06 14.36 151.58 12.42 149.25ZM11.33 150.34 11.48 150.18 11.79 150.18 11.95 150.34 12.18 150.18 12.57 150.18 12.65 150.34 12.49 150.5 12.73 150.73 12.65 151.12 12.49 151.27 12.26 151.27 12.03 151.12 11.79 151.27 11.48 151.27 11.25 151.04ZM28.36 139.45 26.89 141.16 29.69 143.57 29.92 143.65 31.32 141.94ZM28.05 141.08 28.29 140.85 28.6 140.85 28.75 141 28.91 140.85 29.3 140.85 29.45 141.78 29.14 142.02 28.75 141.86 28.36 142.02 28.05 141.78 28.13 141.39ZM16.62 134.24 16.54 134.31 16.23 138.05 16.77 138.2 17.55 138.2 18.48 138.36 18.56 138.28 18.87 134.55 18.41 134.39 17.63 134.39ZM16.85 136.41 17.01 136.26 17.32 136.26 17.63 136.65 17.86 136.26 18.09 136.26 18.25 136.96 18.17 137.27 17.94 137.35 17.78 137.19 17.55 137.19 17.16 137.43 16.85 137.19ZM37.39 121.4 36.14 123.27 39.33 125.44 40.42 123.89 40.58 123.5 38.48 122.02ZM37.39 122.96 37.54 122.8 37.93 122.8 38.09 122.96 38.32 122.8 38.63 122.8 38.87 123.19 38.79 123.73 38.48 123.97 38.17 123.81 37.78 123.97 37.54 123.89 37.39 123.73 37.47 123.34ZM24.86 120.78 22.84 121.79 23.23 122.72 24.63 125.29 26.65 124.2ZM24.24 123.19 24.4 123.03 24.78 123.03 24.94 123.19 25.1 123.03 25.41 123.03 25.49 123.11 25.49 123.81 25.64 124.04 25.56 124.12 24.86 124.04 24.63 124.2 24.24 124.04ZM46.26 112.76 45.56 114.86 45.71 115.02 49.14 116.11 49.29 115.95 49.91 113.93ZM46.8 114.09 46.88 114.01 47.42 114.01 47.5 114.09 48.05 114.01 48.2 114.16 48.12 114.48 48.2 114.94 47.97 115.1 47.74 115.1 47.5 114.94 47.58 114.79 47.89 114.71 47.66 114.55 47.81 114.32 47.58 114.24 47.42 114.4 47.27 114.94 47.04 115.02 46.96 114.79 47.11 114.32 46.88 114.24ZM32.18 112.45 30.85 113.93 33.11 115.88 34.43 114.32ZM32.02 113.93 32.1 113.85 32.64 113.85 32.72 113.93 33.26 113.85 33.42 114.01 33.5 114.55 33.42 114.79 33.26 114.94 32.88 114.94 32.72 114.79 32.8 114.4 32.72 114.24 32.49 114.86 32.25 114.94 32.18 114.63 32.33 114.24ZM34.04 110.43 32.64 111.91 34.82 113.93 36.22 112.45ZM33.89 111.99 33.97 111.91 34.51 111.99 35.13 111.91 35.21 112.3 34.9 113 34.67 112.92 34.9 112.3 34.59 112.14 34.28 112.92 34.04 113 33.97 112.84 34.2 112.3 33.97 112.22ZM35.99 108.49 34.51 109.89 36.61 112.06 38.01 110.59ZM35.68 110.12 35.83 109.96 36.3 109.96 36.45 110.2 36.69 109.96 37 109.96 37.08 110.04 37 110.35 37.15 110.59 37.08 110.97 36.69 111.13 36.45 110.97 36.3 110.59 36.14 110.97 35.91 111.05 35.83 110.82 35.99 110.35 35.75 110.27ZM38.01 106.62 36.45 107.94 38.4 110.2 39.96 108.87ZM37.7 108.25 37.78 108.17 38.32 108.25 38.87 108.17 39.02 108.33 38.94 108.56 39.1 108.8 39.02 109.19 38.79 109.34 38.56 109.34 38.4 109.19 38.4 109.03 38.48 108.95 38.63 109.03 38.79 108.87 38.48 108.8 38.32 108.64 38.17 109.11 38.01 109.26 37.85 109.26 37.78 109.11 38.01 108.56 37.78 108.49ZM40.11 105.06 38.87 106.07 38.63 106.38 40.11 108.25 40.5 108.56 41.59 107.78 42.06 107.32 41.59 106.7 41.2 106.38 40.27 105.14ZM40.81 106.62 41.12 106.7 41.2 107.47 41.04 107.71 40.58 107.55 40.34 107.32ZM40.42 106.62 40.5 106.7 40.5 106.93 40.34 107.16 40.42 107.24 40.27 107.4 40.27 107.55 40.11 107.71 39.96 107.71 39.88 107.55 40.11 107.01 39.88 106.93 39.8 106.7 39.88 106.62ZM66.25 103.74 66.17 103.82 66.17 105.06 66.1 105.14 64.7 105.14 64.62 105.22 66.25 106.85 66.41 106.7 66.48 106.77 66.64 106.46 67.81 105.3ZM64.15 103.04 64.07 103.12 64.07 104.67 64.23 104.83 65.78 104.83 65.86 104.75 65.86 103.35 65.55 103.04ZM64.54 103.43 64.62 103.35 65.4 103.35 65.47 103.43 65.47 104.28 65.4 104.36 65.08 104.28 65.01 103.74 64.93 104.28 64.62 104.36 64.54 104.28ZM70.76 101.56 69.52 102.88 70.92 104.28 71.39 103.82 71.85 104.28 72.71 103.43ZM63.61 101.09 63.45 101.25 63.29 101.25 63.22 101.33 63.29 101.41 62.83 101.87 62.59 101.72 62.21 102.11 62.36 102.34 62.05 102.73 63.68 104.36 63.76 104.28 63.76 102.81 63.84 102.73 65.08 102.73 65.16 102.65ZM62.44 102.11 62.52 101.95 62.67 102.03 62.52 102.18ZM62.59 101.95 62.67 101.87 62.75 101.95 62.67 102.03ZM62.67 101.87 62.75 101.79 62.83 101.87 62.75 101.95ZM67.73 97.67 66.48 98.76 65.47 99.85 65.55 99.93 65.78 99.77 66.33 100.39 66.25 100.55 66.56 100.86 66.72 100.78 66.87 100.94 66.8 101.09 66.87 101.17 67.03 101.09 68.12 102.18 67.96 102.34 68.04 102.42 68.12 102.18 68.27 102.18 68.58 101.95 70.45 100.08 70.37 100.01 70.14 100.16 69.6 99.62 69.67 99.38 69.44 99.15 69.21 99.23ZM48.05 97.44 46.02 98.53 47.89 101.95 49.91 100.78ZM47.42 99.62 47.5 99.54 48.05 99.54 48.12 99.62 48.59 99.54 48.82 99.77 48.82 100.01 48.67 100.16 48.82 100.55 48.75 100.63 48.2 100.63 48.12 100.32 48.51 99.93 48.12 99.85 47.89 100.47 47.66 100.63 47.5 100.47 47.74 99.93 47.5 99.85ZM57.62 95.65 57.46 95.49 57.23 95.57 56.92 95.1 56.76 95.26 56.37 95.18 55.28 95.8 55.05 96.04 54.81 95.96 54.27 96.35 54.19 96.27 53.88 96.5 53.96 96.58 53.65 96.82 53.73 96.97 53.41 97.28 53.96 98.22 54.11 98.29 54.97 97.9 57.54 96.35 57.62 96.19 57.38 95.8ZM73.1 90.98 72.71 91.45 71.85 92.93 75.12 94.95 76.13 93.39 76.29 93ZM73.17 92.54 73.33 92.38 73.72 92.38 73.88 92.54 74.11 92.38 74.34 92.38 74.58 92.61 74.65 92.93 74.58 93.31 74.34 93.55 74.11 93.55 73.88 93.31 73.8 92.93 73.64 93.39 73.33 93.47 73.25 93.39 73.49 92.77 73.25 92.69ZM60.96 82.97 60.42 83.51 61.12 84.13 61.58 83.59ZM57.93 81.33 52.48 86.78 57.93 92.3 59.02 91.21 58.86 90.98 62.13 87.71 62.36 87.87 63.45 86.78ZM58.47 87.64 59.02 87.56 59.17 87.71 59.33 87.56 59.56 87.56 59.64 87.64 59.64 88.26 59.79 88.41 59.79 88.57 59.72 88.65 59.17 88.57 59.4 88.26 59.4 88.02 59.17 87.87 58.94 88.49 58.78 88.65 58.63 88.65 58.55 88.49 58.78 87.95 58.55 87.87ZM66.41 77.76 66.1 79.39 66.33 79.62 66.64 79.54 68.2 79.86 68.58 77.99 68.51 77.91 66.56 77.91ZM80.95 75.97 77.92 77.29 77.45 77.6 77.92 78.69 78.47 79.62 81.81 78.14 81.97 77.99ZM78.7 77.76 78.93 77.52 79.4 77.6 79.94 77.52 80.18 77.99 80.02 78.53 79.71 78.69 79.4 78.53 79.09 78.69 78.85 78.61 78.7 78.38ZM66.87 75.81 66.8 75.89 66.8 77.52 66.87 77.6 68.51 77.6 68.58 77.52 68.58 75.89 68.51 75.81ZM67.26 76.2 67.34 76.12 68.12 76.12 68.2 76.2 68.2 77.05 68.12 77.13 67.81 77.05 67.73 76.51 67.65 77.05 67.34 77.13 67.26 77.05ZM58.32 74.57 57.93 75.03 57.93 76.28 58 76.35 59.25 76.35 59.72 75.81 59.72 75.27 59.48 75.11 59.72 74.8 59.72 74.64 59.64 74.57ZM58.39 74.95 58.47 74.88 59.25 74.88 59.33 74.95 59.33 75.81 59.25 75.89 58.94 75.81 58.86 75.27 58.78 75.81 58.47 75.89 58.39 75.81ZM67.11 73.63 66.95 74.02 66.72 75.42 66.8 75.5 68.82 75.5 68.9 75.58 69.21 74.02 68.9 73.87 68.74 73.94ZM65.78 63.28 64.7 65.31 68.04 67.17 69.13 65.15ZM66.64 65.31 66.87 65.07 67.34 65.15 67.88 65.07 68.04 65.23 68.04 66.01 67.88 66.16 67.5 66.16 67.34 66.01 67.18 66.16 66.8 66.16 66.64 65.93ZM77.38 58.15 73.8 59.39 74.42 61.34 74.58 61.57 78.23 60.33 78.08 60.1 77.53 58.31ZM75.2 59.55 75.59 59.63 76.21 59.55 76.29 59.63 76.29 59.94 75.98 60.64 75.74 60.56 75.98 59.94 75.66 59.78 75.51 59.86 75.66 60.1 75.59 60.56 75.28 60.72 74.96 60.48 74.96 59.78ZM72.55 46.95 71.31 50.6 73.41 51.38 73.72 50.68 74.65 47.73ZM72.16 49.44 72.4 49.2 72.71 49.2 72.79 49.67 73.1 49.2 73.41 49.2 73.49 49.28 73.41 49.59 73.56 49.75 73.56 50.06 73.33 50.29 73.02 50.29 72.86 50.14 72.63 50.29 72.32 50.29 72.16 50.14ZM56.99 46.32 56.84 46.17 55.59 46.4 53.26 46.71 53.1 46.87 53.18 46.95 53.1 47.03 53.41 48.89 53.57 49.05 57.23 48.43 57.3 48.19ZM54.89 47.26 55.2 47.1 55.51 47.26 55.75 47.1 56.06 47.18 56.22 47.57 55.98 47.88 56.22 48.11 56.14 48.19 55.44 48.11 55.28 48.27 55.05 48.27 54.81 48.04ZM58.86 32.32 58.39 32.79 56.45 35.36 58.24 36.83 60.65 33.72ZM57.54 34.73 57.77 34.5 58.08 34.5 58.24 34.66 58.39 34.5 58.63 34.5 58.78 34.66 58.78 35.28 58.94 35.51 58.86 35.59 58.16 35.51 57.93 35.67 57.69 35.59 57.54 35.43Z" fill="#4D4D4D" fill-rule="evenodd"/>
+<circle cx="32.766" cy="114.235" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="62.317" cy="53.557" r="0.6" fill="#1A1A1A"/>
+<circle cx="59.433" cy="50.91" r="0.6" fill="#1A1A1A"/>
+<circle cx="12.003" cy="150.543" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="55.452" cy="47.513" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="67.286" cy="65.438" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="38.136" cy="123.185" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="38.394" cy="108.595" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="24.946" cy="123.435" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="64.548" cy="57.092" r="0.6" fill="#1A1A1A"/>
+<circle cx="40.503" cy="107.019" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="34.58" cy="112.288" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="36.431" cy="110.383" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="79.371" cy="77.906" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="29.386" cy="117.19" r="0.6" fill="#1A1A1A"/>
+<circle cx="28.785" cy="141.256" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="73.831" cy="92.804" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="72.789" cy="49.564" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="59.095" cy="87.965" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="75.59" cy="59.939" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="23.429" cy="129.905" r="0.6" fill="#1A1A1A"/>
+<circle cx="46.285" cy="38.875" r="0.6" fill="#1A1A1A"/>
+<circle cx="47.486" cy="114.368" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="58.182" cy="34.903" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="21.44" cy="134.165" r="0.6" fill="#1A1A1A"/>
+<circle cx="48.065" cy="99.916" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="17.543" cy="136.645" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<text x="33.716" y="114.976" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">78</text>
+<text x="33.716" y="114.976" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">78</text>
+<text x="62.982" y="52.892" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">64</text>
+<text x="62.982" y="52.892" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">64</text>
+<text x="60.098" y="50.245" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">63</text>
+<text x="60.098" y="50.245" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">63</text>
+<text x="12.668" y="149.878" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">86</text>
+<text x="12.668" y="149.878" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">86</text>
+<text x="56.117" y="46.848" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">62</text>
+<text x="56.117" y="46.848" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">62</text>
+<text x="67.951" y="64.773" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">68</text>
+<text x="67.951" y="64.773" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">68</text>
+<text x="38.801" y="122.52" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">80</text>
+<text x="38.801" y="122.52" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">80</text>
+<text x="39.344" y="109.336" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">75</text>
+<text x="39.344" y="109.336" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">75</text>
+<text x="25.611" y="122.77" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">81</text>
+<text x="25.611" y="122.77" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">81</text>
+<text x="65.213" y="56.427" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">65</text>
+<text x="65.213" y="56.427" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">65</text>
+<text x="41.168" y="106.354" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">74</text>
+<text x="41.168" y="106.354" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">74</text>
+<text x="35.53" y="113.029" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">77</text>
+<text x="35.53" y="113.029" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">77</text>
+<text x="37.381" y="111.124" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">76</text>
+<text x="37.381" y="111.124" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">76</text>
+<text x="80.036" y="77.241" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">69</text>
+<text x="80.036" y="77.241" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">69</text>
+<text x="30.051" y="116.525" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">79</text>
+<text x="30.051" y="116.525" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">79</text>
+<text x="29.45" y="140.591" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">85</text>
+<text x="29.45" y="140.591" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">85</text>
+<text x="74.496" y="92.139" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">70</text>
+<text x="74.496" y="92.139" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">70</text>
+<text x="73.454" y="48.899" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">66</text>
+<text x="73.454" y="48.899" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">66</text>
+<text x="59.76" y="87.3" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">71</text>
+<text x="59.76" y="87.3" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">71</text>
+<text x="76.255" y="59.274" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">67</text>
+<text x="76.255" y="59.274" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">67</text>
+<text x="24.094" y="129.24" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">82</text>
+<text x="24.094" y="129.24" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">82</text>
+<text x="46.95" y="38.21" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">60</text>
+<text x="46.95" y="38.21" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">60</text>
+<text x="48.151" y="113.703" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">73</text>
+<text x="48.151" y="113.703" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">73</text>
+<text x="58.847" y="34.238" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">61</text>
+<text x="58.847" y="34.238" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">61</text>
+<text x="22.105" y="133.5" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">83</text>
+<text x="22.105" y="133.5" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">83</text>
+<text x="48.73" y="99.251" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">72</text>
+<text x="48.73" y="99.251" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">72</text>
+<text x="18.208" y="135.98" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">84</text>
+<text x="18.208" y="135.98" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">84</text>
+</g>
+<rect x="6" y="28.9" width="79.374" height="127.646" fill="none" stroke="#1A1A1A" stroke-width="0.35"/>
+<text x="6" y="28" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold">P3 · 60–86</text>
+<text x="85.374" y="28" font-family="Barlow Condensed" font-size="1.905" fill="#5A5A5A" text-anchor="end">1:7 497</text>
+</g>
+<g inkscape:groupmode="layer" id="layer-inset-p1" inkscape:label="P1">
+<rect x="88.074" y="25.5" width="48.747" height="83.424" fill="#FFFFFF"/>
+<g clip-path="url(#clip-inset-P1)">
+<path d="M95.25 28.6 88.11 47.45 88.11 63.44 100.44 30.92 101.69 30.03 102.76 29.76 103.74 29.76 111.52 32.71 112.95 34.23 113.3 35.3 113.39 36.64 113.03 38.34 92.22 93.37 91.59 94.09 90.25 94.89 89.27 95.16 88.11 94.98 88.11 100.79 89.63 101.42 92.93 102.13 109.28 108.38 109.64 107.85 110.18 108.12 110.44 108.03 110.44 107.67 110 107.22 111.52 103.11 111.96 102.85 113.39 103.47 113.66 103.29 114.11 101.86 113.84 101.68 112.14 101.33 111.61 100.7 122.51 71.84 122.68 71.66 136.8 76.94 136.8 76.13 136.62 76.4 133.32 75.15 132.78 74.79 135.1 68.63 135.55 68.45 136.8 68.98 136.8 68.54 134.12 67.46 136.8 60.41 136.8 54.69 136.35 54.87 136.09 55.22 135.55 54.78 134.21 54.78 133.94 55.05 133.85 55.49 135.55 56.21 136 56.21 136.35 56.56 136.35 56.83 135.28 59.42 135.28 60.5 134.75 60.76 133.94 62.91 133.76 63.09 133.41 62.91 133.05 63 132.24 65.41 131.62 66.57 125.99 64.52 125.45 64.16 133.05 43.97 133.58 43.61 135.73 44.59 136.09 44.41 136.09 44.15 134.66 43.52 134.57 42.18 133.85 41.91 133.67 41.64 134.03 41.02 134.66 41.29 135.28 41.11 135.55 40.39 135.37 39.86 135.64 39.32 136.09 39.32 136.44 38.96 136.8 39.05 136.8 36.82 120.09 30.65 115.89 28.6Z" fill="#CCCCCC" fill-rule="evenodd"/>
+<polygon points="-48.128,270.745 134.257,-211.253 126.068,-214.352 -56.317,267.646" fill="#1A1A1A"/>
+<polygon points="156.907,-203.036 -25.671,280.854 -18.817,283.44 163.762,-200.45" fill="#1A1A1A"/>
+<line x1="-41.379" y1="240.539" x2="119.32" y2="-184.146" stroke="#FFFFFF" stroke-width="0.35" stroke-dasharray="4.596 3.064"/>
+<path d="M-52.47 268.119L-50.844 263.82M-53.453 267.747L-51.826 263.449M-54.436 267.375L-52.809 263.077M-55.418 267.003L-53.792 262.705M-51.324 268.553L-49.697 264.254M-50.341 268.924L-48.714 264.626M-49.358 269.296L-47.732 264.998M-48.375 269.668L-46.749 265.37" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M-38.788 228.744L-36.402 222.439M-35.512 229.983L-33.127 223.679" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<path d="M129.264 -212.16L127.638 -207.861M128.282 -212.531L126.655 -208.233M127.299 -212.903L125.672 -208.605M126.316 -213.275L124.69 -208.977M130.411 -211.726L128.784 -207.427M131.393 -211.354L129.767 -207.056M132.376 -210.982L130.75 -206.684M133.359 -210.61L131.733 -206.312" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M113.453 -173.59L111.067 -167.286M116.728 -172.351L114.343 -166.046" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<line x1="149.518" y1="-173.077" x2="-11.428" y2="253.48" stroke="#FFFFFF" stroke-width="0.35" stroke-dasharray="4.596 3.064"/>
+<path d="M160.583 -200.667L158.961 -196.367M161.343 -200.38L159.721 -196.08M162.104 -200.093L160.481 -195.793M162.864 -199.806L161.241 -195.506M159.436 -201.1L157.814 -196.8M158.676 -201.386L157.054 -197.086M157.916 -201.673L156.294 -197.373M157.156 -201.96L155.533 -197.66" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M146.671 -161.38L144.291 -155.073M143.929 -162.414L141.549 -156.107" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<path d="M-21.346 281.503L-19.724 277.203M-20.586 281.79L-18.964 277.49M-19.826 282.077L-18.203 277.777M-19.066 282.364L-17.443 278.064M-22.493 281.07L-20.87 276.771M-23.253 280.784L-21.631 276.484M-24.013 280.497L-22.391 276.197M-24.774 280.21L-23.151 275.91" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M-5.839 242.818L-3.459 236.511M-8.58 241.783L-6.201 235.477" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<g transform="translate(-48.156 258.449) rotate(20.73)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">01L</text></g>
+<g transform="translate(-18.188 271.397) rotate(20.67)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">01R</text></g>
+<g transform="translate(156.278 -190.993) rotate(200.67)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">19L</text></g>
+<g transform="translate(126.097 -202.056) rotate(200.73)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">19R</text></g>
+<path d="M111.78 102.93 111.43 103.56 110.18 106.96 110.27 107.04 110.18 107.31 110.62 107.58 110.71 107.94 110.98 107.67 111.52 107.85 111.61 107.58 111.96 107.4 112.5 105.88 112.86 105.53 113.21 104.54 113.12 104.36 113.21 104.1 113.03 103.92 113.12 103.47ZM135.37 68.54 135.19 68.72 132.96 74.79 136.62 76.22 136.8 75.95 136.8 74.52 136.71 74.97 136.53 75.15 136.35 75.15 136 74.88 135.91 74.97 135.64 74.7 136.09 73.54 136.8 73.81 136.8 69.07ZM134.21 72.74 135.19 73.18 134.66 74.43 134.03 74.25 133.67 73.99 133.94 73.63 133.85 73.54ZM135.46 69.61 136.35 69.97 135.91 71.22 134.92 70.86 135.28 69.79ZM136.8 63.98 135.73 66.75 135.91 66.93 136.8 67.29ZM132.42 59.51 131.44 62.01 131.8 62.28 132.15 62.28 133.32 62.82 133.76 62.91 134.66 60.76 134.57 60.67 132.6 60.67ZM132.96 58.26 132.87 58.35 132.87 60.23 132.96 60.32 134.75 60.32 134.92 60.14 134.92 58.35 134.84 58.26ZM133.41 58.71 133.49 58.62 134.39 58.62 134.48 58.71 134.48 59.69 134.39 59.78 134.03 59.69 133.94 59.07 133.85 59.69 133.49 59.78 133.41 59.69ZM133.94 55.67 133.05 57.82 133.14 57.9 135.19 57.9 135.37 58.8 136.26 56.65 136 56.39 135.64 56.39ZM136.44 39.05 136.35 39.32 136.18 39.5 136.09 39.41 135.46 41.02 135.1 41.38 134.75 42.36 134.84 42.63 134.75 42.89 134.92 43.07 134.84 43.43 135.01 43.61 135.91 43.97 136.09 43.97 136.44 43.52 136.8 42.54 136.8 39.23Z" fill="#4D4D4D" fill-rule="evenodd"/>
+<circle cx="126.663" cy="47.652" r="0.6" fill="#1A1A1A"/>
+<circle cx="116.729" cy="40.983" r="0.6" fill="#1A1A1A"/>
+<circle cx="96.345" cy="95.037" r="0.6" fill="#1A1A1A"/>
+<circle cx="121.742" cy="60.463" r="0.6" fill="#1A1A1A"/>
+<circle cx="114.815" cy="46.077" r="0.6" fill="#1A1A1A"/>
+<circle cx="120.799" cy="62.943" r="0.6" fill="#1A1A1A"/>
+<circle cx="100.318" cy="84.778" r="0.6" fill="#1A1A1A"/>
+<circle cx="125.658" cy="50.247" r="0.6" fill="#1A1A1A"/>
+<circle cx="108.079" cy="64.279" r="0.6" fill="#1A1A1A"/>
+<circle cx="117.874" cy="70.737" r="0.6" fill="#1A1A1A"/>
+<circle cx="103.392" cy="77.023" r="0.6" fill="#1A1A1A"/>
+<circle cx="106.269" cy="69.406" r="0.6" fill="#1A1A1A"/>
+<circle cx="109.285" cy="93.936" r="0.6" fill="#1A1A1A"/>
+<circle cx="115.001" cy="78.425" r="0.6" fill="#1A1A1A"/>
+<circle cx="114.01" cy="81.039" r="0.6" fill="#1A1A1A"/>
+<circle cx="98.427" cy="89.891" r="0.6" fill="#1A1A1A"/>
+<circle cx="115.743" cy="43.573" r="0.6" fill="#1A1A1A"/>
+<circle cx="129.627" cy="39.887" r="0.6" fill="#1A1A1A"/>
+<circle cx="109.984" cy="59.084" r="0.6" fill="#1A1A1A"/>
+<circle cx="112.856" cy="51.257" r="0.6" fill="#1A1A1A"/>
+<circle cx="115.978" cy="75.84" r="0.6" fill="#1A1A1A"/>
+<circle cx="108.304" cy="96.536" r="0.6" fill="#1A1A1A"/>
+<circle cx="102.219" cy="79.579" r="0.6" fill="#1A1A1A"/>
+<circle cx="112.086" cy="86.234" r="0.6" fill="#1A1A1A"/>
+<circle cx="111.98" cy="53.909" r="0.6" fill="#1A1A1A"/>
+<circle cx="110.219" cy="91.452" r="0.6" fill="#1A1A1A"/>
+<circle cx="123.738" cy="55.345" r="0.6" fill="#1A1A1A"/>
+<circle cx="118.836" cy="68.128" r="0.6" fill="#1A1A1A"/>
+<circle cx="118.764" cy="35.794" r="0.6" fill="#1A1A1A"/>
+<circle cx="106.336" cy="101.73" r="0.6" fill="#1A1A1A"/>
+<circle cx="128.693" cy="42.487" r="0.6" fill="#1A1A1A"/>
+<circle cx="99.38" cy="87.272" r="0.6" fill="#1A1A1A"/>
+<circle cx="116.902" cy="73.221" r="0.6" fill="#1A1A1A"/>
+<circle cx="107.121" cy="66.759" r="0.6" fill="#1A1A1A"/>
+<circle cx="127.707" cy="45.1" r="0.6" fill="#1A1A1A"/>
+<circle cx="107.313" cy="99.121" r="0.6" fill="#1A1A1A"/>
+<circle cx="113.847" cy="48.662" r="0.6" fill="#1A1A1A"/>
+<circle cx="124.71" cy="52.717" r="0.6" fill="#1A1A1A"/>
+<circle cx="105.312" cy="72.02" r="0.6" fill="#1A1A1A"/>
+<circle cx="111.219" cy="88.862" r="0.6" fill="#1A1A1A"/>
+<circle cx="104.325" cy="74.528" r="0.6" fill="#1A1A1A"/>
+<circle cx="113.01" cy="83.586" r="0.6" fill="#1A1A1A"/>
+<circle cx="95.268" cy="97.57" r="0.6" fill="#1A1A1A"/>
+<circle cx="101.257" cy="82.159" r="0.6" fill="#1A1A1A"/>
+<circle cx="97.341" cy="92.443" r="0.6" fill="#1A1A1A"/>
+<circle cx="109.007" cy="61.66" r="0.6" fill="#1A1A1A"/>
+<circle cx="117.697" cy="38.374" r="0.6" fill="#1A1A1A"/>
+<circle cx="119.827" cy="65.552" r="0.6" fill="#1A1A1A"/>
+<circle cx="110.989" cy="56.475" r="0.6" fill="#1A1A1A"/>
+<circle cx="122.771" cy="57.926" r="0.6" fill="#1A1A1A"/>
+<text x="127.613" y="48.393" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">13</text>
+<text x="127.613" y="48.393" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">13</text>
+<text x="117.679" y="41.724" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">37</text>
+<text x="117.679" y="41.724" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">37</text>
+<text x="97.295" y="95.778" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">58</text>
+<text x="97.295" y="95.778" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">58</text>
+<text x="122.692" y="61.204" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">18</text>
+<text x="122.692" y="61.204" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">18</text>
+<text x="115.765" y="46.818" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">39</text>
+<text x="115.765" y="46.818" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">39</text>
+<text x="121.749" y="63.684" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">19</text>
+<text x="121.749" y="63.684" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">19</text>
+<text x="101.268" y="85.519" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">54</text>
+<text x="101.268" y="85.519" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">54</text>
+<text x="126.608" y="50.988" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">14</text>
+<text x="126.608" y="50.988" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">14</text>
+<text x="109.029" y="65.02" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">46</text>
+<text x="109.029" y="65.02" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">46</text>
+<text x="118.824" y="71.478" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">22</text>
+<text x="118.824" y="71.478" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">22</text>
+<text x="104.342" y="77.764" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">51</text>
+<text x="104.342" y="77.764" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">51</text>
+<text x="107.219" y="70.147" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">48</text>
+<text x="107.219" y="70.147" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">48</text>
+<text x="110.235" y="94.677" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">31</text>
+<text x="110.235" y="94.677" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">31</text>
+<text x="115.951" y="79.166" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">25</text>
+<text x="115.951" y="79.166" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">25</text>
+<text x="114.96" y="81.78" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">26</text>
+<text x="114.96" y="81.78" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">26</text>
+<text x="99.377" y="90.632" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">56</text>
+<text x="99.377" y="90.632" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">56</text>
+<text x="116.693" y="44.314" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">38</text>
+<text x="116.693" y="44.314" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">38</text>
+<text x="130.292" y="39.222" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">10</text>
+<text x="130.292" y="39.222" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">10</text>
+<text x="110.934" y="59.825" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">44</text>
+<text x="110.934" y="59.825" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">44</text>
+<text x="113.806" y="51.998" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">41</text>
+<text x="113.806" y="51.998" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">41</text>
+<text x="116.928" y="76.581" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">24</text>
+<text x="116.928" y="76.581" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">24</text>
+<text x="109.254" y="97.277" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">32</text>
+<text x="109.254" y="97.277" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">32</text>
+<text x="103.169" y="80.32" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">52</text>
+<text x="103.169" y="80.32" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">52</text>
+<text x="113.036" y="86.974" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">28</text>
+<text x="113.036" y="86.974" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">28</text>
+<text x="112.93" y="54.65" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">42</text>
+<text x="112.93" y="54.65" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">42</text>
+<text x="111.169" y="92.193" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">30</text>
+<text x="111.169" y="92.193" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">30</text>
+<text x="124.688" y="56.086" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">16</text>
+<text x="124.688" y="56.086" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">16</text>
+<text x="119.786" y="68.869" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">21</text>
+<text x="119.786" y="68.869" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">21</text>
+<text x="119.429" y="35.129" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">35</text>
+<text x="119.429" y="35.129" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">35</text>
+<text x="107.286" y="102.471" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">34</text>
+<text x="107.286" y="102.471" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">34</text>
+<text x="129.643" y="43.227" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">11</text>
+<text x="129.643" y="43.227" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">11</text>
+<text x="100.33" y="88.013" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">55</text>
+<text x="100.33" y="88.013" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">55</text>
+<text x="117.852" y="73.962" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">23</text>
+<text x="117.852" y="73.962" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">23</text>
+<text x="108.071" y="67.499" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">47</text>
+<text x="108.071" y="67.499" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">47</text>
+<text x="128.657" y="45.841" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">12</text>
+<text x="128.657" y="45.841" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">12</text>
+<text x="108.263" y="99.862" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">33</text>
+<text x="108.263" y="99.862" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">33</text>
+<text x="114.797" y="49.403" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">40</text>
+<text x="114.797" y="49.403" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">40</text>
+<text x="125.66" y="53.458" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">15</text>
+<text x="125.66" y="53.458" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">15</text>
+<text x="106.262" y="72.761" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">49</text>
+<text x="106.262" y="72.761" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">49</text>
+<text x="112.169" y="89.603" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">29</text>
+<text x="112.169" y="89.603" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">29</text>
+<text x="105.275" y="75.269" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">50</text>
+<text x="105.275" y="75.269" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">50</text>
+<text x="113.96" y="84.327" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">27</text>
+<text x="113.96" y="84.327" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">27</text>
+<text x="96.218" y="98.311" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">59</text>
+<text x="96.218" y="98.311" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">59</text>
+<text x="102.207" y="82.9" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">53</text>
+<text x="102.207" y="82.9" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">53</text>
+<text x="98.291" y="93.184" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">57</text>
+<text x="98.291" y="93.184" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">57</text>
+<text x="109.957" y="62.401" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">45</text>
+<text x="109.957" y="62.401" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">45</text>
+<text x="118.647" y="39.115" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">36</text>
+<text x="118.647" y="39.115" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">36</text>
+<text x="120.777" y="66.293" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">20</text>
+<text x="120.777" y="66.293" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">20</text>
+<text x="111.939" y="57.216" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">43</text>
+<text x="111.939" y="57.216" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">43</text>
+<text x="123.721" y="58.667" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">17</text>
+<text x="123.721" y="58.667" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">17</text>
+</g>
+<rect x="88.374" y="28.9" width="48.147" height="79.724" fill="none" stroke="#1A1A1A" stroke-width="0.35"/>
+<text x="88.374" y="28" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold">P1 · 10–59</text>
+<text x="136.52" y="28" font-family="Barlow Condensed" font-size="1.905" fill="#5A5A5A" text-anchor="end">1:6 528</text>
+</g>
+<g inkscape:groupmode="layer" id="layer-inset-p6" inkscape:label="P6">
+<rect x="5.7" y="159.546" width="21.502" height="33.793" fill="#FFFFFF"/>
+<g clip-path="url(#clip-inset-P6)">
+<path d="M27.03 164.18 23.54 162.84 19.23 162.84 18.1 165.88 17.92 166.19 17.57 166.02 18.31 164.11 18.31 164 17.18 163.54 17.04 163.58 16.68 164.53 16.68 164.78 16.54 164.89 16.4 165.31 16.26 165.42 15.27 164.99 15.59 164.11 15.59 163.83 15.73 163.72 15.69 163.54 15.87 163.16 15.83 163.05 15.52 162.94 15.45 162.98 14.88 164.53 14.7 164.6 14.21 164.39 14.1 164.46 13.61 165.84 14.24 166.12 13.96 166.9 13.96 167.08 14.28 167.15 14.49 167.54 14.32 167.82 13.61 169.83 13.43 170.15 13.43 170.29 11.63 174.96 11.59 175.24 11.45 175.42 10.99 176.79 10.85 177.01 10.29 178.67 10.04 179.16 10 179.44 9.55 180.47 9.47 180.82 7.96 182.16 5.87 181.35 5.87 184.04 8.38 184.96 8.56 185.1 6.26 191.31 6.37 191.46 10.82 193.15 14.21 193.15 14.85 191.46 14.95 191.35 15.69 191.63 15.76 191.6 15.91 191.74 15.41 193.15 15.83 193.15 16.29 191.88 16.4 191.77 18.7 192.66 18.91 192.66 19.86 189.87 19.4 189.69 19.12 189.8 18.98 189.69 18.98 189.58 18.1 189.23 18.52 188.1 18.52 187.96 18.38 187.82 18.87 186.44 18.98 186.3 19.16 186.3 19.83 184.57 20.14 184.53 20.22 184.71 21.63 185.27 21.73 185.2 22.26 183.82 22.26 183.65 22.19 183.61 22.09 183.65 21.88 184.04 21.31 184.5 20.6 184.6 20.39 184.53 20.18 184.57 20.11 184.43 20.36 183.93 20.78 184.04 21.2 183.9 21.49 183.58 21.84 182.52 21.73 182.41 21.73 181.32 21.63 181.25 21.73 181.07 21.77 180.43 21.52 180.11 21.66 179.73 21.77 179.62 21.95 179.62 21.84 179.48 21.98 179.37 22.19 178.6 22.09 178.52 22.26 178.45 22.55 177.68 22.69 177.54 22.69 177.43 22.55 177.32 22.69 176.9 22.79 176.76 22.94 176.79 23.11 176.72 23.5 176.19 23.43 176.05 23.5 175.98 23.71 175.98 24.28 175.31 24.28 175.06 24.63 174.25 27.03 175.13 27.03 174.96 23.64 173.65 23.71 173.3 25.76 167.96 26.08 167.64 26.58 167.47 26.75 166.94 26.5 166.55 26.43 166.19 27.03 164.68ZM16.33 184.92 16.47 185.03 16.61 185.87 16.89 186.02 16.86 186.12 16.65 186.19 16.65 186.26 17.67 186.79 17.53 186.97 17.07 186.9 16.54 186.69 16.44 186.76 16.54 186.9 16.44 187.07 16.19 186.97 15.45 187.53 15.3 187.43 15.91 186.76 15.94 186.47 15.09 186.05 14.63 186.3 14.46 186.19 14.7 185.94 14.63 185.77 14.81 185.7 14.81 185.34 14.88 185.27 15.02 185.38 15.16 185.8 16.01 186.09 16.15 186.05 16.26 185.84 16.22 185.27ZM20.14 174.46 20.25 174.57 20.36 175.38 20.67 175.56 20.57 175.7 20.43 175.73 20.43 175.84 21.13 176.12 21.35 176.37 21.24 176.48 21.1 176.48 20.32 176.23 20.22 176.3 20.32 176.44 20.22 176.62 19.97 176.51 19.26 177.08 19.16 177.04 19.09 176.93 19.69 176.26 19.72 175.98 18.87 175.59 18.41 175.8 18.24 175.73 18.48 175.45 18.41 175.31 18.59 175.2 18.59 174.89 18.66 174.82 18.77 174.89 18.91 175.31 19.83 175.63 20 175.45 20.04 174.53ZM17.74 166.41 17.85 166.51 17.53 167.29 17.57 167.4 17.42 167.57 16.12 171.03 16.05 171.39 15.94 171.49 15.34 173.08 15.34 173.4 15.13 173.65 14.53 175.38 13.15 178.88 13.11 179.2 13.01 179.27 12.34 181.03 12.3 181.28 12.12 181.63 11.81 181.95 11.81 182.02 12.02 182.16 11.77 182.41 11.7 182.34 11.81 182.16 11.7 182.09 10.92 182.55 10.78 182.52 10.36 182.62 10.18 182.45 9.76 180.96 10.18 179.94 10.22 179.66 10.36 179.48 10.78 178.35 10.82 178.07 11.06 177.61 11.49 176.48 11.52 176.19 12.09 174.89 12.12 174.6 12.69 173.3 12.73 173.01 13.18 171.99 13.22 171.71 13.5 171.11 14.74 167.71 15.13 167.5 16.72 168.1 16.86 167.96 17.42 166.41 17.5 166.34ZM12.76 162.84 12.37 162.84 12.05 163.72 11.81 163.93 11.38 164.07 11.06 164 10.96 163.86 10.78 163.83 10.57 163.62 10.39 163.58 10.29 163.44 10 163.33 9.9 163.19 9.72 163.16 9.44 162.91 9.26 162.84 8.66 162.84 8.73 162.94 8.87 162.94 9.12 163.19 9.26 163.19 9.51 163.44 9.65 163.44 9.79 163.62 9.93 163.62 10.08 163.79 10.25 163.9 10.32 163.86 10.46 164.04 10.64 164.15 10.71 164.11 10.85 164.29 11.1 164.39 11.52 165.06 10.61 167.4 10.57 167.68 10.43 167.85 9.97 169.23 9.51 170.29 9.47 170.58 9.23 171.03 8.77 172.41 8.42 173.19 8.38 173.47 7.81 174.78 7.78 175.06 7.43 175.8 7.28 176.37 6.83 177.39 6.68 177.96 6.22 178.98 6.19 179.27 5.91 179.87 5.87 181.03 6.4 179.51 6.75 178.74 6.79 178.45 7.36 177.15 7.39 176.86 7.96 175.56 7.99 175.27 8.45 174.25 8.49 173.97 9.05 172.66 9.09 172.38 9.65 171.07 9.69 170.79 10.15 169.76 10.61 168.38 10.75 168.17 10.78 167.89 11.35 166.58 11.38 166.3Z" fill="#CCCCCC" fill-rule="evenodd"/>
+<polygon points="-103.26,307.915 -31.137,117.312 -34.375,116.087 -106.498,306.689" fill="#1A1A1A"/>
+<polygon points="-22.18,120.562 -94.38,311.912 -91.669,312.935 -19.47,121.584" fill="#1A1A1A"/>
+<line x1="-100.591" y1="295.97" x2="-37.044" y2="128.032" stroke="#FFFFFF" stroke-width="0.35" stroke-dasharray="1.817 1.212"/>
+<path d="M-104.977 306.876L-104.334 305.177M-105.366 306.729L-104.722 305.03M-105.754 306.582L-105.111 304.882M-106.143 306.435L-105.5 304.735M-104.524 307.048L-103.88 305.348M-104.135 307.195L-103.492 305.495M-103.746 307.342L-103.103 305.642M-103.358 307.489L-102.715 305.789" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M-99.566 291.306L-98.623 288.813M-98.271 291.796L-97.328 289.303" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<path d="M-33.111 116.954L-33.755 118.654M-33.5 116.807L-34.143 118.507M-33.889 116.66L-34.532 118.36M-34.277 116.513L-34.92 118.212M-32.658 117.125L-33.301 118.825M-32.269 117.272L-32.913 118.972M-31.881 117.419L-32.524 119.119M-31.492 117.567L-32.135 119.266" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M-39.364 132.206L-40.307 134.699M-38.069 132.696L-39.012 135.189" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<line x1="-25.102" y1="132.409" x2="-88.747" y2="301.088" stroke="#FFFFFF" stroke-width="0.35" stroke-dasharray="1.817 1.212"/>
+<path d="M-20.727 121.499L-21.368 123.199M-20.426 121.612L-21.068 123.312M-20.125 121.725L-20.767 123.426M-19.825 121.839L-20.466 123.539M-21.18 121.327L-21.822 123.028M-21.481 121.214L-22.122 122.914M-21.781 121.101L-22.423 122.801M-22.082 120.987L-22.724 122.688" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M-26.228 137.034L-27.169 139.528M-27.312 136.625L-28.253 139.119" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<path d="M-92.669 312.169L-92.028 310.469M-92.369 312.282L-91.727 310.582M-92.068 312.396L-91.426 310.696M-91.767 312.509L-91.126 310.809M-93.123 311.998L-92.481 310.298M-93.423 311.885L-92.782 310.184M-93.724 311.771L-93.082 310.071M-94.025 311.658L-93.383 309.957" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M-86.537 296.871L-85.596 294.377M-87.621 296.462L-86.68 293.968" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<g transform="translate(-103.271 303.053) rotate(20.73)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">01L</text></g>
+<g transform="translate(-91.42 308.173) rotate(20.67)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">01R</text></g>
+<g transform="translate(-22.429 125.324) rotate(200.67)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">19L</text></g>
+<g transform="translate(-34.364 120.949) rotate(200.73)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">19R</text></g>
+<path d="M17.32 192.8 17.25 192.73 16.86 192.59 16.75 192.73 16.54 192.69 16.36 193.15 17.21 193.15ZM15.87 191.77 15.76 191.67 15.62 191.67 14.95 191.39 14.28 193.15 15.34 193.15ZM17.74 191.1 17.67 191.31 17.92 191.46 18.98 191.84 19.09 191.7 19.12 191.53 18.98 191.42 18.1 191.1 17.95 191.1 17.81 191.03ZM5.87 188.77 5.87 189.8 5.98 189.62 5.94 189.44 6.15 188.91 6.12 188.84ZM16.36 184.99 16.29 185.03 16.29 185.41 16.26 185.45 16.29 185.49 16.26 185.73 16.36 185.91 16.19 186.02 16.15 186.16 15.66 185.98 15.16 185.87 15.06 185.73 14.99 185.41 14.88 185.34 14.85 185.38 14.85 185.77 14.74 185.8 14.81 185.87 14.53 186.19 14.67 186.23 15.06 185.98 15.48 186.23 16.01 186.44 15.94 186.79 15.38 187.43 15.48 187.5 16.19 186.9 16.44 187.04 16.47 186.9 16.36 186.86 16.33 186.79 16.51 186.65 16.61 186.65 17.14 186.86 17.32 186.9 17.53 186.86 17.35 186.65 16.61 186.33 16.58 186.12 16.61 186.09 16.79 186.12 16.82 186.02 16.54 185.91 16.58 185.87 16.44 185.06ZM20.11 174.5 20.07 174.53 20.07 175.06 20.04 175.1 20.07 175.24 20.04 175.27 20.14 175.42 19.97 175.52 19.93 175.66 19.79 175.66 19.47 175.52 18.91 175.38 18.84 175.27 18.77 174.96 18.66 174.89 18.63 174.92 18.63 175.27 18.56 175.35 18.59 175.38 18.31 175.7 18.41 175.77 18.73 175.56 18.87 175.52 18.94 175.59 19.79 175.98 19.72 176.33 19.51 176.51 19.16 176.93 19.19 177.01 19.26 177.01 19.93 176.44 20.22 176.55 20.25 176.44 20.11 176.3 20.32 176.16 20.96 176.4 21.2 176.44 21.31 176.37 21.03 176.12 20.39 175.88 20.36 175.63 20.43 175.59 20.53 175.66 20.6 175.56 20.43 175.45 20.36 175.49 20.32 175.45 20.22 174.57ZM24.67 174.32 24.6 174.36 24.31 175.13 24.42 175.2 23.82 175.95 23.57 176.16 23.08 176.9 23.01 176.79 22.94 176.86 22.9 176.83 22.76 176.86 22.62 177.29 22.69 177.36 22.76 177.36 22.79 177.43 22.58 177.78 22.3 178.45 22.02 179.34 21.98 179.69 21.95 179.73 21.77 179.69 21.66 179.87 21.56 180.19 21.77 180.26 21.84 180.33 21.81 180.36 21.84 180.43 21.81 180.47 21.77 181.21 21.73 181.25 21.81 181.32 21.77 181.35 21.77 182.41 21.91 182.55 21.66 183.15 21.56 183.58 21.28 183.9 20.99 184.04 20.64 184.07 20.39 184 20.22 184.43 20.32 184.5 20.67 184.57 21.2 184.5 21.7 184.18 21.95 183.86 22.09 183.54 24.14 184.28 24.24 184.14 24.63 182.98 24.7 182.91 25.3 183.15 25.52 182.66 25.73 182.73 25.8 182.8 25.59 183.44 26.05 183.61 25.94 183.97 25.8 184.14 25.3 184.25 24.42 184.53 22.87 184.92 22.48 185.1 22.16 185.52 22.05 185.49 22.09 185.41 22.05 185.31 21.88 185.41 20.99 185.1 20.89 184.99 20.14 184.74 20.04 184.6 19.93 184.57 19.83 184.64 19.16 186.44 19.05 186.37 18.94 186.4 18.84 186.76 18.77 186.83 18.66 187.11 18.59 187.43 18.45 187.75 18.45 187.82 18.63 187.96 18.17 189.16 18.2 189.27 19.26 189.65 19.37 189.62 20.36 190.01 20.5 190.01 20.53 190.04 20.43 190.22 20.39 190.47 20.14 191.07 20.07 191.42 20.07 191.63 20.22 192.02 20.6 192.34 22.87 193.15 24.31 193.15 24.35 193.05 23.96 192.87 20.96 191.81 20.71 191.63 20.67 191.49 21.03 190.54 21.13 190.11 22.76 185.7 22.9 185.56 25.83 184.78 26.19 184.6 26.5 184.21 26.58 184.25 27.03 184.99 27.03 183.82 26.89 183.51 26.89 183.08 27.03 182.76 27.03 176.76 26.93 176.69 27.03 176.44 27.03 175.2ZM23.64 181.78 23.68 181.74 23.71 181.78 23.68 181.81ZM23.64 181.63 23.68 181.6 23.71 181.63 23.68 181.67ZM23.64 181.56 23.68 181.53 23.71 181.56 23.68 181.6ZM23.71 181.35 23.75 181.39 23.71 181.53 23.68 181.49ZM23.71 181.14 23.75 181.17 23.71 181.35 23.68 181.32ZM24.99 177.54 25.02 177.5 25.06 177.57 25.02 177.61ZM25.09 177.39 25.13 177.46 25.06 177.54 25.02 177.46ZM25.16 177.29 25.2 177.36 25.13 177.43 25.09 177.36ZM25.23 177.18 25.27 177.25 25.2 177.32 25.16 177.25ZM25.27 177.11 25.3 177.08 25.34 177.15 25.3 177.18ZM25.34 177.01 25.37 176.97 25.41 177.04 25.37 177.08ZM25.41 176.9 25.44 176.86 25.48 176.93 25.44 176.97ZM25.48 176.79 25.52 176.76 25.55 176.83 25.52 176.86ZM27.03 172.41 26.93 172.7 27 172.8 27.03 172.8ZM26.22 172.17 26.01 172.66 26.33 172.77 26.47 172.52 26.43 172.48 26.5 172.41 26.47 172.38 26.5 172.27ZM25.8 168.88 25.34 170.01 25.44 170.08 25.41 170.19 25.48 170.26 25.62 170.12 25.76 170.22 25.73 170.33 25.76 170.36 25.83 170.36 25.9 170.26 25.97 170.26 26.33 170.4 26.4 170.33 26.79 169.27 26.65 169.16 26.68 169.06 26.58 168.99 26.54 169.09 26.47 169.13 26.22 168.99 26.26 168.95 26.19 168.88 26.08 168.84 25.97 168.91ZM15.48 165.21 15.34 165.24 15.2 165.66 14.99 165.95 15.02 166.12 14.77 166.72 15.34 166.97 15.41 166.97 15.48 166.87 16.01 165.45 15.87 165.35ZM15.55 164.36 15.3 164.96 15.38 165.03 16.29 165.35 16.36 165.28 16.51 164.89 16.47 164.85 15.62 164.85ZM15.76 163.9 15.73 163.93 15.73 164.68 15.76 164.71 16.51 164.71 16.54 164.68 16.54 163.93 16.51 163.9ZM15.94 164.07 15.98 164.04 16.33 164.04 16.36 164.07 16.36 164.46 16.33 164.5 16.19 164.46 16.15 164.22 16.12 164.46 15.98 164.5 15.94 164.46ZM15.91 163.16 15.76 163.47 15.8 163.72 15.83 163.76 16.65 163.76 16.68 163.79 16.68 164.25 16.72 164.29 17 163.62 16.93 163.54Z" fill="#4D4D4D" fill-rule="evenodd"/>
+<circle cx="19.337" cy="178.375" r="0.6" fill="#1A1A1A"/>
+<circle cx="24.176" cy="165.672" r="0.6" fill="#1A1A1A"/>
+<circle cx="18.453" cy="180.938" r="0.6" fill="#1A1A1A"/>
+<circle cx="23.152" cy="168.464" r="0.6" fill="#1A1A1A"/>
+<circle cx="8.726" cy="190.313" r="0.6" fill="#1A1A1A"/>
+<circle cx="22.218" cy="171.069" r="0.6" fill="#1A1A1A"/>
+<circle cx="17.423" cy="183.615" r="0.6" fill="#1A1A1A"/>
+<circle cx="21.179" cy="173.504" r="0.6" fill="#1A1A1A"/>
+<circle cx="15.524" cy="188.912" r="0.6" fill="#1A1A1A"/>
+<text x="20.002" y="177.71" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">05</text>
+<text x="20.002" y="177.71" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">05</text>
+<text x="24.841" y="165.007" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">01</text>
+<text x="24.841" y="165.007" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">01</text>
+<text x="19.403" y="181.679" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">06</text>
+<text x="19.403" y="181.679" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">06</text>
+<text x="23.817" y="167.799" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">02</text>
+<text x="23.817" y="167.799" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">02</text>
+<text x="9.391" y="189.648" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">09</text>
+<text x="9.391" y="189.648" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">09</text>
+<text x="23.168" y="171.81" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">03</text>
+<text x="23.168" y="171.81" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">03</text>
+<text x="18.373" y="184.356" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">07</text>
+<text x="18.373" y="184.356" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">07</text>
+<text x="22.129" y="174.245" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">04</text>
+<text x="22.129" y="174.245" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">04</text>
+<text x="16.189" y="188.247" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">08</text>
+<text x="16.189" y="188.247" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">08</text>
+</g>
+<rect x="6" y="162.946" width="20.902" height="30.093" fill="none" stroke="#1A1A1A" stroke-width="0.35"/>
+<text x="6" y="162.046" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold">P6 · 01–09</text>
+<text x="26.902" y="162.046" font-family="Barlow Condensed" font-size="1.905" fill="#5A5A5A" text-anchor="end">1:16 507</text>
+</g>
+<g inkscape:groupmode="layer" id="layer-inset-p5" inkscape:label="P5">
+<rect x="29.602" y="159.546" width="20.734" height="24.766" fill="#FFFFFF"/>
+<g clip-path="url(#clip-inset-P5)">
+<path d="M36.98 162.85 37.17 163.71 36.95 163.8 36.79 163.64 36.69 163.32 36.63 163.29 36.31 163.45 36.34 163.71 36.25 163.9 37.58 165.17 37.87 165.64 37.9 165.84 37.52 166.88 37.58 166.92 37.68 166.85 37.87 166.28 38.09 166.09 38.41 166.09 38.63 166.34 38.06 167.87 37.93 167.93 37.46 167.71 37.43 167.33 37.55 166.98 37.43 166.98 37.2 167.17 36.95 166.63 37.01 166.34 36.63 166.18 36.54 166.25 36.38 166.66 36.69 166.79 36.82 166.92 36.95 167.33 36.82 167.42 36.41 167.52 36.31 167.62 36.22 167.93 36.5 168.03 36.66 168.28 36.44 168.38 36.25 168.89 36.38 169.05 36.15 169.3 35.65 169.11 35.52 168.95 35.39 169.01 35.3 168.98 35.23 168.86 34.18 168.44 33.99 168.47 33.77 168.28 32.75 167.9 32.63 167.97 32.43 168.54 32.75 168.66 32.88 168.63 35.39 169.55 35.49 169.68 34.47 172.42 34.37 172.48 34.28 172.77 34.31 172.99 33.93 174.01 34.21 174.1 34.31 174.23 33.96 175.12 33.87 175.21 33.71 175.21 32.69 177.98 32.69 178.07 33.23 178.27 33.32 178.42 33.2 178.65 33.13 178.58 33.2 178.46 33.17 178.36 32.63 178.17 32.53 178.23 32.43 178.55 32.31 178.65 32.31 178.74 32.53 178.87 32.4 179.31 32.66 179.41 32.72 179.51 31.39 183.07 34.15 184.11 43.85 184.11 47.34 174.77 47.85 174.13 48.33 173.94 48.84 173.88 48.9 174.01 48.71 174.51 48.97 174.61 49.03 174.7 48.49 176.14 48.36 176.33 48.33 176.58 47.82 177.76 47.79 178.01 47.38 178.93 47.34 179.19 46.84 180.36 46.8 180.62 46.39 181.54 46.36 181.79 45.95 182.72 45.82 183.22 45.44 184.11 45.75 184.11 46.65 181.76 46.77 181.57 46.8 181.32 47.31 180.14 47.34 179.92 47.76 178.96 47.79 178.71 47.95 178.42 48.08 177.98 48.2 177.79 48.52 176.8 48.65 176.61 48.78 176.1 49.09 175.44 49.51 174.2 49.63 174.13 50.14 174.32 50.14 171.53 49.98 171.46 49.82 171.49 49.6 171.94 49.22 171.56 48.97 171.08 49 170.38 50.08 167.55 50.14 167.2 40.35 163.48 40.19 163.55 39.21 166.22 39.05 166.28 38.82 166.18 38.73 166.06 38.92 165.61 38.92 165.2 39.11 165.1 39.33 164.4 38.76 164.18 38.63 164.05 38.32 164.63 38.22 164.47 38.19 164.21 38.7 162.85 38.22 162.85 37.87 163.8 37.65 163.93 37.39 163.8 37.24 162.88ZM36.19 179.06 38.28 179.89 37.49 182.05 37.33 182.33 35.23 181.51ZM33.67 178.11 35.61 178.84 35.77 178.96 34.82 181.38 32.91 180.68 32.72 180.55Z" fill="#CCCCCC" fill-rule="evenodd"/>
+<polygon points="18.04,278.285 82.935,106.783 80.021,105.68 15.126,277.183" fill="#1A1A1A"/>
+<polygon points="90.994,109.706 26.03,281.882 28.469,282.803 93.433,110.626" fill="#1A1A1A"/>
+<line x1="20.441" y1="267.538" x2="77.62" y2="116.428" stroke="#FFFFFF" stroke-width="0.35" stroke-dasharray="1.635 1.09"/>
+<path d="M16.495 277.351L17.073 275.822M16.145 277.219L16.724 275.689M15.795 277.086L16.374 275.557M15.445 276.954L16.024 275.425M16.902 277.505L17.481 275.976M17.252 277.638L17.831 276.108M17.602 277.77L18.18 276.241M17.951 277.902L18.53 276.373" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M21.363 263.341L22.212 261.098M22.528 263.782L23.377 261.539" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<path d="M81.159 106.46L80.58 107.989M80.809 106.328L80.23 107.857M80.459 106.195L79.881 107.725M80.11 106.063L79.531 107.592M81.567 106.614L80.988 108.144M81.916 106.747L81.338 108.276M82.266 106.879L81.687 108.408M82.616 107.011L82.037 108.541" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M75.533 120.184L74.684 122.427M76.698 120.625L75.849 122.868" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<line x1="88.365" y1="120.366" x2="31.098" y2="272.142" stroke="#FFFFFF" stroke-width="0.35" stroke-dasharray="1.635 1.09"/>
+<path d="M92.302 110.549L91.725 112.079M92.573 110.651L91.996 112.181M92.843 110.753L92.266 112.283M93.114 110.855L92.537 112.385M91.894 110.395L91.317 111.925M91.624 110.293L91.047 111.823M91.353 110.191L90.776 111.721M91.083 110.089L90.506 111.619" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M87.352 124.528L86.505 126.772M86.377 124.16L85.53 126.404" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<path d="M27.569 282.113L28.146 280.583M27.839 282.216L28.417 280.686M28.11 282.318L28.687 280.788M28.38 282.42L28.958 280.89M27.161 281.96L27.738 280.43M26.89 281.857L27.468 280.327M26.62 281.755L27.197 280.225M26.349 281.653L26.927 280.123" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M33.087 268.349L33.933 266.105M32.111 267.98L32.958 265.736" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<g transform="translate(18.03 273.911) rotate(20.73)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">01L</text></g>
+<g transform="translate(28.693 278.518) rotate(20.67)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">01R</text></g>
+<g transform="translate(90.771 113.991) rotate(200.67)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">19L</text></g>
+<g transform="translate(80.032 110.055) rotate(200.73)"><text x="0" y="0.988" font-family="Barlow Condensed" font-size="2.822" fill="#FFFFFF" font-weight="bold" text-anchor="middle">19R</text></g>
+<path d="M36.22 179.12 36.12 179.25 35.3 181.51 37.33 182.27 38.19 180.08 38.22 179.89ZM36.34 180.62 36.41 180.55 36.5 180.55 36.57 180.62 36.57 180.87 36.63 180.9 36.79 180.71 36.63 180.68 36.66 180.55 36.82 180.55 36.92 180.65 37.01 180.55 37.14 180.55 37.2 180.62 37.17 180.68 37.2 180.94 37.08 181.03 36.95 180.97 36.89 181 36.66 181 36.63 180.97 36.6 181 36.38 181 36.34 180.94 36.44 180.84 36.44 180.74 36.34 180.68ZM33.71 178.17 33.61 178.3 32.98 180.05 32.85 180.3 32.78 180.55 34.63 181.29 34.82 181.32 35.71 178.96 35.65 178.9ZM34.44 179.66 34.66 179.7 34.66 179.82 34.53 180.11 34.44 180.08 34.53 179.82 34.37 179.73ZM33.83 179.73 33.9 179.66 34.02 179.7 34.02 179.95 34.09 180.01 34.25 179.85 34.21 179.79 34.15 179.82 34.12 179.79 34.12 179.7 34.31 179.66 34.41 179.76 34.37 179.89 34.31 179.95 34.37 180.01 34.37 180.08 34.34 180.11 34.12 180.08 33.87 180.11 33.83 180.05 33.93 179.95 33.93 179.85 33.83 179.79ZM30.46 174.13 29.8 175.91 29.8 177.66 32.34 178.61 32.5 178.17 32.66 177.98 32.82 177.47 33.64 175.28 33.52 175.18 31.8 174.58 31.1 174.29 31.04 174.35ZM31.96 176.23 31.99 176.2 32.15 176.23 32.15 176.48 32.21 176.55 32.37 176.36 32.21 176.29 32.28 176.2 32.43 176.2 32.5 176.26 32.56 176.2 32.72 176.2 32.78 176.26 32.82 176.52 32.72 176.64 32.53 176.61 32.47 176.64 32.24 176.64 32.21 176.61 31.99 176.64 31.96 176.55 32.02 176.48 32.02 176.36 31.96 176.29ZM31.74 173.18 31.64 173.31 31.54 173.62 31.8 173.75 31.99 173.31 31.93 173.24ZM29.8 168.82 29.8 169.3 29.86 169.14 29.86 168.86ZM32.28 168.54 32.15 168.76 31.07 171.75 31 171.81 31.19 171.94 31.48 172 31.74 172.13 32.75 172.48 32.85 172.57 34.12 173.02 34.18 172.96 34.31 172.51 34.47 172.32 34.56 171.97 35.45 169.65 32.94 168.7 32.85 168.76ZM34.12 170.67 34.21 170.6 34.31 170.6 34.37 170.67 34.6 170.6 34.69 170.7 34.69 170.83 34.6 170.92 34.69 171.02 34.66 171.05 34.37 171.02 34.31 171.08 34.15 171.05 34.12 170.99 34.28 170.92 34.18 170.86 34.21 170.76ZM33.96 170.6 34.06 170.67 34.06 170.92 34.12 170.99 34.09 171.05 33.87 171.02 33.93 170.92 33.93 170.79 33.83 170.7ZM36.22 167.97 35.8 169.01 35.87 169.08 36.06 169.14 36.15 169.08 36.22 169.11 36.31 169.08 36.19 168.95 36.38 168.41 36.47 168.28 36.57 168.31 36.63 168.25 36.47 168.16 36.5 168.12 36.47 168.06 36.38 168.03 36.34 168.06ZM30.05 167.17 29.89 167.27 29.8 167.52 29.8 168.7 29.95 168.7 30.05 168.79 30.02 168.82 30.05 168.86 29.99 168.92 30.02 168.98 30.05 168.95 30.02 168.89 30.15 168.73 30.11 168.7 30.08 168.73 30.02 168.66 30.3 167.93 30.37 168 30.4 167.97 30.37 167.93 30.34 167.97 30.3 167.9 30.37 167.84 30.4 167.87 30.5 167.74 30.46 167.71 30.4 167.81 30.37 167.77 30.46 167.42 30.3 167.36 30.24 167.23 30.15 167.3 30.08 167.27ZM30.02 168.76 30.05 168.73 30.08 168.76 30.05 168.79ZM30.34 167.81 30.37 167.77 30.4 167.81 30.37 167.84ZM38.35 166.12 38.25 166.22 38.09 166.15 37.9 166.34 37.71 166.92 37.62 166.95 37.49 167.3 37.52 167.42 37.49 167.52 37.55 167.58 37.52 167.71 37.97 167.9 38.19 167.49 38.57 166.38 38.54 166.31 38.38 166.22 38.41 166.18ZM32.4 164.69 32.4 165.26 32.82 165.49 33.04 165.55 33.07 165.64 33.01 165.8 33.07 165.87 33.26 165.93 33.39 165.68 33.67 165.8 33.77 165.74 34.02 165.04 33.99 164.98 33.93 165.01 33.87 164.94 33.83 164.98 33.77 164.94 33.74 164.82 33.71 164.85 33.74 164.91 33.71 164.94 33.61 164.91 33.52 165.04 33.48 164.91 33.23 164.63 33.07 164.56 32.91 164.85 32.47 164.66ZM31.58 164.44 31.54 164.47 31.54 164.94 31.61 165.01 32.02 165.17 32.24 165.17 32.28 165.14 32.28 164.63 31.86 164.44ZM32.05 164.53 32.12 164.6 32.12 164.94 32.08 164.98 31.96 164.94 31.93 164.72 31.89 164.94 31.77 164.98 31.74 164.94 31.74 164.6ZM30.15 163.83 30.08 163.99 29.95 164.05 29.99 164.21 29.89 164.28 29.95 164.37 31.23 164.88 31.16 164.94 31.1 165.17 31.26 165.26 31.35 165.07 31.35 164.94 31.42 164.88 31.42 164.34 31.51 164.25 31.58 164.31 31.64 164.28 31.51 164.18 31.45 164.18 31.42 164.21 31.45 164.25 31.35 164.28 31 164.12 30.75 164.05 30.65 163.99 30.72 163.93 30.69 163.9 30.65 163.93 30.53 163.83 30.46 163.86 30.5 163.9 30.46 163.93ZM30.62 163.96 30.65 163.93 30.69 163.96 30.65 163.99ZM30.56 163.96 30.59 163.93 30.62 163.96 30.59 163.99ZM30.53 163.93 30.56 163.9 30.59 163.93 30.56 163.96ZM30.46 163.93 30.5 163.9 30.53 163.93 30.5 163.96ZM38.95 163.32 38.82 163.58 38.82 163.86 38.89 163.93 38.95 163.9 38.98 163.93 38.95 164.02 38.98 164.05 39.46 164.05 39.56 163.9 39.56 163.36 39.52 163.32ZM39.02 163.48 39.05 163.45 39.37 163.45 39.4 163.48 39.4 163.83 39.37 163.86 39.24 163.83 39.21 163.61 39.17 163.83 39.05 163.86 39.02 163.83ZM35.9 163.2 35.96 163.39 36.12 163.36 36.15 163.39 36.19 163.67 36.25 163.74 36.31 163.71 36.25 163.36 36.34 163.32 36.44 163.39 36.47 163.29 36.73 163.23 36.66 163.16 35.93 163.16ZM35.84 162.85 35.9 163.04 36.54 163.04 36.57 163.01 36.57 162.85Z" fill="#4D4D4D" fill-rule="evenodd"/>
+<circle cx="34.262" cy="170.792" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="40.935" cy="176.04" r="0.6" fill="#1A1A1A"/>
+<circle cx="44.473" cy="166.607" r="0.6" fill="#1A1A1A"/>
+<circle cx="34.237" cy="179.803" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="44.461" cy="176.623" r="0.6" fill="#1A1A1A"/>
+<circle cx="39.259" cy="181.559" r="0.6" fill="#1A1A1A"/>
+<circle cx="36.758" cy="180.697" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<circle cx="37.789" cy="174.902" r="0.6" fill="#1A1A1A"/>
+<circle cx="41.392" cy="165.399" r="0.6" fill="#1A1A1A"/>
+<circle cx="47.584" cy="167.622" r="0.6" fill="#1A1A1A"/>
+<circle cx="32.355" cy="176.33" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<text x="34.927" y="170.127" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">132</text>
+<text x="34.927" y="170.127" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">132</text>
+<text x="41.6" y="175.375" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">130</text>
+<text x="41.6" y="175.375" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">130</text>
+<text x="45.138" y="165.942" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">134</text>
+<text x="45.138" y="165.942" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">134</text>
+<text x="34.902" y="179.138" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">127</text>
+<text x="34.902" y="179.138" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">127</text>
+<text x="45.126" y="175.958" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">129</text>
+<text x="45.126" y="175.958" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">129</text>
+<text x="39.924" y="180.894" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">125</text>
+<text x="39.924" y="180.894" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">125</text>
+<text x="37.423" y="180.032" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">126</text>
+<text x="37.423" y="180.032" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">126</text>
+<text x="38.454" y="174.237" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">131</text>
+<text x="38.454" y="174.237" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">131</text>
+<text x="42.057" y="164.734" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">133</text>
+<text x="42.057" y="164.734" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">133</text>
+<text x="47.584" y="170.054" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" text-anchor="middle" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">135</text>
+<text x="47.584" y="170.054" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" text-anchor="middle" class="num">135</text>
+<text x="33.02" y="175.665" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">128</text>
+<text x="33.02" y="175.665" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">128</text>
+</g>
+<rect x="29.902" y="162.946" width="20.134" height="21.066" fill="none" stroke="#1A1A1A" stroke-width="0.35"/>
+<text x="29.902" y="162.046" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold">P5 · 125–135</text>
+<text x="50.037" y="162.046" font-family="Barlow Condensed" font-size="1.905" fill="#5A5A5A" text-anchor="end">1:18 345</text>
+</g>
+<g inkscape:groupmode="layer" id="layer-inset-p7" inkscape:label="P7">
+<rect x="52.737" y="159.546" width="19.1" height="8.071" fill="#FFFFFF"/>
+<g clip-path="url(#clip-inset-P7)">
+<path d="M71.61 162.87 69.62 162.87 69.47 163.3 69.47 163.44 69.58 163.57 69.71 163.37 69.76 163.41 69.56 163.87 69.47 163.57 69.42 163.55 69.35 163.59 69.04 164.52 68.67 165.38 68.63 165.61 68.54 165.74 68.2 166.65 68.33 166.92 68.29 166.96 68.22 166.85 68.13 166.85 67.93 167.39 70.26 167.39 70.57 166.58 70.57 166.49 70.51 166.44 70.66 166.35 71.41 164.36 71.34 164.27 71.48 164.18 71.61 163.82ZM66.23 162.87 65.98 162.87 65.87 163.12 65.85 163.3 65.73 163.5 64.76 166.17 64.4 167.01 64.38 167.19 64.26 167.39 64.49 167.39 64.56 167.3 64.69 166.87 64.85 166.56 64.87 166.38 65.17 165.72 65.26 165.36 65.55 164.7 65.64 164.34ZM61.12 162.87 60.82 163.59 60.55 163.73 60.48 163.89 60.46 164.11 60.55 164.32 60.12 165.49 63.65 166.83 63.74 166.81 65.24 162.87Z" fill="#CCCCCC" fill-rule="evenodd"/>
+<polygon points="37.303,254.535 83.48,132.501 81.406,131.716 35.229,253.751" fill="#1A1A1A"/>
+<polygon points="89.214,134.581 42.988,257.095 44.724,257.749 90.95,135.236" fill="#1A1A1A"/>
+<line x1="39.011" y1="246.888" x2="79.698" y2="139.364" stroke="#FFFFFF" stroke-width="0.35" stroke-dasharray="1.164 0.776"/>
+<path d="M36.203 253.87L36.615 252.782M35.954 253.776L36.366 252.688M35.706 253.682L36.117 252.594M35.457 253.588L35.869 252.5M36.494 253.98L36.905 252.892M36.742 254.074L37.154 252.986M36.991 254.168L37.403 253.08M37.24 254.263L37.652 253.174" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M39.667 243.901L40.271 242.305M40.497 244.215L41.101 242.619" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<path d="M82.216 132.271L81.804 133.36M81.967 132.177L81.555 133.266M81.718 132.083L81.306 133.171M81.469 131.989L81.057 133.077M82.506 132.381L82.094 133.47M82.755 132.475L82.343 133.564M83.003 132.57L82.592 133.658M83.252 132.664L82.84 133.752" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M78.212 142.037L77.608 143.633M79.042 142.35L78.438 143.947" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<line x1="87.343" y1="142.167" x2="46.595" y2="250.164" stroke="#FFFFFF" stroke-width="0.35" stroke-dasharray="1.164 0.776"/>
+<path d="M90.145 135.181L89.734 136.27M90.337 135.254L89.927 136.343M90.53 135.326L90.119 136.415M90.722 135.399L90.312 136.488M89.855 135.072L89.444 136.16M89.662 134.999L89.251 136.088M89.47 134.926L89.059 136.015M89.277 134.854L88.866 135.942" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M86.623 145.128L86.02 146.725M85.928 144.866L85.326 146.463" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<path d="M44.083 257.259L44.494 256.17M44.276 257.332L44.687 256.243M44.468 257.404L44.879 256.316M44.661 257.477L45.072 256.388M43.793 257.149L44.204 256.061M43.601 257.077L44.011 255.988M43.408 257.004L43.819 255.916M43.216 256.932L43.626 255.843" fill="none" stroke="#FFFFFF" stroke-width="0.245"/>
+<path d="M48.01 247.464L48.612 245.868M47.315 247.203L47.918 245.606" fill="none" stroke="#FFFFFF" stroke-width="0.525"/>
+<g transform="translate(37.296 251.422) rotate(20.73)"><text x="0" y="0.887" font-family="Barlow Condensed" font-size="2.534" fill="#FFFFFF" font-weight="bold" text-anchor="middle">01L</text></g>
+<g transform="translate(44.883 254.7) rotate(20.67)"><text x="0" y="0.742" font-family="Barlow Condensed" font-size="2.12" fill="#FFFFFF" font-weight="bold" text-anchor="middle">01R</text></g>
+<g transform="translate(89.055 137.63) rotate(200.67)"><text x="0" y="0.742" font-family="Barlow Condensed" font-size="2.12" fill="#FFFFFF" font-weight="bold" text-anchor="middle">19L</text></g>
+<g transform="translate(81.414 134.829) rotate(200.73)"><text x="0" y="0.887" font-family="Barlow Condensed" font-size="2.534" fill="#FFFFFF" font-weight="bold" text-anchor="middle">19R</text></g>
+<circle cx="61.032" cy="164.691" r="0.6" fill="#1A1A1A"/>
+<circle cx="63.542" cy="165.571" r="0.6" fill="#1A1A1A"/>
+<text x="61.032" y="167.123" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" text-anchor="middle" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">137</text>
+<text x="61.032" y="167.123" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" text-anchor="middle" class="num">137</text>
+<text x="64.207" y="164.906" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round" class="halo">136</text>
+<text x="64.207" y="164.906" font-family="Barlow Condensed SemiBold" font-size="2.117" fill="#1A1A1A" class="num">136</text>
+</g>
+<rect x="53.037" y="162.946" width="18.5" height="4.371" fill="none" stroke="#1A1A1A" stroke-width="0.35"/>
+<text x="53.037" y="162.046" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold">P7 · 136–137</text>
+<text x="71.537" y="162.046" font-family="Barlow Condensed" font-size="1.905" fill="#5A5A5A" text-anchor="end">1:25 782</text>
+</g>
+</g>
+<g inkscape:groupmode="layer" id="layer-header" inkscape:label="Header">
+<text x="6" y="11.4" font-family="Barlow Condensed" font-size="4.586" fill="#1A1A1A" font-weight="bold">LTAN</text>
+<text x="6" y="14.7" font-family="Barlow Condensed" font-size="2.293" fill="#5A5A5A">SYRIA · DCS</text>
+<text x="74.55" y="11.9" font-family="Barlow Condensed" font-size="5.292" fill="#1A1A1A" font-weight="bold" text-anchor="middle" letter-spacing="1.1">KONYA</text>
+<text x="74.4" y="15" font-family="Barlow Condensed" font-size="2.293" fill="#5A5A5A" text-anchor="middle" letter-spacing="0.8">PARKINGS</text>
+<text x="142" y="11.4" font-family="Barlow Condensed" font-size="4.586" fill="#1A1A1A" font-weight="bold" text-anchor="end">10-9B</text>
+<text x="142" y="14.7" font-family="Barlow Condensed" font-size="2.293" fill="#5A5A5A" text-anchor="end">v1</text>
+<line x1="6" y1="17.1" x2="142" y2="17.1" stroke="#1A1A1A" stroke-width="0.5"/>
+<text x="6" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">ÉLÉV. 3407 FT</text>
+<text x="51.3" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">ARP N37°58.7' E032°33.7'</text>
+<text x="96.7" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">VAR 3°E (1985)</text>
+<line x1="6" y1="22.8" x2="142" y2="22.8" stroke="#1A1A1A" stroke-width="0.25"/>
+</g>
+<g inkscape:groupmode="layer" id="layer-runway-table" inkscape:label="Runway table">
+<circle cx="7.2" cy="198.3" r="0.6" fill="#1A1A1A"/>
+<text x="9.6" y="199.3" font-family="Barlow Condensed" font-size="2.223" fill="#5A5A5A">OUVERT</text>
+<rect x="22.906" y="197.16" width="2.28" height="2.28" fill="#4D4D4D" rx="0.6"/>
+<circle cx="24.046" cy="198.3" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<text x="26.446" y="199.3" font-family="Barlow Condensed" font-size="2.223" fill="#5A5A5A">ABRI (HAS, HANGAR)</text>
+<circle cx="49.864" cy="198.3" r="0.6" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.25"/>
+<text x="52.264" y="199.3" font-family="Barlow Condensed" font-size="2.223" fill="#5A5A5A">HÉLICOPTÈRE SEUL</text>
+<text x="142" y="199.3" font-family="Barlow Condensed" font-size="2.223" fill="#5A5A5A" text-anchor="end">NUMÉROS DE PARKING TELS QUE DANS DCS</text>
+</g>
+<g inkscape:groupmode="layer" id="layer-footer" inkscape:label="Footer">
+<line x1="6" y1="201.2" x2="142" y2="201.2" stroke="#1A1A1A" stroke-width="0.5"/>
+<text x="6" y="203.7" font-family="Barlow Condensed" font-size="2.152" fill="#5A5A5A">DCS AIRFIELD CHARTS · données : carte F10 et fichiers de DCS World (Eagle Dynamics), via pydcs</text>
+<text x="142" y="203.7" font-family="Barlow Condensed" font-size="2.152" fill="#1A1A1A" font-weight="bold" text-anchor="end">PAS POUR LA NAVIGATION RÉELLE</text>
+</g>
+</svg>
