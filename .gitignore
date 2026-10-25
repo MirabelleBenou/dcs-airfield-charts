@@ -1,0 +1,4 @@
+out/
+sync/
+__pycache__/
+*.pyc
