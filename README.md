@@ -18,9 +18,20 @@ Plans d'aérodromes pour DCS World, tirés des données du jeu.
 2. Ajouter en fin de `Saved Games\DCS...\Scripts\Export.lua` :
    `dofile(lfs.writedir()..[[Scripts\ChartsCapture\ChartsCaptureHook.lua]])`
 3. Python 3.12+ avec `numpy`, `mss`, `pillow`.
-4. Lancer une mission sur le théâtre voulu, ouvrir la F10 en mode Alt, masquer étiquettes et unités, DCS au premier plan ; puis `python -I capture/f10capture.py capture <Théâtre> <Base>`.
+4. Configurer les chemins (voir ci-dessous).
+5. Lancer une mission sur le théâtre voulu, ouvrir la F10 en mode Alt, masquer étiquettes et unités, DCS au premier plan ; puis `python -I capture/f10capture.py capture <Théâtre> <Base>`.
 
-Les chemins (`ROOT`, `TERRAINS`) et la taille d'écran sont pour l'instant écrits en tête des scripts.
+### Configuration
+
+Copier `capture/config.example.json` en `capture/config.json` (ignoré par git) et l'adapter à son PC :
+
+| Clé | Rôle |
+|---|---|
+| `work_dir` | dossier de travail (obligatoire) : les scripts y écrivent `out/` et `sync/` ; créé s'il n'existe pas |
+| `dcs_install` | dossier d'installation de DCS World (obligatoire) : les terrains sont lus dans `<dcs_install>/Mods/terrains`, qui doit exister |
+| `screen` | taille de l'écran en pixels, `[largeur, hauteur]` (facultatif : on peut l'omettre, c'est alors celle de l'écran principal) |
+
+Le fichier est cherché, dans cet ordre : option `--config <chemin>` sur la ligne de commande, sinon variable d'environnement `DCS_CHARTS_CONFIG`, sinon `capture/config.json`. Le `~` est développé. Si le fichier manque ou est incomplet, le script s'arrête avec un message qui le dit.
 
 ## Ce qu'on a mesuré
 

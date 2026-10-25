@@ -5,6 +5,7 @@ Usage (python -I f10capture.py ...) :
   capture <Theatre> <Base> [<Base> ...]  -> out/<theatre>/<Base>/{tiles/,tiles.json,mosaic.png,base.json}
   modes   <Theatre> <Base> [map|alt|sat] -> out/<theatre>/<Base>/modes/<mode>.png (une capture par mode ;
                                             sans mode : les trois, avec attente de Entree entre chaque)
+Option : --config <chemin> (sinon variable DCS_CHARTS_CONFIG, sinon capture/config.json ; voir config.example.json)
 """
 import ctypes
 import json
@@ -17,15 +18,16 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # python -I n'ajoute pas le dossier du script
+from config import load_config
+
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
 except Exception:
     pass
 
 HOST, PORT = '127.0.0.1', 47123
-ROOT = Path(r'D:\Claude_AI\DCS_Airfield_Charts')
-TERRAINS = Path(r'F:\DCS World OpenBeta\Mods\terrains')
-SCREEN = (3440, 1440)
+CFG = None             # configuration (config.py), fixee par init() avant toute commande
 MARGIN_L, MARGIN_T, MARGIN_R, MARGIN_B = 0, 36, 90, 0
 ALT_MIN = 1350.0
 ALT_ABOVE_GROUND = 700.0
@@ -80,8 +82,16 @@ def hook_release():
 
 
 # ---------- synchronisation par fichiers (ADDENDUM 1) ----------
-SYNC = ROOT / 'sync'
+SYNC = None            # work_dir / 'sync', fixe par init()
 SYNC_POLL_S = 5.0
+
+
+def init(argv):
+    """Charge la configuration (chemins, ecran) ; retourne argv sans l'option --config."""
+    global CFG, SYNC
+    CFG, rest = load_config(argv)
+    SYNC = CFG.work_dir / 'sync'
+    return rest
 
 
 def set_status(state):
@@ -195,6 +205,22 @@ def ensure_dcs_front(context=''):
 # ---------- capture ----------
 _sct = None
 _last = None
+_screen = None
+
+
+def screen_size():
+    """Taille d'ecran de la configuration ; sinon celle de l'ecran principal (mss), lue a la premiere demande."""
+    global _sct, _screen
+    if _screen is None:
+        if CFG.screen is not None:
+            _screen = CFG.screen
+        else:
+            if _sct is None:
+                import mss
+                _sct = mss.mss()
+            m = _sct.monitors[1]
+            _screen = (m['width'], m['height'])
+    return _screen
 
 
 def grab():
@@ -205,8 +231,9 @@ def grab():
         _sct = mss.mss()
     shot = _sct.grab(_sct.monitors[1])
     img = np.asarray(shot)[:, :, :3][:, :, ::-1].copy()   # BGRA -> RGB
-    if (img.shape[1], img.shape[0]) != SCREEN:
-        raise SystemExit(f'ARRET : ecran {img.shape[1]}x{img.shape[0]} au lieu de {SCREEN[0]}x{SCREEN[1]}')
+    screen = screen_size()
+    if (img.shape[1], img.shape[0]) != screen:
+        raise SystemExit(f'ARRET : ecran {img.shape[1]}x{img.shape[0]} au lieu de {screen[0]}x{screen[1]}')
     return img
 
 
@@ -323,7 +350,8 @@ def cam_params(ext):
 
 # ---------- grille ----------
 def usable_px():
-    return SCREEN[0] - MARGIN_L - MARGIN_R, SCREEN[1] - MARGIN_T - MARGIN_B
+    w, h = screen_size()
+    return w - MARGIN_L - MARGIN_R, h - MARGIN_T - MARGIN_B
 
 
 def zone_of(ext):
@@ -347,14 +375,14 @@ def plan_grid(zone, mpp):
 
 # ---------- commandes ----------
 def rn4_dir(theatre):
-    d = TERRAINS / theatre / 'AirfieldsTaxiways'
+    d = CFG.terrains / theatre / 'AirfieldsTaxiways'
     if not d.is_dir():
         raise SystemExit(f'ARRET : dossier introuvable {d}')
     return d
 
 
 def out_theatre(theatre):
-    return ROOT / 'out' / theatre.lower()
+    return CFG.work_dir / 'out' / theatre.lower()
 
 
 def find_rn4(theatre, base):
@@ -632,8 +660,9 @@ def ask(text):
 
 
 if __name__ == '__main__':
+    _argv = init(sys.argv)
     try:
-        main(sys.argv)
+        main(_argv)
     except (AskCdP, ForegroundFailure, RuntimeError, OSError) as e:
         hook_release()
         ask(f'{type(e).__name__}: {e}')

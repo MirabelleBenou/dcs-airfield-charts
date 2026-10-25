@@ -16,6 +16,9 @@ import mss
 import numpy as np
 from PIL import Image
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # python -I n'ajoute pas le dossier du script
+from config import load_config
+
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
 except Exception:
@@ -23,8 +26,7 @@ except Exception:
 
 HOST, PORT = '127.0.0.1', 47123
 LAT, LON = 49.9453, 6.5650
-ROOT = Path(r'D:\Claude_AI\DCS_Airfield_Charts')
-OUT = ROOT / 'out' / 'bitburg'
+OUT = None             # work_dir / 'out' / 'bitburg', fixe apres load_config
 STAB_FRAC = 0.005      # 0,5 % des pixels
 PIX_THR = 8            # seuil par pixel (sur 255)
 POLL_S = 0.1
@@ -304,9 +306,11 @@ def step_D():
 
 
 if __name__ == '__main__':
+    CFG, _argv = load_config(sys.argv)
+    OUT = CFG.work_dir / 'out' / 'bitburg'
     selftest_phase()
     OUT.mkdir(parents=True, exist_ok=True)
-    step = sys.argv[1].upper() if len(sys.argv) > 1 else ''
+    step = _argv[1].upper() if len(_argv) > 1 else ''
     try:
         {'A': step_A, 'B': step_B, 'C': step_C, 'D': step_D}[step]()
     finally:

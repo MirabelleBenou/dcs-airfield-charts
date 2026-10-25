@@ -2,3 +2,4 @@ out/
 sync/
 __pycache__/
 *.pyc
+capture/config.json
