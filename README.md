@@ -8,13 +8,13 @@ The goal is to share a complete set of charts for every airfield, as PDF and PNG
 
 ## Example charts
 
-Three Syria airfields, rendered by `render/build_chart.py` from the F10 capture and the game files, with no manual drawing (work in progress: the full set is not published yet). A5 portrait, magnetic declination for **1985** (the default; `--annee` changes it). Every page comes as **SVG** (vector, organised as Inkscape layers; editing needs the Barlow Condensed fonts from `render/fonts/`), **PNG** (1748 × 2480 px, 300 dpi, ready for the DCS kneeboard) and **PDF** (one file per airfield, all pages).
+Three Syria airfields, rendered by `render/build_chart.py` from the F10 capture and the game files, with no manual drawing (work in progress: the full set is not published yet). A5 portrait, magnetic declination for **1985** (the default; `--annee` changes it). Every page comes as **SVG** (vector, organised as Inkscape layers; editing needs the Barlow Condensed fonts from `render/fonts/`), **PNG** (1748 × 2480 px, 300 dpi, ready for the DCS kneeboard) and **PDF** (one file per airfield, all pages). The links download the files themselves; when saving from a GitHub file page, use its *Download raw file* button (saving the page itself gives an HTML file that Inkscape cannot open).
 
 | Airfield | PDF (all pages) | 10-9 (airfield) | Parking pages |
 |---|---|---|---|
-| Konya (LTAN) | [LTAN_Konya_charts.pdf](docs/examples/syria/LTAN_Konya_charts.pdf) | [SVG](docs/examples/syria/LTAN_Konya_10-9.svg) · [PNG](docs/examples/syria/LTAN_Konya_10-9.png) | 10-9A: [SVG](docs/examples/syria/LTAN_Konya_10-9A.svg) · [PNG](docs/examples/syria/LTAN_Konya_10-9A.png) — 10-9B: [SVG](docs/examples/syria/LTAN_Konya_10-9B.svg) · [PNG](docs/examples/syria/LTAN_Konya_10-9B.png) |
-| Adana Sakirpasa (LTAF) | [LTAF_Adana_charts.pdf](docs/examples/syria/LTAF_Adana_charts.pdf) | [SVG](docs/examples/syria/LTAF_Adana_10-9.svg) · [PNG](docs/examples/syria/LTAF_Adana_10-9.png) | none: parking insets inside the plan |
-| Ramat David (LLRD) | [LLRD_Ramat_David_charts.pdf](docs/examples/syria/LLRD_Ramat_David_charts.pdf) | [SVG](docs/examples/syria/LLRD_Ramat_David_10-9.svg) · [PNG](docs/examples/syria/LLRD_Ramat_David_10-9.png) | 10-9A: [SVG](docs/examples/syria/LLRD_Ramat_David_10-9A.svg) · [PNG](docs/examples/syria/LLRD_Ramat_David_10-9A.png) |
+| Konya (LTAN) | [LTAN_Konya_charts.pdf](docs/examples/syria/LTAN_Konya_charts.pdf?raw=true) | [SVG](docs/examples/syria/LTAN_Konya_10-9.svg?raw=true) · [PNG](docs/examples/syria/LTAN_Konya_10-9.png?raw=true) | 10-9A: [SVG](docs/examples/syria/LTAN_Konya_10-9A.svg?raw=true) · [PNG](docs/examples/syria/LTAN_Konya_10-9A.png?raw=true) — 10-9B: [SVG](docs/examples/syria/LTAN_Konya_10-9B.svg?raw=true) · [PNG](docs/examples/syria/LTAN_Konya_10-9B.png?raw=true) |
+| Adana Sakirpasa (LTAF) | [LTAF_Adana_charts.pdf](docs/examples/syria/LTAF_Adana_charts.pdf?raw=true) | [SVG](docs/examples/syria/LTAF_Adana_10-9.svg?raw=true) · [PNG](docs/examples/syria/LTAF_Adana_10-9.png?raw=true) | none: parking insets inside the plan |
+| Ramat David (LLRD) | [LLRD_Ramat_David_charts.pdf](docs/examples/syria/LLRD_Ramat_David_charts.pdf?raw=true) | [SVG](docs/examples/syria/LLRD_Ramat_David_10-9.svg?raw=true) · [PNG](docs/examples/syria/LLRD_Ramat_David_10-9.png?raw=true) | 10-9A: [SVG](docs/examples/syria/LLRD_Ramat_David_10-9A.svg?raw=true) · [PNG](docs/examples/syria/LLRD_Ramat_David_10-9A.png?raw=true) |
 
 | Konya 10-9 | Konya 10-9A |
 |---|---|
