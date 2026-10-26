@@ -98,6 +98,10 @@ MIT — see `LICENSE`.
 
 ## Acknowledgements
 
+**How this project is built.** DCS Airfield Charts is built with [Claude](https://www.anthropic.com/claude), Anthropic's AI: it designed the methods, wrote the code and produced the charts, working as project lead and developer. Benoit (KHR-26 / 4th VEAW), a sim pilot with an IT background but not a developer or a graphic designer, had the idea, made the decisions and checked the results.
+
+Thanks to Flappie for reviewing the SVG files and suggesting the Inkscape layers, and to the pilots of the 4th VEAW for testing.
+
 The principle — driving the F10 camera from `Export.lua` and capturing the screen — comes from the map generator of [DCS Olympus](https://github.com/Pax1601/DCSOlympus). No code is taken from it.
 
 DCS World is a trademark of Eagle Dynamics SA. This project is neither made nor endorsed by Eagle Dynamics.
