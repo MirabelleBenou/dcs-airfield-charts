@@ -1,6 +1,8 @@
-# Syria — all airfields
+# Syria — all airfields and heliports
 
-One PDF per airfield (all its pages: 10-9, then the parking pages 10-9A, 10-9B… when needed). Magnetic declination for **1985**. Every page as PNG (kneeboard) and SVG (Inkscape layers) is in the [global zip](../DCS_Airfield_Charts_Syria_1985.zip?raw=true).
+One PDF per airfield and helicopter base (all its pages: 10-9, then the parking pages 10-9A, 10-9B… when needed). Magnetic declination for **1985**. Every page as PNG (kneeboard) and SVG (Inkscape layers) is in the [global zip](../DCS_Airfield_Charts_Syria_1985.zip?raw=true).
+
+**Heliport directory**: the 141 other heliports of Syria, four to a page with a plan of their pads and pad numbers, position, elevation and nearest town, and an index: [Syria_heliports_directory.pdf](Syria_heliports_directory.pdf?raw=true) (the pages as JPEG for the kneeboard are in the zip, folder `heliports/`).
 
 | Airfield | ICAO | PDF | Pages |
 |---|---|---|---|
@@ -12,6 +14,7 @@ One PDF per airfield (all its pages: 10-9, then the parking pages 10-9A, 10-9B�
 | Amman | OJAM | [OJAM_Amman_charts.pdf](OJAM_Amman_charts.pdf?raw=true) | 10-9, 10-9A |
 | An Nasiriyah | — | [An_Nasiriyah_charts.pdf](An_Nasiriyah_charts.pdf?raw=true) | 10-9 |
 | As Suwayda | — | [As_Suwayda_charts.pdf](As_Suwayda_charts.pdf?raw=true) | 10-9 |
+| At Tanf (helicopters) | — | [At_Tanf_charts.pdf](At_Tanf_charts.pdf?raw=true) | 10-9 |
 | Beirut | OLBA | [OLBA_Beirut_charts.pdf](OLBA_Beirut_charts.pdf?raw=true) | 10-9 |
 | Ben Gurion | LLBG | [LLBG_Ben_Gurion_charts.pdf](LLBG_Ben_Gurion_charts.pdf?raw=true) | 10-9, 10-9A |
 | Chukurova | LTDB | [LTDB_Chukurova_charts.pdf](LTDB_Chukurova_charts.pdf?raw=true) | 10-9, 10-9A |
@@ -42,25 +45,30 @@ One PDF per airfield (all its pages: 10-9, then the parking pages 10-9A, 10-9B�
 | Kahramanmaras | LTCN | [LTCN_Kahramanmaras_charts.pdf](LTCN_Kahramanmaras_charts.pdf?raw=true) | 10-9 |
 | Kedem | — | [Kedem_charts.pdf](Kedem_charts.pdf?raw=true) | 10-9 |
 | Khalkhalah | — | [Khalkhalah_charts.pdf](Khalkhalah_charts.pdf?raw=true) | 10-9, 10-9A |
+| Kharab Ishk (helicopters) | — | [Kharab_Ishk_charts.pdf](Kharab_Ishk_charts.pdf?raw=true) | 10-9 |
 | King Abdullah II | OJKA | [OJKA_King_Abdullah_II_charts.pdf](OJKA_King_Abdullah_II_charts.pdf?raw=true) | 10-9, 10-9A |
 | King Hussein | OJMF | [OJMF_King_Hussein_charts.pdf](OJMF_King_Hussein_charts.pdf?raw=true) | 10-9 |
 | Kingsfield | LCRE | [LCRE_Kingsfield_charts.pdf](LCRE_Kingsfield_charts.pdf?raw=true) | 10-9 |
 | Kiryat Shmona | LLKS | [LLKS_Kiryat_Shmona_charts.pdf](LLKS_Kiryat_Shmona_charts.pdf?raw=true) | 10-9 |
 | Konya | LTAN | [LTAN_Konya_charts.pdf](LTAN_Konya_charts.pdf?raw=true) | 10-9, 10-9A, 10-9B |
-| Lakatamia | — | [Lakatamia_charts.pdf](Lakatamia_charts.pdf?raw=true) | 10-9 |
+| Lakatamia (helicopters) | — | [Lakatamia_charts.pdf](Lakatamia_charts.pdf?raw=true) | 10-9 |
 | Larnaca | LCLK | [LCLK_Larnaca_charts.pdf](LCLK_Larnaca_charts.pdf?raw=true) | 10-9 |
 | Latakia | OSLK | [OSLK_Latakia_charts.pdf](OSLK_Latakia_charts.pdf?raw=true) | 10-9, 10-9A |
+| Marj as Sultan North (helicopters) | — | [Marj_as_Sultan_North_charts.pdf](Marj_as_Sultan_North_charts.pdf?raw=true) | 10-9 |
+| Marj as Sultan South (helicopters) | — | [Marj_as_Sultan_South_charts.pdf](Marj_as_Sultan_South_charts.pdf?raw=true) | 10-9 |
 | Marj Ruhayyil | — | [Marj_Ruhayyil_charts.pdf](Marj_Ruhayyil_charts.pdf?raw=true) | 10-9 |
 | Megiddo | LLMG | [LLMG_Megiddo_charts.pdf](LLMG_Megiddo_charts.pdf?raw=true) | 10-9 |
 | Mezzeh | OS67 | [OS67_Mezzeh_charts.pdf](OS67_Mezzeh_charts.pdf?raw=true) | 10-9 |
 | Minakh | — | [Minakh_charts.pdf](Minakh_charts.pdf?raw=true) | 10-9 |
 | Muwaffaq Salti | OJMS | [OJMS_Muwaffaq_Salti_charts.pdf](OJMS_Muwaffaq_Salti_charts.pdf?raw=true) | 10-9, 10-9A, 10-9B |
+| Naqoura (helicopters) | — | [Naqoura_charts.pdf](Naqoura_charts.pdf?raw=true) | 10-9 |
 | Nejrab | OSAP | [OSAP_Nejrab_charts.pdf](OSAP_Nejrab_charts.pdf?raw=true) | 10-9 |
 | Nevatim | — | [Nevatim_charts.pdf](Nevatim_charts.pdf?raw=true) | 10-9, 10-9A |
 | Palmachim | LL59 | [LL59_Palmachim_charts.pdf](LL59_Palmachim_charts.pdf?raw=true) | 10-9, 10-9A |
 | Palmyra | OSPR | [OSPR_Palmyra_charts.pdf](OSPR_Palmyra_charts.pdf?raw=true) | 10-9 |
 | Paphos | LCPH | [LCPH_Paphos_charts.pdf](LCPH_Paphos_charts.pdf?raw=true) | 10-9, 10-9A |
 | Prince Hassan | OJPH | [OJPH_Prince_Hassan_charts.pdf](OJPH_Prince_Hassan_charts.pdf?raw=true) | 10-9, 10-9A |
+| Qabr as Sitt (helicopters) | — | [Qabr_as_Sitt_charts.pdf](Qabr_as_Sitt_charts.pdf?raw=true) | 10-9 |
 | Ramat David | LLRD | [LLRD_Ramat_David_charts.pdf](LLRD_Ramat_David_charts.pdf?raw=true) | 10-9, 10-9A |
 | Rasin El Aboud | — | [Rasin_El_Aboud_charts.pdf](Rasin_El_Aboud_charts.pdf?raw=true) | 10-9 |
 | Rayak | OLRA | [OLRA_Rayak_charts.pdf](OLRA_Rayak_charts.pdf?raw=true) | 10-9 |
@@ -72,6 +80,7 @@ One PDF per airfield (all its pages: 10-9, then the parking pages 10-9A, 10-9B�
 | Shayrat | — | [Shayrat_charts.pdf](Shayrat_charts.pdf?raw=true) | 10-9 |
 | T2 | — | [T2_charts.pdf](T2_charts.pdf?raw=true) | 10-9 |
 | Tabqa | — | [Tabqa_charts.pdf](Tabqa_charts.pdf?raw=true) | 10-9 |
+| Taftanaz (helicopters) | — | [Taftanaz_charts.pdf](Taftanaz_charts.pdf?raw=true) | 10-9 |
 | Tal Siman | — | [Tal_Siman_charts.pdf](Tal_Siman_charts.pdf?raw=true) | 10-9 |
 | Tel Nof | LLEK | [LLEK_Tel_Nof_charts.pdf](LLEK_Tel_Nof_charts.pdf?raw=true) | 10-9, 10-9A |
 | Teyman | LLBS | [LLBS_Teyman_charts.pdf](LLBS_Teyman_charts.pdf?raw=true) | 10-9, 10-9A |

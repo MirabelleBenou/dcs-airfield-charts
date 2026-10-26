@@ -7,8 +7,16 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Coming next
 
-- Heliports: charts for the helicopter bases, and a directory of the Syria heliports with their pads and pad numbers.
 - Cold War Germany.
+
+## AC-V1.3.0 — 26 October 2026
+
+Syria: **helicopter bases and heliports**.
+
+- **7 new charts** for the helicopter bases: Marj as Sultan South (Der Salman in the DCS files), Marj as Sultan North, Qabr as Sitt and Taftanaz, whose short runways are now found, and At Tanf, Kharab Ishk and Naqoura, the heliports with a tower radio (no runway table on these three). Each one is titled "BASE D'HÉLICOPTÈRES" (the charts are in French), counts its pads ("AIRES"), and every pad has its DCS number.
+- **Heliport directory**: the 141 other heliports of Syria in one PDF, four to a page. Each has a plan of the F10 map with its pads circled and numbered, its position, elevation, pad sizes and the nearest town (for example "6,5 km N de Nazareth": 6.5 km north of Nazareth). Sites larger than a box take two; sites in two separate groups (HI17) show both. An index at the front gives the page of every heliport.
+- **Scale bar fixed** on 11 small airfields (Gulechoba, Haifa, Ilker Karter, Kingsfield, Kiryat Shmona, Lakatamia, Rosh Pina, T2, Tal Siman, Teyman, Wujah Al Hajar): it only showed "0 FT" and "0"; it now has 50 or 100 m and 200 or 500 ft steps, each one labelled.
+- Lakatamia, whose spots are all for helicopters, is now titled "BASE D'HÉLICOPTÈRES" too.
 
 ## AC-V1.2.0 — 26 October 2026
 
