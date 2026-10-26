@@ -81,7 +81,10 @@ def distance_to_mask_m(mask, mpp):
 
 
 def building_mask(img, pav, mpp):
-    """Batiments : couleur +-14, ouverture 1 m, composantes (>= 40 m2) a moins de 60 m du revetement."""
+    """Batiments : couleur +-14, ouverture 1 m, composantes (>= 40 m2) a moins de 60 m du revetement ; puis les trous
+    (composantes 4-connexes du complement, <= 40 m2, hors bord de la mosaique) sont combles : ce sont les numeros de
+    parking imprimes par la carte F10 dans les abris. Le nombre de batiments renvoye est celui d'avant le comblement."""
+    max_hole_m2 = 40.0
     m = near_color(img, BUILDING_RGB, BUILDING_TOL)
     m = open_mask(m, BUILDING_OPEN_M, mpp)
     n, lab, stats, _ = cv2.connectedComponentsWithStats(m.view(np.uint8), connectivity=8)
@@ -98,7 +101,15 @@ def building_mask(img, pav, mpp):
     keep = np.zeros(n, bool)
     area = stats[:, cv2.CC_STAT_AREA] * mpp * mpp
     keep[1:] = (dmin[1:] < BUILDING_NEAR_M) & (area[1:] >= BUILDING_MIN_M2)
-    return keep[lab], int(keep.sum())
+    mk = keep[lab]
+    # trous : composantes 4-connexes du complement, de moins de 40 m2 et qui ne touchent pas le bord
+    nb, labb, stb, _ = cv2.connectedComponentsWithStats((~mk).view(np.uint8), connectivity=4)
+    h, w = mk.shape
+    x, y = stb[:, cv2.CC_STAT_LEFT], stb[:, cv2.CC_STAT_TOP]
+    touches = (x == 0) | (y == 0) | (x + stb[:, cv2.CC_STAT_WIDTH] == w) | (y + stb[:, cv2.CC_STAT_HEIGHT] == h)
+    hole = (~touches) & (stb[:, cv2.CC_STAT_AREA] * mpp * mpp <= max_hole_m2)
+    hole[0] = False
+    return mk | hole[labb], int(keep.sum())
 
 
 def mask_rings(mask, georef, eps_m, window=None):

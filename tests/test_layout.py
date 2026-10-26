@@ -190,3 +190,104 @@ def test_label_not_placed_is_omitted():
     ways = [('A', np.array([[10.0, 50.0], [30.0, 50.0]]), 20.0)]
     placed = layout.place_labels(ways, lambda nm: (4.0, 2.6), [(0.0, 40.0, 148.0, 60.0)], np.empty((0, 2)), 0.6, None)
     assert placed == {}
+
+
+# ---------- rangees de numeros (lot parkings-v2) ----------
+def _legacy_place_numbers(points, widths, text_h, dot_r, clip=None):
+    """Regle des 8 positions d'avant le lot, telle quelle (reference des points hors rangee)."""
+    from scipy.spatial import cKDTree
+    off = dot_r + 0.35
+    placed, out = [], []
+    tree = cKDTree(np.array(points, float)) if points else None
+    for (cx, cy), w in zip(points, widths):
+        chosen = None
+        for pos in layout.POS8:
+            rect, anc = layout.number_rect(pos, cx, cy, w, text_h, off)
+            ok = True
+            if clip is not None and not (rect[0] >= clip[0] and rect[1] >= clip[1] and rect[2] <= clip[2] and rect[3] <= clip[3]):
+                ok = False
+            if ok and any(layout.rects_overlap(rect, r2) for r2 in placed):
+                ok = False
+            if ok and tree is not None:
+                for j in tree.query_ball_point([(rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2],
+                                               (rect[2] - rect[0] + rect[3] - rect[1]) / 2 + dot_r + 0.5):
+                    if layout.circle_rect_overlap(points[j][0], points[j][1], dot_r, rect):
+                        ok = False
+                        break
+            if ok:
+                chosen = (pos, rect, anc)
+                break
+        if chosen is None:
+            rect, anc = layout.number_rect(layout.POS8[0], cx, cy, w, text_h, off)
+            chosen = (layout.POS8[0], rect, anc)
+        placed.append(chosen[1])
+        out.append(chosen)
+    return out
+
+
+def _no_conflict(pts, out, dot_r):
+    rects = [o[1] for o in out]
+    for i in range(len(rects)):
+        for j in range(i + 1, len(rects)):
+            assert not overlap(rects[i], rects[j])
+        for (cx, cy) in pts:
+            assert not layout.circle_rect_overlap(cx, cy, dot_r, rects[i])
+
+
+def test_row_of_five_all_numbers_same_side_without_overlap():
+    pts = [(10.0 + 3.0 * k, 50.0 + 0.1 * (k % 2)) for k in range(5)]
+    assert layout.find_rows(pts) == [[0, 1, 2, 3, 4]]
+    out = layout.place_numbers(pts, [2.0] * 5, 1.8, 0.8)
+    assert all(o[0] == 'ROW' and o[2] == 'middle' for o in out)
+    assert all((o[1][1] + o[1][3]) / 2 > p[1] for o, p in zip(out, pts))      # tous sous leurs points (vers le bas de la page)
+    _no_conflict(pts, out, 0.8)
+
+
+def test_row_diagonal_same_side_perpendicular():
+    pts = [(10.0 + 2.5 * k, 20.0 + 1.5 * k) for k in range(6)]
+    out = layout.place_numbers(pts, [2.0] * 6, 1.8, 0.8)
+    n = layout.row_normal(pts)
+    assert n[1] > 0
+    sides = [np.dot([(o[1][0] + o[1][2]) / 2 - p[0], (o[1][1] + o[1][3]) / 2 - p[1]], n) for o, p in zip(out, pts)]
+    assert all(s > 0 for s in sides)
+    _no_conflict(pts, out, 0.8)
+
+
+def test_two_close_parallel_rows_keep_their_side_without_conflict():
+    a = [(10.0 + 3.0 * k, 50.0) for k in range(5)]
+    b = [(10.0 + 3.0 * k, 54.5) for k in range(5)]
+    pts = a + b
+    assert layout.find_rows(pts) == [list(range(5)), list(range(5, 10))]
+    out = layout.place_numbers(pts, [2.0] * 10, 1.8, 0.8)
+    assert all(o[0] == 'ROW' for o in out)
+    for grp in (out[:5], out[5:]):
+        ys = [(o[1][1] + o[1][3]) / 2 for o in grp]
+        assert len({round(y, 6) for y in ys}) == 1                             # meme cote, meme alignement
+    _no_conflict(pts, out, 0.8)
+
+
+def test_row_takes_the_side_without_conflict():
+    pts = [(10.0 + 3.0 * k, 50.0) for k in range(5)] + [(16.0, 52.2)]         # un point isole sous la rangee
+    out = layout.place_numbers(pts, [2.0] * 6, 1.8, 0.8)
+    assert all(o[0] == 'ROW' for o in out[:5])
+    assert all((o[1][1] + o[1][3]) / 2 < p[1] for o, p in zip(out[:5], pts))  # cote bloque : la rangee passe dessus
+    _no_conflict(pts, out, 0.8)
+
+
+def test_isolated_points_keep_the_eight_positions_rule():
+    pts = [(10.0, 10.0), (50.0, 80.0), (120.0, 30.0), (10.0, 90.0)]
+    assert layout.find_rows(pts) == []
+    out = layout.place_numbers(pts, [2.0, 2.4, 1.6, 2.0], 1.8, 0.8, clip=(0.0, 0.0, 148.0, 210.0))
+    assert out == _legacy_place_numbers(pts, [2.0, 2.4, 1.6, 2.0], 1.8, 0.8, clip=(0.0, 0.0, 148.0, 210.0))
+    assert out[0][0] == 'NE'
+
+
+def test_curved_chain_is_not_a_row():
+    pts = [(30.0 * math.cos(t), 30.0 * math.sin(t)) for t in np.linspace(0, math.pi, 7)]
+    assert layout.find_rows(pts) == []
+
+
+def test_row_normal_vertical_row_goes_right():
+    pts = [(10.0, 10.0 + 3.0 * k) for k in range(4)]
+    n = layout.row_normal(pts)
+    assert n[0] > 0 and abs(n[1]) < 1e-9

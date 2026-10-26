@@ -333,40 +333,151 @@ def number_rect(pos, cx, cy, w, h, off):
     return (cx - off * 0.7 - w, cy + off * 0.7, cx - off * 0.7, cy + off * 0.7 + h), 'end'
 
 
+ROW_NEIGHBOR_RATIO = 1.7       # voisins : points a moins de 1,7 x la distance au plus proche voisin
+ROW_ANGLE_DEG = 15.0           # deux aretes d'un meme point a moins de 15 deg l'une de l'autre : meme groupe
+ROW_MIN_POINTS = 3
+ROW_STRAIGHT = 0.6             # ecart maximal a l'axe principal / mediane des distances au plus proche voisin
+
+
+def _axis_deviation(pts):
+    """Axe principal (moindres carres orthogonaux) de pts (N, 2) : (direction unitaire, ecart maximal des points a l'axe)."""
+    c = pts - pts.mean(axis=0)
+    _, _, vt = np.linalg.svd(c, full_matrices=False)
+    u = vt[0]
+    return u, float(np.abs(c @ np.array([-u[1], u[0]])).max())
+
+
+def find_rows(points):
+    """Rangees de parkings (regle 4.2) : liste de listes d'indices (tries), de la plus nombreuse a la moins nombreuse.
+    1. d_i = distance au plus proche voisin ; voisins de i : points a moins de 1,7 d_i ; arete (i, j) si chacun est voisin de l'autre.
+    2. direction d'une arete = angle modulo 180 deg ; deux aretes qui partagent un point et dont les directions different de
+       moins de 15 deg vont dans le meme groupe (union de proche en proche).
+    3. un groupe est une rangee s'il compte >= 3 points et si l'ecart maximal de ses points a leur axe principal est
+       <= 0,6 x la mediane des d_i de ses points.
+    4. de la plus nombreuse a la moins nombreuse ; un point deja pris est retire des suivantes ; sous 3 points : plus une rangee."""
+    pts = np.asarray(points, float).reshape(-1, 2)
+    n = len(pts)
+    if n < ROW_MIN_POINTS:
+        return []
+    d, _ = cKDTree(pts).query(pts, k=2)
+    d = d[:, 1]
+    tree = cKDTree(pts)
+    nbrs = []
+    for i in range(n):
+        cand = [j for j in tree.query_ball_point(pts[i], d[i] * ROW_NEIGHBOR_RATIO * (1 + 1e-9)) if j != i]
+        nbrs.append({j for j in cand if math.hypot(*(pts[j] - pts[i])) < d[i] * ROW_NEIGHBOR_RATIO})
+    edges = sorted((i, j) for i in range(n) for j in nbrs[i] if i < j and i in nbrs[j])
+    if not edges:
+        return []
+    ang = [math.degrees(math.atan2(pts[j][1] - pts[i][1], pts[j][0] - pts[i][0])) % 180.0 for i, j in edges]
+    parent = list(range(len(edges)))
+
+    def find(k):
+        while parent[k] != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+    at = {}
+    for k, (i, j) in enumerate(edges):
+        at.setdefault(i, []).append(k)
+        at.setdefault(j, []).append(k)
+    for ks in at.values():
+        for a in range(len(ks)):
+            for b in range(a + 1, len(ks)):
+                diff = abs(ang[ks[a]] - ang[ks[b]])
+                if min(diff, 180.0 - diff) < ROW_ANGLE_DEG:
+                    parent[find(ks[a])] = find(ks[b])
+    groups = {}
+    for k, (i, j) in enumerate(edges):
+        groups.setdefault(find(k), set()).update((i, j))
+    cands = []
+    for g in groups.values():
+        idx = sorted(g)
+        if len(idx) < ROW_MIN_POINTS:
+            continue
+        _, dev = _axis_deviation(pts[idx])
+        if dev <= ROW_STRAIGHT * float(np.median(d[idx])):
+            cands.append(idx)
+    cands.sort(key=lambda g: (-len(g), g[0]))
+    taken, rows = set(), []
+    for g in cands:
+        rest = [i for i in g if i not in taken]
+        if len(rest) < ROW_MIN_POINTS:
+            continue
+        taken.update(rest)
+        rows.append(rest)
+    return rows
+
+
+def _conflicts(rect, placed, points, tree, dot_r, clip):
+    """Nombre de conflits d'un rectangle de numero : sortie du clip (1), numeros deja poses recouverts, points recouverts."""
+    c = 0
+    if clip is not None and not (rect[0] >= clip[0] and rect[1] >= clip[1] and rect[2] <= clip[2] and rect[3] <= clip[3]):
+        c += 1
+    c += sum(1 for r2 in placed if rects_overlap(rect, r2))
+    if tree is not None:
+        for j in tree.query_ball_point([(rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2],
+                                       (rect[2] - rect[0] + rect[3] - rect[1]) / 2 + dot_r + 0.5):
+            if circle_rect_overlap(points[j][0], points[j][1], dot_r, rect):
+                c += 1
+    return c
+
+
+def _row_rect(p, s, w, h, off):
+    """Rectangle du numero d'un point `p` d'une rangee, du cote `s` (vecteur unitaire) : centre en p + s (off + |sx| w/2 + |sy| h/2)."""
+    d = off + abs(s[0]) * w / 2 + abs(s[1]) * h / 2
+    cx, cy = p[0] + s[0] * d, p[1] + s[1] * d
+    return (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+
+
+def row_normal(pts):
+    """Normale unitaire a une rangee, d'abord vers le bas de la page (n_y > 0 ; si n_y = 0, n_x > 0)."""
+    u, _ = _axis_deviation(np.asarray(pts, float))
+    n = np.array([-u[1], u[0]])
+    if n[1] < -1e-9 or (abs(n[1]) <= 1e-9 and n[0] < 0):
+        n = -n
+    return n
+
+
 def place_numbers(points, widths, text_h, dot_r, clip=None):
-    """Numero de chaque parking : 8 positions essayees, la premiere sans chevauchement d'un numero deja pose ni d'un point.
+    """Numero de chaque parking. 1) Rangees (find_rows) : les numeros d'une meme rangee vont du meme cote, perpendiculairement
+    a la rangee ; le cote retenu est celui qui a le moins de conflits (sortie du clip, numero deja pose, point, recouvrement
+    entre numeros de la rangee), a egalite le premier (vers le bas de la page) ; les numeros sans conflit sont poses, les
+    autres passent au placement libre. 2) Placement libre : 8 positions essayees, la premiere sans chevauchement d'un numero
+    deja pose ni d'un point.
     points : [(cx, cy)] mm ; widths : largeur du texte de chacun. Retourne [(pos, rect, anchor)] ; sans position libre,
     la premiere (NE). clip : rectangle hors duquel le numero n'est pas cherche a l'exterieur (inutilise si None)."""
     off = dot_r + 0.35
     placed = []
-    out = []
+    out = [None] * len(points)
     tree = cKDTree(np.array(points, float)) if points else None
+    for row in find_rows(points):
+        n = row_normal([points[i] for i in row])
+        best = None
+        for s in (n, -n):
+            rects = [_row_rect(points[i], s, widths[i], text_h, off) for i in row]
+            score = sum(_conflicts(r, placed, points, tree, dot_r, clip) for r in rects)
+            score += sum(1 for a in range(len(rects)) for b in range(a + 1, len(rects)) if rects_overlap(rects[a], rects[b]))
+            if best is None or score < best[0]:
+                best = (score, rects)
+        for i, rect in zip(row, best[1]):
+            if _conflicts(rect, placed, points, tree, dot_r, clip) == 0:
+                out[i] = ('ROW', rect, 'middle')
+                placed.append(rect)
     for k, ((cx, cy), w) in enumerate(zip(points, widths)):
+        if out[k] is not None:
+            continue
         chosen = None
         for pos in POS8:
             rect, anc = number_rect(pos, cx, cy, w, text_h, off)
-            ok = True
-            if clip is not None and not (rect[0] >= clip[0] and rect[1] >= clip[1] and rect[2] <= clip[2] and rect[3] <= clip[3]):
-                ok = False
-            if ok:
-                for r2 in placed:
-                    if rects_overlap(rect, r2):
-                        ok = False
-                        break
-            if ok and tree is not None:
-                for j in tree.query_ball_point([(rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2],
-                                               (rect[2] - rect[0] + rect[3] - rect[1]) / 2 + dot_r + 0.5):
-                    if circle_rect_overlap(points[j][0], points[j][1], dot_r, rect):
-                        ok = False
-                        break
-            if ok:
+            if _conflicts(rect, placed, points, tree, dot_r, clip) == 0:
                 chosen = (pos, rect, anc)
                 break
         if chosen is None:
             rect, anc = number_rect(POS8[0], cx, cy, w, text_h, off)
             chosen = (POS8[0], rect, anc)
         placed.append(chosen[1])
-        out.append(chosen)
+        out[k] = chosen
     return out
 
 
