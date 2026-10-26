@@ -34,7 +34,7 @@ EXTEND_MAX_M = 6000.0               # prolongement maximal de chaque cote de la 
 SPARE_HALF_WIDTH_MIN_M = 8.0        # candidats de secours (cadrage 4.2)
 SPARE_SEGMENT_MIN_M = 400.0
 SPARE_HOUGH_VOTES = HOUGH_VOTES * SPARE_SEGMENT_MIN_M / SEGMENT_MIN_M    # seuil d'accumulation proportionnel a la longueur (non fixe par le cadrage)
-HELI_SPARE_SEGMENT_MIN_M = 150.0    # lot heliports : mode helicoptere, les pistes des bases d'helicopteres sont courtes (cadrage 4.1)
+HELI_SPARE_SEGMENT_MIN_M = 150.0    # lot heliports (addendum 1) : seconde passe des bases d'helicopteres, pour les pistes restees sans candidat
 MATCH_MAX_DEG = 13.0                # ecart de cap maximal d'un appariement (cadrage 4.3 ; addendum 1 : 13 deg)
 FREE_LENGTH_SHARE = 0.75            # regle 3 : longueur de revetement >= 75 % du plus long candidat eligible (addendum 1)
 BARS_MIN_SHARE = 0.60               # barres de seuil trop courtes : < 60 % de la longueur de revetement (addendum 1)
@@ -424,7 +424,7 @@ def _choose_ends(c, sam, pav, clear, pave=None):
     return pave[0], pave[1], pave[2], 'revetement', bars_len, pave_len
 
 
-def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log=None, spare_segment_min=SPARE_SEGMENT_MIN_M):
+def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log=None, second_pass_min=None):
     """Pistes d'une mosaique. Retourne une liste de Runway.
 
     Sans `refs` : toutes les pistes marquees (comportement d'origine).
@@ -432,8 +432,9 @@ def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log
     magnetique modulo 180` : detection guidee par pydcs (cadrage 4.2 a 4.4 et addendum 1). Les pistes appariees en
     premier (candidats normaux a >= 2 blocs, dans l'ordre des candidats) viennent d'abord, puis les autres (dans l'ordre
     de `refs`). Chaque Runway porte `ref`, l'indice de sa piste pydcs.
-    `spare_segment_min` : longueur minimale (m) des candidats de secours (lot heliports : 150 m en mode helicoptere) ;
-    le seuil d'accumulation reste proportionnel a cette longueur."""
+    `second_pass_min` (lot heliports, addendum 1 ; mode helicoptere) : apres la passe ordinaire (candidats de secours a
+    400 m), longueur minimale (m) d'une seconde passe de candidats de secours, qui ne porte que sur les pistes pydcs
+    restees sans piste ; le seuil d'accumulation reste proportionnel a cette longueur. None : pas de seconde passe."""
     log = log or (lambda *a: None)
     mpp = georef.mpp
     sam = Sampler(georef)
@@ -472,17 +473,24 @@ def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log
         ln2, width, ends, mode, bars_len, pave_len = _choose_ends(c, sam, pav, clear)
         found[i] = _make_runway(ln2, width, ends, c['nb'], i, mode, bars_len, pave_len)
     # regle 3 : candidats libres (normaux non marques, puis de secours) <-> pistes pydcs libres
-    free_refs = [i for i in range(len(refs)) if i not in found]
-    if free_refs:
-        pool = [c for k, c in enumerate(info) if k not in marked]
-        spare, dist_s, m2s = candidate_lines(pav, georef, SPARE_HALF_WIDTH_MIN_M, spare_segment_min,
-                                             HOUGH_VOTES * spare_segment_min / SEGMENT_MIN_M)
+    # (lot heliports : en mode helicoptere, une seconde passe de candidats de secours a `second_pass_min`, pour les seules
+    # pistes pydcs restees sans piste ; les candidats deja examines a la premiere passe ne reviennent pas)
+    seen = []
+    for k_pass, (seg_min, votes) in enumerate([(SPARE_SEGMENT_MIN_M, SPARE_HOUGH_VOTES)]
+                                              + ([(second_pass_min, HOUGH_VOTES * second_pass_min / SEGMENT_MIN_M)]
+                                                 if second_pass_min else [])):
+        free_refs = [i for i in range(len(refs)) if i not in found]
+        if not free_refs:
+            break
+        pool = [c for k, c in enumerate(info) if k not in marked] if k_pass == 0 else []
+        spare, dist_s, m2s = candidate_lines(pav, georef, SPARE_HALF_WIDTH_MIN_M, seg_min, votes)
         for ln in spare:
-            if any(_same_line(ln, c['ln']) for c in info):
+            if any(_same_line(ln, c['ln']) for c in info) or any(_same_line(ln, o) for o in seen):
                 continue
             hw = half_width_along(ln, dist_s, m2s, georef, SPARE_HALF_WIDTH_MIN_M)
             pool.append({'ln': ln, 'hw': hw, 'width': 2 * hw, 'heading': heading_fn(ln), 'nb': count_blocks(ln, hw, blocks),
                          'spare': True})
+        seen.extend(c['ln'] for c in pool)
         for c in pool:                                                  # longueur de revetement des candidats eligibles
             if any(heading_diff(ref_h[i], c['heading']) <= MATCH_MAX_DEG for i in free_refs):
                 c['pave'] = _finish_pavement(c['ln'], c['hw'], sam, pav, clear)

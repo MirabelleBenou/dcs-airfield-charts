@@ -10,7 +10,6 @@ PAVEMENT_RGB, PAVEMENT_TOL = (153, 149, 131), 12
 BUILDING_RGB, BUILDING_TOL = (78, 74, 58), 14
 PAVEMENT_CLOSE_M, PAVEMENT_OPEN_M = 2.0, 2.5
 PAVEMENT_HOLE_M2, PAVEMENT_MIN_M2 = 400.0, 1500.0
-HELIPORT_PAVEMENT_MIN_M2 = 300.0       # lot heliports : les aires de 30 x 23 m (690 m2) d'un heliport doivent rester
 PAVEMENT_SIMPLIFY_M = 0.8
 BUILDING_OPEN_M, BUILDING_NEAR_M = 1.0, 60.0
 BUILDING_SIMPLIFY_M, BUILDING_MIN_M2 = 0.5, 40.0
@@ -67,14 +66,13 @@ def keep_components(mask, min_area_m2, mpp, connectivity=8):
     return keep[lab]
 
 
-def pavement_mask(img, mpp, min_area_m2=PAVEMENT_MIN_M2):
-    """Revetement : couleur +-12, fermeture 2 m, trous < 400 m2 combles, ouverture 2,5 m, composantes >= `min_area_m2`
-    (1 500 m2 ; lot heliports : 300 m2 pour les captures `kind: heliport`)."""
+def pavement_mask(img, mpp):
+    """Revetement : couleur +-12, fermeture 2 m, trous < 400 m2 combles, ouverture 2,5 m, composantes >= 1 500 m2."""
     m = near_color(img, PAVEMENT_RGB, PAVEMENT_TOL)
     m = close_mask(m, PAVEMENT_CLOSE_M, mpp)
     m = fill_small_holes(m, PAVEMENT_HOLE_M2, mpp)
     m = open_mask(m, PAVEMENT_OPEN_M, mpp)
-    return keep_components(m, min_area_m2, mpp)
+    return keep_components(m, PAVEMENT_MIN_M2, mpp)
 
 
 def distance_to_mask_m(mask, mpp):

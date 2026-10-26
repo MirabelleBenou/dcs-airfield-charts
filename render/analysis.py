@@ -228,7 +228,7 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     blist = dcsdata.airfield_beacons(all_beacons, facts.id)
 
     log(f'{base} -> {facts.name} (id {facts.id}), mosaique {g.width}x{g.height}, {g.mpp:.4f} m/px')
-    pav = vector.pavement_mask(img, g.mpp, vector.HELIPORT_PAVEMENT_MIN_M2 if is_heliport else vector.PAVEMENT_MIN_M2)
+    pav = vector.pavement_mask(img, g.mpp)
     heli_mode = bool(facts.slots) and all(sl.heli_only for sl in facts.slots)
     bld, n_bld = vector.building_mask(img, pav, g.mpp)
     clear = vector.clear_marking_mask(img)
@@ -243,8 +243,8 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
 
     refs = [(f'{m.name}/{o.name}', m.heading) for m, o in facts.rw_refs]
     if refs:
-        spare_min = runways.HELI_SPARE_SEGMENT_MIN_M if heli_mode else runways.SPARE_SEGMENT_MIN_M
-        rws = runways.detect_runways(img, pav, g, clear, refs=refs, heading_fn=mag_heading, log=log, spare_segment_min=spare_min)
+        rws = runways.detect_runways(img, pav, g, clear, refs=refs, heading_fn=mag_heading, log=log,
+                                     second_pass_min=runways.HELI_SPARE_SEGMENT_MIN_M if heli_mode else None)
         if not rws:
             raise ChartError('aucune piste detectee')
     else:
