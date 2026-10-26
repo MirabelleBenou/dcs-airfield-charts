@@ -441,10 +441,9 @@ def row_normal(pts):
 
 def place_numbers(points, widths, text_h, dot_r, clip=None):
     """Numero de chaque parking. 1) Rangees (find_rows) : les numeros d'une meme rangee vont du meme cote, perpendiculairement
-    a la rangee ; le cote retenu est celui qui a le moins de conflits (sortie du clip, numero deja pose, point, recouvrement
-    entre numeros de la rangee), a egalite le premier (vers le bas de la page) ; les numeros sans conflit sont poses, les
-    autres passent au placement libre. 2) Placement libre : 8 positions essayees, la premiere sans chevauchement d'un numero
-    deja pose ni d'un point.
+    a la rangee ; un cote n'est retenu que s'il n'a aucun conflit (sortie du clip, numero deja pose, point, recouvrement
+    entre numeros de la rangee), le cote bas d'abord ; sinon toute la rangee passe au placement libre.
+    2) Placement libre : 8 positions essayees, la premiere sans chevauchement d'un numero deja pose ni d'un point.
     points : [(cx, cy)] mm ; widths : largeur du texte de chacun. Retourne [(pos, rect, anchor)] ; sans position libre,
     la premiere (NE). clip : rectangle hors duquel le numero n'est pas cherche a l'exterieur (inutilise si None)."""
     off = dot_r + 0.35
@@ -453,17 +452,15 @@ def place_numbers(points, widths, text_h, dot_r, clip=None):
     tree = cKDTree(np.array(points, float)) if points else None
     for row in find_rows(points):
         n = row_normal([points[i] for i in row])
-        best = None
         for s in (n, -n):
             rects = [_row_rect(points[i], s, widths[i], text_h, off) for i in row]
             score = sum(_conflicts(r, placed, points, tree, dot_r, clip) for r in rects)
             score += sum(1 for a in range(len(rects)) for b in range(a + 1, len(rects)) if rects_overlap(rects[a], rects[b]))
-            if best is None or score < best[0]:
-                best = (score, rects)
-        for i, rect in zip(row, best[1]):
-            if _conflicts(rect, placed, points, tree, dot_r, clip) == 0:
-                out[i] = ('ROW', rect, 'middle')
-                placed.append(rect)
+            if score == 0:                       # rangee tout ou rien : un cote sans aucun conflit, sinon placement libre
+                for i, rect in zip(row, rects):
+                    out[i] = ('ROW', rect, 'middle')
+                    placed.append(rect)
+                break
     for k, ((cx, cy), w) in enumerate(zip(points, widths)):
         if out[k] is not None:
             continue

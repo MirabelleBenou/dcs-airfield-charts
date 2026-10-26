@@ -274,6 +274,13 @@ def test_row_takes_the_side_without_conflict():
     _no_conflict(pts, out, 0.8)
 
 
+def test_row_blocked_on_both_sides_goes_entirely_to_free_placement():
+    pts = [(10.0 + 3.0 * k, 50.0) for k in range(5)] + [(16.0, 52.2), (16.0, 47.8)]    # un point sous, un point dessus
+    out = layout.place_numbers(pts, [2.0] * 7, 1.8, 0.8)
+    assert not any(o[0] == 'ROW' for o in out)                                            # tout ou rien
+    assert out == _legacy_place_numbers(pts, [2.0] * 7, 1.8, 0.8)
+
+
 def test_isolated_points_keep_the_eight_positions_rule():
     pts = [(10.0, 10.0), (50.0, 80.0), (120.0, 30.0), (10.0, 90.0)]
     assert layout.find_rows(pts) == []
