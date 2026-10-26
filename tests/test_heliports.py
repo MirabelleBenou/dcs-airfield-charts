@@ -224,3 +224,64 @@ def test_directory_page_smoke(sites):
     red = (abs(a[..., 0] - 170) < 12) & (abs(a[..., 1] - 35) < 12) & (abs(a[..., 2] - 35) < 12)
     assert red.sum() > 1500
     assert all(sorted(set(s.drawn)) == [x.name for x in s.aires] for s in ss)
+
+
+# ---------- lot ac-heliports-fond : plan sur fond F10 ----------
+def _layer(svg, label):
+    m = re.search(r'<g inkscape:groupmode="layer" id="[^"]*" inkscape:label="' + re.escape(html.escape(label)) + r'"[^>]*>(.*?)\n</g>', svg, re.S)
+    return m.group(1) if m else ''
+
+
+def test_at_tanf_is_on_f10_background(heli):
+    data, pages = heli['At_Tanf']
+    assert data.on_f10 and len(pages) == 1 and pages[0].id == '10-9'
+    assert pages[0].info['mode'] == 1 and pages[0].info['scale'] == pytest.approx(0.2, abs=1e-5)
+    svg = pages[0].svg
+    fx, fy, fw, fh = pages[0].info['frame']
+    layer = _layer(svg, 'F10 map')
+    assert layer.count('<image') == 1 and '<path' not in layer
+    assert f'width="{page.f(fw)}" height="{page.f(fh)}"' in layer and 'preserveAspectRatio="none"' in layer
+    assert 'href="data:image/jpeg;base64,' in layer
+    assert '<path' not in _layer(svg, 'Pavement') and '<path' not in _layer(svg, 'Buildings')
+    assert len(re.findall(r'<circle[^>]*stroke="#AA2323"', _layer(svg, 'Parking'))) == 2
+    assert 'clip-path=' in re.search(r'<g [^>]*inkscape:label="F10 map"[^>]*>', svg).group(0)
+
+
+def test_kharab_ishk_circles_and_numbers(heli):
+    data, pages = heli['Kharab_Ishk']
+    svg = pages[0].svg
+    assert len(re.findall(r'<circle[^>]*stroke="#AA2323"', _layer(svg, 'Parking'))) == 11
+    assert len(re.findall(r'class="num"', svg)) == 11
+    for p in data.parkings:
+        assert p.length > 0
+
+
+def test_circle_radii_follow_the_area_length(heli):
+    data, pages = heli['Kharab_Ishk']
+    s = pages[0].info['scale']
+    radii = sorted(float(r) for r in re.findall(r'<circle cx="[-\d.]+" cy="[-\d.]+" r="([\d.]+)" fill="none" stroke="#AA2323" stroke-width="0.4"/>',
+                                                 _layer(pages[0].svg, 'Parking')))
+    want = sorted(p.length / 2 * s - 0.2 for p in data.parkings)
+    assert len(radii) == len(want) and all(abs(a - b) <= 0.01 for a, b in zip(radii, want))
+
+
+def test_corner_blocks_sit_on_white_rectangles(heli):
+    data, pages = heli['At_Tanf']
+    grid = _layer(pages[0].svg, 'Frame & grid')
+    assert len(re.findall(r'<rect [^>]*fill="#FFFFFF" rx="1" fill-opacity="0.85"/>', grid)) == 2
+
+
+def test_der_salman_is_not_on_f10_background(heli):
+    data, pages = heli['Der_Salman']
+    assert not data.on_f10 and data.f10_img is None
+    assert 'F10 map' not in pages[0].svg and '#AA2323' not in pages[0].svg
+
+
+def test_f10_background_has_no_blue_cluster_near_the_airport(heli):
+    data, pages = heli['At_Tanf']
+    fx, fy, fw, fh = pages[0].info['frame']
+    view = compose.plan_view_f10(data, pages[0].info['frame'])
+    im = np.asarray(compose.fond_image(view, pages[0].info['frame'], data, soften=False))
+    cx, cy = (round((v) * page.FOND_PX_MM) for v in (view.pt(*data.arp)[0] - fx, view.pt(*data.arp)[1] - fy))
+    n, big = directory.blue_clusters(im, (cx, cy), 20.0 * view.s * page.FOND_PX_MM)
+    assert big <= 3

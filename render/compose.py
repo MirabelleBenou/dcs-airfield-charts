@@ -1,15 +1,18 @@
 """Assemblage des pages d'un chart : 10-9, puis 10-9A, 10-9B... selon la regle du cadrage 4.5."""
+import base64
+import io
 import math
 
 import cv2
 import numpy as np
+from PIL import Image
 from shapely.geometry import Polygon
 
-from . import geo, layout, vector
+from . import directory, geo, layout, vector
 from .fonts import CAP_HEIGHT, pt, text_width
-from .page import (SYM_INSET_R, SYM_PLAN_R, CORNER_PAD, CORNER_PAD_Y, FRAME_CELL, FRAME_W, FRAME_X, FT, LAST_ROW_Y, LEGEND_Y, PAGE_H, PAGE_W, PLAN_MARGIN_M,
-                   ROW_PITCH, X0, X1, PageOut, View, cells_from_mask, draw_scene, edge_ticks, footer, header,
-                   legend, north_block, number_elems, rot_box, rw_axes, runway_table, runway_polygon, scale_block, scale_plan)
+from .page import (FOND_PX_MM, FOND_S_MAX, SYM_INSET_R, SYM_PLAN_R, CORNER_PAD, CORNER_PAD_Y, FRAME_CELL, FRAME_W, FRAME_X, FT, LAST_ROW_Y, LEGEND_Y, PAGE_H, PAGE_W, PLAN_MARGIN_M,
+                   ROW_PITCH, X0, X1, PageOut, View, cells_from_mask, draw_scene, edge_ticks, fond_circles, fond_number_elems,
+                   footer, header, legend, north_block, number_elems, rot_box, rw_axes, runway_table, runway_polygon, scale_block, scale_plan)
 from .svgdoc import BAND, INK, INK2, TAXI, Doc, circle, f, line, rect, slug, text
 
 NORTH_WH = (16.0, 20.0)
@@ -29,6 +32,18 @@ def ground_bbox(rings, parkings):
     return float(xs.min()), float(xs.max()), float(zs.min()), float(zs.max())
 
 
+def plan_view_f10(data, frame):
+    """Lot heliports-fond (4.2) : plan centre sur la boite des aires (centre +- longueur / 2) ; 1:5 000 au plus."""
+    fx, fy, fw, fh = frame
+    xs0 = [p.x - p.length / 2 for p in data.parkings]
+    xs1 = [p.x + p.length / 2 for p in data.parkings]
+    zs0 = [p.z - p.length / 2 for p in data.parkings]
+    zs1 = [p.z + p.length / 2 for p in data.parkings]
+    x0, x1, z0, z1 = min(xs0), max(xs1), min(zs0), max(zs1)
+    s = min(FOND_S_MAX, fw / (z1 - z0 + 2 * PLAN_MARGIN_M), fh / (x1 - x0 + 2 * PLAN_MARGIN_M))
+    return View(s, (x0 + x1) / 2, (z0 + z1) / 2, fx + fw / 2, fy + fh / 2)
+
+
 def plan_view(data, frame):
     fx, fy, fw, fh = frame
     x0, x1, z0, z1 = ground_bbox(data.pav_rings, data.parkings)
@@ -37,6 +52,37 @@ def plan_view(data, frame):
             x0, x1, z0, z1 = min(x0, px), max(x1, px), min(z0, pz), max(z1, pz)
     s = min(fw / (z1 - z0 + 2 * PLAN_MARGIN_M), fh / (x1 - x0 + 2 * PLAN_MARGIN_M))
     return View(s, (x0 + x1) / 2, (z0 + z1) / 2, fx + fw / 2, fy + fh / 2)
+
+
+def fond_image(view, frame, data, soften=True):
+    """Lot heliports-fond (4.3) : la mosaique (icone et nom effaces) sur le terrain couvert par le cadre a l'echelle du plan,
+    reechantillonnee en bicubique a la resolution du PNG ; hors de la mosaique : gris (222, 222, 222) ; adoucie
+    (directory.soften) sauf `soften=False`. Retourne une image PIL RGB."""
+    fx, fy, fw, fh = frame
+    g, img, s = data.georef, data.f10_img, view.s
+    wpx, hpx = int(round(fw * FOND_PX_MM)), int(round(fh * FOND_PX_MM))
+    zc_l, xc_t = view.zc - (fw / 2) / s, view.xc + (fh / 2) / s
+    u0, u1 = (zc_l - g.z_left) / g.mpp, (zc_l + fw / s - g.z_left) / g.mpp
+    v0, v1 = (g.x_top - xc_t) / g.mpp, (g.x_top - (xc_t - fh / s)) / g.mpp
+    wc0, wc1 = int(math.floor(u0)) - 2, int(math.ceil(u1)) + 2
+    wr0, wr1 = int(math.floor(v0)) - 2, int(math.ceil(v1)) + 2
+    H, W = img.shape[:2]
+    win = np.empty((wr1 - wr0, wc1 - wc0, 3), np.uint8)
+    win[:] = (222, 222, 222)
+    a0, a1, b0, b1 = max(wr0, 0), min(wr1, H), max(wc0, 0), min(wc1, W)
+    if a1 > a0 and b1 > b0:
+        win[a0 - wr0:a1 - wr0, b0 - wc0:b1 - wc0] = img[a0:a1, b0:b1]
+    bg = Image.fromarray(win).resize((wpx, hpx), Image.BICUBIC, box=(u0 - wc0, v0 - wr0, u1 - wc0, v1 - wr0))
+    return directory.soften(bg) if soften else bg
+
+
+def fond_image_elem(view, frame, data):
+    """L'unique <image> du calque `F10 map` : exactement le cadre, JPEG qualite 88 en data: base64."""
+    fx, fy, fw, fh = frame
+    buf = io.BytesIO()
+    fond_image(view, frame, data).save(buf, 'JPEG', quality=88)
+    href = 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
+    return f'<image x="{f(fx)}" y="{f(fy)}" width="{f(fw)}" height="{f(fh)}" preserveAspectRatio="none" href="{href}"/>'
 
 
 def poly_cells(poly_mm, origin, shape, grow_mm=0.0):
@@ -182,7 +228,7 @@ def build_pages(data, log=print):
     frame = (FRAME_X, frame_top, FRAME_W, ny * FRAME_CELL)
     fx, fy, fw, fh = frame
     doc.add_clip('clip-plan', fx, fy, fw, fh)
-    view = plan_view(data, frame)
+    view = plan_view_f10(data, frame) if data.on_f10 else plan_view(data, frame)
     s = view.s
     log(f'plan : echelle {s:.5f} mm/m (1:{1000 / s:,.0f}), cadre {fw:.1f} x {fh:.1f} mm')
 
@@ -223,23 +269,35 @@ def build_pages(data, log=print):
     # ---- regle des pages
     def zone_center_mm(z):
         return view.pt(*z.center)
-    decision = layout.decide_mode(zones, s, occ, origin, frame, zone_center_mm)
-    mode = decision['mode']
-    log(f'{len(zones)} zones ' + ', '.join(f'{z.label}:{z.count}' for z in zones) + f' -> regle {mode}'
-        + (f' (f={decision["f"]})' if 'f' in decision else '')
-        + (' encarts reduits : ' + ', '.join(f'{lab} k={k:.2f}' for lab, k in decision['reduced'].items())
-           if decision.get('reduced') else ''))
+    if data.on_f10:                                  # lot heliports-fond (4.1) : une seule page, ni encarts ni pages de parkings
+        decision = {'mode': 1}
+        mode = 1
+        log(f'{len(zones)} zones ' + ', '.join(f'{z.label}:{z.count}' for z in zones) + ' -> regle 1 (fond F10, forcee)')
+    else:
+        decision = layout.decide_mode(zones, s, occ, origin, frame, zone_center_mm)
+        mode = decision['mode']
+        log(f'{len(zones)} zones ' + ', '.join(f'{z.label}:{z.count}' for z in zones) + f' -> regle {mode}'
+            + (f' (f={decision["f"]})' if 'f' in decision else '')
+            + (' encarts reduits : ' + ', '.join(f'{lab} k={k:.2f}' for lab, k in decision['reduced'].items())
+               if decision.get('reduced') else ''))
 
     # ---- plan
     lay = {k: [] for k in ('Pavement', 'Runways', 'Runway markings', 'Buildings', 'Parking')}
     scene_boxes = []
-    draw_scene(view, data, data.pav_rings, data.bld_rings, parkings, lay, boxes=scene_boxes)
+    if data.on_f10:                                  # lot heliports-fond (4.3, 4.4) : le fond remplace revetement et batiments
+        doc.add('F10 map', fond_image_elem(view, frame, data))
+        fond_circles(view, parkings, lay)
+    else:
+        draw_scene(view, data, data.pav_rings, data.bld_rings, parkings, lay, boxes=scene_boxes)
     for k, v in lay.items():
         for e in v:
             doc.add(k, e)
     n_numbers = 0
     if mode == 1:
-        nums, n_numbers = number_elems(parkings, view, NUM_SIZE, SYM_PLAN_R, clip=None)
+        if data.on_f10:
+            nums, n_numbers = fond_number_elems(parkings, view, NUM_SIZE)
+        else:
+            nums, n_numbers = number_elems(parkings, view, NUM_SIZE, SYM_PLAN_R, clip=None)
         for e in nums:
             doc.add('Parking numbers', e)
     navaids(doc, view, frame, data)
@@ -301,9 +359,15 @@ def build_pages(data, log=print):
     # ---- cadre, grille, nord, echelle
     doc.add('Frame & grid', rect(fx, fy, fw, fh, 'none', INK, 0.35))
     graticule(doc, view, frame, data.projection)
+    if data.on_f10:                                  # lot heliports-fond (4.5) : un rectangle blanc sous chacun des deux blocs
+        doc.add('Frame & grid', rect(rn[0] - 1, rn[1] - 1, rn[2] - rn[0] + 2, rn[3] - rn[1] + 2, '#FFFFFF',
+                                     extra='rx="1" fill-opacity="0.85"'))
     nx0 = (rn[0] + rn[2]) / 2
     for e in north_block(nx0, rn[1] + 13.0 if cn[0] == 'B' else rn[1] + 13.0, data.conv, data.decl, data.year):
         doc.add('Frame & grid', e)
+    if data.on_f10:
+        doc.add('Frame & grid', rect(rs[0] - 1, rs[1] - 1, rs[2] - rs[0] + 2, rs[3] - rs[1] + 2, '#FFFFFF',
+                                     extra='rx="1" fill-opacity="0.85"'))
     sb, Lmm = scale_block(rs[0] + 1.0, rs[1] + 5.0, s)
     for e in sb:
         doc.add('Frame & grid', e)
@@ -311,7 +375,7 @@ def build_pages(data, log=print):
     # ---- tableau, legende, pied
     rows_y = [first_row + i * ROW_PITCH for i in range(n_rows)]
     runway_table(doc, data, frame_bottom, head_y, rows_y)
-    legend(doc, LEGEND_Y, x_right=X1, heli=data.heli_mode)
+    legend(doc, LEGEND_Y, x_right=X1, heli=data.heli_mode, fond=data.on_f10)
     footer(doc, data, osm)
 
     pages = [PageOut('10-9', doc.render(), {'mode': mode, 'zones': len(zones), 'labels': placed, 'n_numbers': n_numbers,

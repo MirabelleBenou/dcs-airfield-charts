@@ -8,9 +8,9 @@ INK, INK2 = '#1A1A1A', '#5A5A5A'
 PAVE, BUILD, BAND, TAXI = '#CCCCCC', '#4D4D4D', '#F2F2F2', '#FFCC00'
 NS_INKSCAPE = 'http://www.inkscape.org/namespaces/inkscape'
 
-LAYERS = ['Background', 'Pavement', 'Runways', 'Runway markings', 'Buildings', 'Navaids', 'Parking', 'Parking numbers',
+LAYERS = ['Background', 'F10 map', 'Pavement', 'Runways', 'Runway markings', 'Buildings', 'Navaids', 'Parking', 'Parking numbers',
           'Runway bearings', 'Taxiway labels', 'Insets', 'Frame & grid', 'Header', 'Runway table', 'Footer']
-CLIPPED = set(LAYERS[1:10])          # calques 2 a 10 : decoupes au cadre du plan
+CLIPPED = set(LAYERS[1:11])          # `F10 map` (lot heliports-fond, 4.3) et les calques Pavement a Taxiway labels : decoupes au cadre du plan
 
 
 def f(v, nd=3):

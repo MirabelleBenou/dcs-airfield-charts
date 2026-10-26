@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from . import dcsdata, geo, georef, naming, runways, vector
+from . import dcsdata, directory, geo, georef, naming, runways, vector
 
 FT = 3.28084
 NO_FREQUENCY = '\u2014'          # tiret cadratin : frequence de tour inconnue
@@ -54,6 +54,7 @@ class Parking:
     z: float
     kind: str                  # 'open', 'shelter', 'heli'
     zone: int = -1
+    length: float = 20.0       # lot heliports-fond (4.2) : longueur pydcs du slot (m), 20 m si elle manque
 
 
 @dataclass
@@ -85,6 +86,12 @@ class ChartData:
     n_shelter: int = 0
     heli_mode: bool = False    # lot heliports (4.1) : toutes les aires pydcs sont reservees aux helicopteres
     icao_known: bool = True    # un OACI a ete donne (option --icao ou fichier OSM) ; sinon `icao` porte le nom de la capture
+    f10_img: object = None     # lot heliports-fond (4.3) : mosaique (RGB, icone et nom de l'heliport effaces), seulement sur fond F10
+
+    @property
+    def on_f10(self):
+        """Lot heliports-fond (4.1) : chart sur fond F10 = mode helicoptere et aucune piste."""
+        return bool(self.heli_mode and not self.runways)
 
 
 def load_rn4_points(folder, cfg, theatre, base):
@@ -250,6 +257,10 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     else:
         rws = []                                          # lot heliports (4.2) : aucune piste pydcs, la detection ne tourne pas
         log('aucune piste dans pydcs : detection des pistes non lancee')
+    f10_img = None
+    if heli_mode and not rws:                              # lot heliports-fond (4.1, 4.3) : le plan prend le fond de la F10
+        r, c = g.xz_to_rc(facts.x, facts.z)
+        f10_img = directory.erase_label(img, int(round(r)), int(round(c)), facts.name)
     del img
 
     hints = [[(a.name, a.heading) for a in facts.rw_refs[r.ref]] if r.ref is not None else None for r in rws]
@@ -284,7 +295,7 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     shares = shelter_flags([(s.x, s.z) for s in facts.slots], bld, g)
     for s, sh in zip(facts.slots, shares):
         kind = 'shelter' if sh >= SHELTER_SHARE else ('heli' if s.heli_only else 'open')
-        parkings.append(Parking(s.name, s.x, s.z, kind))
+        parkings.append(Parking(s.name, s.x, s.z, kind, length=float(s.length or 20.0)))
     n_shelter = sum(1 for p in parkings if p.kind == 'shelter')
 
     osm_icao, osm_ways = None, []
@@ -306,4 +317,4 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
                      beacons=banner_beacons(blist), decl=decl, conv=conv, runways=rws, ends=ends, parkings=parkings,
                      georef=g, pav_rings=pav_rings, bld_rings=bld_rings, masks={'pav': pav, 'bld': bld, 'clear': None},
                      osm_ways=osm_ways, osm_kept=sorted({w['ref'] for w in osm_ways}, key=dcsdata.natural_key),
-                     osm_icao=osm_icao, projection=proj, n_shelter=n_shelter, heli_mode=heli_mode, icao_known=icao_known)
+                     osm_icao=osm_icao, projection=proj, n_shelter=n_shelter, heli_mode=heli_mode, icao_known=icao_known, f10_img=f10_img)

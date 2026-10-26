@@ -15,6 +15,10 @@ FRAME_X, FRAME_W = 11.0, 126.0
 FT = 3.28084
 VERSION = 'v1'
 PLAN_MARGIN_M = 80.0
+FOND_S_MAX = 0.2        # lot heliports-fond (4.2) : echelle maximale du plan sur fond F10 (mm/m, 1:5 000)
+FOND_PX_MM = 1748 / 148  # resolution du fond F10 = celle du PNG (px par mm)
+AIRE_RED = '#AA2323'
+AIRE_STROKE = 0.4
 ROW_PITCH, LAST_ROW_Y = 3.46, 194.2
 LEGEND_Y, FOOTER_RULE_Y, FOOTER_Y = 198.9, 201.2, 203.7
 SYM_PLAN_R = 0.45       # rayon (mm) des trois symboles de parking sur le 10-9 (addendum 3)
@@ -141,6 +145,28 @@ def draw_scene(view, data, rings_pav, rings_bld, parkings, layers, sym_r=SYM_PLA
             layers['Parking'].append(circle(X, Y, r, '#FFFFFF', INK, STROKE_SHELTER))
         else:
             layers['Parking'].append(circle(X, Y, r, '#FFFFFF', INK, STROKE_HELI))
+
+
+def fond_circles(view, parkings, layers):
+    """Lot heliports-fond (4.4) : un cercle sans remplissage par aire, a la taille de l'aire (bord exterieur du trait)."""
+    for p in parkings:
+        X, Y = view.pt(p.x, p.z)
+        r = p.length / 2 * view.s
+        layers['Parking'].append(circle(X, Y, r - AIRE_STROKE / 2, 'none', AIRE_RED, AIRE_STROKE))
+
+
+def fond_number_elems(parkings, view, size):
+    """Lot heliports-fond (4.4) : numero DCS (gras, rouge, halo blanc) au point haut-droit du cercle de l'aire."""
+    out = []
+    for p in parkings:
+        X, Y = view.pt(p.x, p.z)
+        r = p.length / 2 * view.s
+        x, y = X + r * 0.7071 + 0.2, Y - r * 0.7071 - 0.2
+        sz = size * 1.15
+        out.append(text(x, y, p.name, sz, 'bold', '#FFFFFF', 'start',
+                        extra='stroke="#FFFFFF" stroke-width="0.6" stroke-linejoin="round" class="halo"'))
+        out.append(text(x, y, p.name, sz, 'bold', AIRE_RED, 'start', extra='class="num"'))
+    return out, len(parkings)
 
 
 def number_elems(parkings, view, size, dot_r, clip=None):
@@ -336,12 +362,18 @@ def footer(doc, data, osm):
     doc.add(L, text(X1, FOOTER_Y, 'PAS POUR LA NAVIGATION RÉELLE', pt(6.1), 'bold', INK, 'end'))
 
 
-def legend(doc, y, x_left=None, x_right=None, note=None, sym_r=SYM_PLAN_R, heli=False):
+def legend(doc, y, x_left=None, x_right=None, note=None, sym_r=SYM_PLAN_R, heli=False, fond=False):
     """Legende des parkings (symboles dessines, pas de glyphes de police) ; alignee a gauche (x_left) ou a droite (x_right) ;
     `note` : texte secondaire aligne a droite sur la meme ligne.
     `heli` (lot heliports, 4.1) : base d'helicopteres, un seul element (l'aire d'helicoptere), sans texte secondaire."""
     L = 'Runway table'
     size = pt(6.3)
+    if fond:                                           # lot heliports-fond (4.6) : cercle rouge de 1,3 mm, aligne a droite sur x_right
+        t = "AIRE D'H\u00c9LICOPT\u00c8RE (NUM\u00c9RO DCS) \u00b7 FOND : CARTE F10"
+        x = x_right - (4.6 + text_width(t, 'regular', size))
+        doc.add(L, circle(x + 1.5, y - 1.0, 1.3, 'none', AIRE_RED, AIRE_STROKE))
+        doc.add(L, text(x + 4.4, y, t, size, 'regular', INK2))
+        return
     items = [('open', 'OUVERT'), ('shelter', 'ABRI (HAS, HANGAR)'), ('heli', 'H\u00c9LICOPT\u00c8RE SEUL')]
     if heli:
         items, note = [('heli', "AIRE D'H\u00c9LICOPT\u00c8RE (NUM\u00c9RO DCS)")], None
