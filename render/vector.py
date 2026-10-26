@@ -102,6 +102,7 @@ def building_mask(img, pav, mpp):
     area = stats[:, cv2.CC_STAT_AREA] * mpp * mpp
     keep[1:] = (dmin[1:] < BUILDING_NEAR_M) & (area[1:] >= BUILDING_MIN_M2)
     mk = keep[lab]
+    del lab, flat, order, sl, dflat, dist            # memoire : la mosaique de Damascus pese des centaines de Mpx
     # trous : composantes 4-connexes du complement, de moins de 40 m2 et qui ne touchent pas le bord
     nb, labb, stb, _ = cv2.connectedComponentsWithStats((~mk).view(np.uint8), connectivity=4)
     h, w = mk.shape
