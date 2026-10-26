@@ -20,8 +20,10 @@ def number_of(name):
     return m.group(1).zfill(2) if m else name
 
 
-def name_ends(runways, approaches):
+def name_ends(runways, approaches, hints=None):
     """runways : liste de (p0, p1) en (x, z). approaches : liste de (nom pydcs, cap pydcs).
+    `hints` (optionnel) : pour chaque piste, la liste des approches de sa piste pydcs appariee (ou None) ; le numero est
+    alors cherche parmi ces approches seulement (deux pistes a 10 deg d'ecart, decalees de 6 deg, gardent chacune leur nom).
     Retourne, pour chaque piste i, [(nom_extremite_p0, azimut_p0), (nom_extremite_p1, azimut_p1)].
 
     Le cap pydcs le plus proche de l'azimut grille d'atterrissage donne le numero ; entre extremites de meme numero
@@ -30,7 +32,8 @@ def name_ends(runways, approaches):
     for i, (p0, p1) in enumerate(runways):
         for k, (a, b) in enumerate(((p0, p1), (p1, p0))):
             az = landing_azimuth(a, b)
-            best = min(approaches, key=lambda ap: (angdiff(az, ap[1]), ap[0]))
+            pool = hints[i] if hints and hints[i] else approaches
+            best = min(pool, key=lambda ap: (angdiff(az, ap[1]), ap[0]))
             ends.append({'rw': i, 'end': k, 'pos': a, 'az': az, 'num': number_of(best[0]), 'letter': ''})
     groups = {}
     for e in ends:

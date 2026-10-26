@@ -105,30 +105,37 @@ class AirportFacts:
     name: str
     x: float
     z: float
-    atc: dict                  # vhf_high_hz, uhf_hz, vhf_low_hz, hf_hz
+    atc: dict                  # vhf_high_hz, uhf_hz, vhf_low_hz, hf_hz ; None si pydcs n'a pas de radio de tour
     approaches: list
     slots: list
+    rw_refs: list = field(default_factory=list)    # une entree par piste de pydcs : (Approach main, Approach opposite)
 
 
 def airport_facts(ap):
     """Faits pydcs d'un aerodrome ; DataError si un fait attendu manque."""
-    try:
-        atc = ap.atc_radio
-        atc_d = {'vhf_high_hz': atc.vhf_high_hz, 'uhf_hz': atc.uhf_hz, 'vhf_low_hz': atc.vhf_low_hz, 'hf_hz': atc.hf_hz}
-    except AttributeError as e:
-        raise DataError(f"pydcs : atc_radio absent pour {ap.name} ({e})")
-    aps = []
+    atc = getattr(ap, 'atc_radio', None)
+    if atc is None:
+        atc_d = None                                  # pas de radio de tour dans pydcs : le bandeau affiche des tirets (lot pistes-v1, 4.6)
+    else:
+        try:
+            atc_d = {'vhf_high_hz': atc.vhf_high_hz, 'uhf_hz': atc.uhf_hz, 'vhf_low_hz': atc.vhf_low_hz, 'hf_hz': atc.hf_hz}
+        except AttributeError as e:
+            raise DataError(f"pydcs : atc_radio incomplet pour {ap.name} ({e})")
+    aps, rw_refs = [], []
     for rw in ap.runways:
+        pair = []
         for app in (rw.main, rw.opposite):
             ids = [b.id for b in app.beacons if getattr(b, 'runway_side', None) == app.name]
-            aps.append(Approach(app.name, float(app.heading), ids))
+            pair.append(Approach(app.name, float(app.heading), ids))
+        aps.extend(pair)
+        rw_refs.append(tuple(pair))
     slots = []
     for s in ap.parking_slots:
         if s.slot_name is None:
             raise DataError(f'pydcs : slot_name absent ({ap.name})')
         slots.append(Slot(str(s.slot_name), s.position.x, s.position.y, bool(s.helicopter and not s.airplanes),
                           bool(s.airplanes), s.length, s.width))
-    return AirportFacts(ap.id, ap.name, ap.position.x, ap.position.y, atc_d, aps, slots)
+    return AirportFacts(ap.id, ap.name, ap.position.x, ap.position.y, atc_d, aps, slots, rw_refs)
 
 
 def natural_key(name):

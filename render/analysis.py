@@ -12,6 +12,7 @@ from PIL import Image
 from . import dcsdata, geo, georef, naming, runways, vector
 
 FT = 3.28084
+NO_FREQUENCY = '\u2014'          # tiret cadratin : frequence de tour inconnue
 Image.MAX_IMAGE_PIXELS = None
 SHELTER_HALF_M, SHELTER_SHARE = 6.0, 0.35
 THRESHOLD_ELEV_MAX_M, THRESHOLD_ELEV_N = 250.0, 5
@@ -217,16 +218,23 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     pav = vector.pavement_mask(img, g.mpp)
     bld, n_bld = vector.building_mask(img, pav, g.mpp)
     clear = vector.clear_marking_mask(img)
-    rws = runways.detect_runways(img, pav, g, clear)
-    if not rws:
-        raise ChartError('aucune piste detectee')
-    del img
-
     lat, lon = proj.to_latlon(facts.x, facts.z)
     decl = geo.declination(lat, lon, year)
     conv = proj.convergence(facts.x, facts.z)
 
-    names = naming.name_ends([(r.p0, r.p1) for r in rws], [(a.name, a.heading) for a in facts.approaches])
+    def mag_heading(ln):
+        """Cap magnetique (modulo 180) d'une droite candidate : azimut grille + convergence - declinaison (cadrage 4.1)."""
+        az = math.degrees(math.atan2(ln['d'][1], ln['d'][0]))
+        return (az + proj.convergence(*ln['p']) - decl) % 180.0
+
+    refs = [(f'{m.name}/{o.name}', m.heading) for m, o in facts.rw_refs]
+    rws = runways.detect_runways(img, pav, g, clear, refs=refs, heading_fn=mag_heading, log=log)
+    if not rws:
+        raise ChartError('aucune piste detectee')
+    del img
+
+    hints = [[(a.name, a.heading) for a in facts.rw_refs[r.ref]] if r.ref is not None else None for r in rws]
+    names = naming.name_ends([(r.p0, r.p1) for r in rws], [(a.name, a.heading) for a in facts.approaches], hints)
     ends = []
     elev_m = float(np.median(pts[:, 1]))
     pxz = pts[:, [0, 2]]
@@ -266,8 +274,11 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
         osm_icao, osm_ways = read_osm(osm, proj, pav, g, g.mpp)
     code = icao or osm_icao or base
 
-    tower = {'vhf': fmt_mhz(facts.atc['vhf_high_hz']), 'uhf': fmt_mhz(facts.atc['uhf_hz']),
-             'fm': fmt_mhz(facts.atc['vhf_low_hz']), 'hf': fmt_mhz(facts.atc['hf_hz'])}
+    if facts.atc is None:
+        tower = {k: NO_FREQUENCY for k in ('vhf', 'uhf', 'fm', 'hf')}     # pas de radio de tour dans pydcs (cadrage 4.6)
+    else:
+        tower = {'vhf': fmt_mhz(facts.atc['vhf_high_hz']), 'uhf': fmt_mhz(facts.atc['uhf_hz']),
+                 'fm': fmt_mhz(facts.atc['vhf_low_hz']), 'hf': fmt_mhz(facts.atc['hf_hz'])}
     pav_rings = vector.mask_rings(pav, g, vector.PAVEMENT_SIMPLIFY_M)
     bld_rings = vector.mask_rings(bld, g, vector.BUILDING_SIMPLIFY_M)
     return ChartData(theatre=theatre, base=base, airport_name=facts.name, icao=code, year=float(year), lat=lat, lon=lon,
