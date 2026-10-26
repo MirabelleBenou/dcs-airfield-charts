@@ -8,12 +8,12 @@ The goal is to share a complete set of charts for every airfield, as PDF and PNG
 
 ## Download the charts
 
-**Syria — first batch: 31 of the 80 airfields** (magnetic declination for 1985), rendered with no manual drawing.
+**Syria — 74 of the 80 airfields** (magnetic declination for 1985), rendered with no manual drawing.
 
 - One PDF per airfield (all its pages): see the list in [`downloads/syria/`](downloads/syria/README.md).
 - Everything in one zip — every page as PDF, PNG (1748 × 2480 px, for the DCS kneeboard) and SVG (Inkscape layers): [DCS_Airfield_Charts_Syria_1985.zip](downloads/DCS_Airfield_Charts_Syria_1985.zip?raw=true).
 
-The other 49 Syria airfields follow once the renderer handles runways that the F10 map draws without threshold or designator markings (most Syrian, Jordanian and smaller fields) and airfields with several runways where one is still missed. Taxiway names appear only where OpenStreetMap has them. These charts are for DCS only, not for real-world navigation.
+Not yet covered: the helicopter bases with no runway on the F10 map (Der Salman / Marj as Sultan South, Marj as Sultan North, Qabr al Sitt, Taftanaz), which will get a heliport-style chart; T3, which the F10 map does not draw; Nicosia, which pydcs does not list as an airfield. Runways are found on the F10 map guided by the game's runway list, so their count and names follow DCS (including the parking names DCS repeats at some bases). Taxiway names appear only where OpenStreetMap has them. These charts are for DCS only, not for real-world navigation.
 
 ## Example charts
 
