@@ -32,6 +32,9 @@ def ground_bbox(rings, parkings):
 def plan_view(data, frame):
     fx, fy, fw, fh = frame
     x0, x1, z0, z1 = ground_bbox(data.pav_rings, data.parkings)
+    for rw in data.runways:                      # lot pistes-v1 : le plan montre les pistes en entier (extremites comprises)
+        for px, pz in (rw.p0, rw.p1):
+            x0, x1, z0, z1 = min(x0, px), max(x1, px), min(z0, pz), max(z1, pz)
     s = min(fw / (z1 - z0 + 2 * PLAN_MARGIN_M), fh / (x1 - x0 + 2 * PLAN_MARGIN_M))
     return View(s, (x0 + x1) / 2, (z0 + z1) / 2, fx + fw / 2, fy + fh / 2)
 

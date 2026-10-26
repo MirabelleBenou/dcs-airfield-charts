@@ -45,21 +45,43 @@ def test_pairing_marked_drops_unpaired_taxiway():
     assert runways.pair_marked([108.0], cands) == {0: 0}
 
 
-def test_pairing_beyond_12_degrees_is_refused():
-    assert runways.pair_marked([100.0], [{'heading': 113.0, 'blocks': 5, 'width': 40.0}]) == {}
-    assert runways.pair_marked([100.0], [{'heading': 112.0, 'blocks': 5, 'width': 40.0}]) == {0: 0}
+def test_pairing_beyond_13_degrees_is_refused():
+    assert runways.pair_marked([100.0], [{'heading': 113.5, 'blocks': 5, 'width': 40.0}]) == {}
+    assert runways.pair_marked([100.0], [{'heading': 112.9, 'blocks': 5, 'width': 40.0}]) == {0: 0}
     assert runways.heading_diff(179.0, 1.0) == pytest.approx(2.0)
 
 
-def test_pairing_free_prefers_widest():
-    """Regle 3 : le taxiway parallele est plus etroit que sa piste."""
-    cands = [{'heading': 271.0, 'width': 22.0}, {'heading': 266.0, 'width': 41.0}]
+def cand(heading, width, length, blocks=0):
+    return {'heading': heading, 'width': width, 'length': length, 'blocks': blocks}
+
+
+def test_pairing_free_ignores_short_wide_block():
+    """Cas Nejrab : un bloc large de 403 m ne pese rien face a la piste de 2 714 m (longueur >= 75 % du plus long)."""
+    cands = [cand(93.0, 78.0, 403.0), cand(93.2, 50.0, 2714.0, 16)]
+    assert runways.pair_free([90.0], [0], cands) == {0: 1}
+
+
+def test_pairing_free_width_decides_between_equal_lengths():
+    """Cas Abu al-Duhur : piste et taxiway parallele de meme longueur, la largeur departage."""
+    cands = [cand(271.0, 22.0, 2990.0), cand(266.0, 41.0, 2994.0)]
     assert runways.pair_free([270.0], [0], cands) == {0: 1}
 
 
+def test_pairing_free_length_share_75_percent():
+    cands = [cand(270.0, 60.0, 2000.0), cand(270.0, 30.0, 3000.0)]       # 2000 < 0,75 x 3000 : le large est ecarte
+    assert runways.pair_free([270.0], [0], cands) == {0: 1}
+    cands = [cand(270.0, 60.0, 2300.0), cand(270.0, 30.0, 3000.0)]       # 2300 >= 2250 : la largeur decide
+    assert runways.pair_free([270.0], [0], cands) == {0: 0}
+
+
 def test_pairing_free_most_runways_first():
-    cands = [{'heading': 100.0, 'width': 60.0}, {'heading': 104.0, 'width': 30.0}]
+    cands = [cand(100.0, 60.0, 3000.0), cand(104.0, 30.0, 3000.0)]
     assert runways.pair_free([100.0, 106.0], [0, 1], cands) == {0: 0, 1: 1}
+
+
+def test_pairing_free_beyond_13_degrees_refused():
+    assert runways.pair_free([100.0], [0], [cand(113.5, 50.0, 3000.0)]) == {}
+    assert runways.pair_free([100.0], [0], [cand(112.9, 50.0, 3000.0)]) == {0: 0}
 
 
 # ---------- echantillons ----------
@@ -96,3 +118,18 @@ def test_gulechoba_renders_without_tower_radio(pistes):
     assert 'GULECHOBA TOWER' in t
     assert t.count('—') >= 4
     assert len(data.runways) == 1
+
+
+# ---------- cadre du plan (P11) ----------
+def test_plan_view_contains_runway_ends():
+    """Une piste qui depasse le revetement (rings) doit entrer en entier dans le cadre du plan."""
+    from types import SimpleNamespace
+    import numpy as np
+    ring = np.array([[0.0, 0.0], [0.0, 100.0], [100.0, 100.0], [100.0, 0.0]])
+    rw = runways.Runway((50.0, -800.0), (50.0, 900.0), 45.0)
+    data = SimpleNamespace(pav_rings=[ring], parkings=[SimpleNamespace(x=50.0, z=50.0)], runways=[rw])
+    frame = (10.0, 30.0, 120.0, 100.0)
+    view = compose.plan_view(data, frame)
+    for p in (rw.p0, rw.p1):
+        x, y = view.pt(*p)
+        assert frame[0] <= x <= frame[0] + frame[2] and frame[1] <= y <= frame[1] + frame[3]

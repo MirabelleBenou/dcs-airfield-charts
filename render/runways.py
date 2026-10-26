@@ -34,7 +34,9 @@ EXTEND_MAX_M = 6000.0               # prolongement maximal de chaque cote de la 
 SPARE_HALF_WIDTH_MIN_M = 8.0        # candidats de secours (cadrage 4.2)
 SPARE_SEGMENT_MIN_M = 400.0
 SPARE_HOUGH_VOTES = HOUGH_VOTES * SPARE_SEGMENT_MIN_M / SEGMENT_MIN_M    # seuil d'accumulation proportionnel a la longueur (non fixe par le cadrage)
-MATCH_MAX_DEG = 12.0                # ecart de cap maximal d'un appariement (cadrage 4.3)
+MATCH_MAX_DEG = 13.0                # ecart de cap maximal d'un appariement (cadrage 4.3 ; addendum 1 : 13 deg)
+FREE_LENGTH_SHARE = 0.75            # regle 3 : longueur de revetement >= 75 % du plus long candidat eligible (addendum 1)
+BARS_MIN_SHARE = 0.60               # barres de seuil trop courtes : < 60 % de la longueur de revetement (addendum 1)
 HEADING_TIE_DEG = 1.0               # somme des ecarts de cap 'egale' a +- 1 deg (cadrage 4.3, regle 2)
 END_PAVED_FRACTION = 0.70           # bout du revetement : part de la largeur couverte (cadrage 4.4)
 
@@ -47,7 +49,10 @@ class Runway:
     n_blocks: int = 0
     axis_dir: tuple = field(default=(0.0, 0.0))   # vecteur unitaire (dx, dz) de A vers B
     ref: int = None      # indice de la piste pydcs appariee (None : detection sans reference)
-    marked: bool = True  # piste a marquage plein (False : piste non marquee, extremites = bout du revetement)
+    marked: bool = True  # piste portant >= 2 blocs de marquage plein
+    ends_mode: str = 'barres'   # 'barres' (barres de seuil) ou 'revetement' (bout du revetement)
+    bars_len: float = None      # longueur entre barres de seuil (m), None si pas de barres
+    pave_len: float = None      # longueur de revetement (m, marche a 70 %)
 
     @property
     def length(self):
@@ -333,13 +338,23 @@ def pair_marked(ref_headings, cands):
 
 
 def pair_free(ref_headings, free_refs, cands):
-    """Regle 3 : entre les pistes de reference restees libres (`free_refs`, indices) et les candidats non pris
-    (`cands` : dicts {heading, width}). On garde l'appariement qui associe le plus de pistes, puis la plus grande somme
-    des largeurs, puis la plus petite somme des ecarts de cap. Retourne {indice de reference: indice de candidat}."""
-    diffs = {i: {j: heading_diff(ref_headings[i], c['heading']) for j, c in enumerate(cands)} for i in free_refs}
+    """Regle 3 (addendum 1) : entre les pistes de reference restees libres (`free_refs`, indices) et les candidats non
+    pris (`cands` : dicts {heading, width, length, blocks} ; length = longueur de revetement). Pour chaque piste libre,
+    seuls comptent les candidats a ecart de cap <= 13 deg dont la longueur de revetement est >= 75 % de celle du plus
+    long candidat eligible pour elle. On garde l'appariement qui associe le plus de pistes, puis la plus grande somme
+    des largeurs, puis le plus de blocs, puis la plus petite somme des ecarts de cap.
+    Retourne {indice de reference: indice de candidat}."""
+    inf = float('inf')
+    raw = {i: {j: heading_diff(ref_headings[i], c['heading']) for j, c in enumerate(cands)} for i in free_refs}
+    diffs = {}
+    for i in free_refs:
+        elig = [j for j in raw[i] if raw[i][j] <= MATCH_MAX_DEG]
+        top = max((cands[j]['length'] for j in elig), default=0.0)
+        diffs[i] = {j: (raw[i][j] if j in elig and cands[j]['length'] >= FREE_LENGTH_SHARE * top else inf) for j in raw[i]}
 
     def stats(m):
-        return (len(m), sum(cands[j]['width'] for j in m.values()), sum(diffs[i][j] for i, j in m.items()))
+        return (len(m), sum(cands[j]['width'] for j in m.values()), sum(cands[j]['blocks'] for j in m.values()),
+                sum(raw[i][j] for i, j in m.items()))
 
     def better(a, b):
         sa, sb = stats(a), stats(b)
@@ -347,7 +362,9 @@ def pair_free(ref_headings, free_refs, cands):
             return sa[0] > sb[0]
         if abs(sa[1] - sb[1]) > 1e-9:
             return sa[1] > sb[1]
-        return sa[2] < sb[2] - 1e-9
+        if sa[2] != sb[2]:
+            return sa[2] > sb[2]
+        return sa[3] < sb[3] - 1e-9
     return _enumerate(list(free_refs), list(range(len(cands))), diffs, better)
 
 
@@ -364,7 +381,7 @@ def _same_line(a, b):
 
 # ---------- extremites ----------
 def _finish_marked(ln, hw, sam, pav, clear):
-    """Piste marquee : recalage, prolongement a 30 %, recalage, barres de seuil. Retourne (ligne, largeur, extremites|None)."""
+    """Recalage, prolongement a 30 %, recalage, barres de seuil. Retourne (ligne, largeur, extremites|None)."""
     ln2, width = refine_axis(ln, hw, sam, pav)
     ln2 = dict(ln2)
     ln2['u0'], ln2['u1'] = extend_range(ln2, width, sam, pav, clear)
@@ -374,8 +391,8 @@ def _finish_marked(ln, hw, sam, pav, clear):
 
 
 def _finish_pavement(ln, hw, sam, pav, clear):
-    """Piste non marquee, ou marquee sans barre de seuil (cadrage 4.4) : extremites = bout du revetement le long de
-    l'axe recale (part de la largeur couverte >= 70 %, interruptions <= 60 m, jusqu'a 6 000 m de chaque cote)."""
+    """Extremites = bout du revetement le long de l'axe recale (cadrage 4.4 : part de la largeur couverte >= 70 %,
+    interruptions <= 60 m, jusqu'a 6 000 m de chaque cote). Retourne (ligne, largeur, (u0, u1))."""
     ln1, width = refine_axis(ln, hw, sam, pav)
     ln1 = dict(ln1)
     ln1['u0'], ln1['u1'] = extend_range(ln1, width, sam, pav, clear, END_PAVED_FRACTION)
@@ -383,10 +400,27 @@ def _finish_pavement(ln, hw, sam, pav, clear):
     return ln2, width, (ln2['u0'], ln2['u1'])
 
 
-def _make_runway(ln, width, ends, nb, ref, marked):
+def _make_runway(ln, width, ends, nb, ref, mode, bars_len, pave_len):
     px, pz, dx, dz, _, _ = _frame(ln)
     a, b = ends
-    return Runway((px + a * dx, pz + a * dz), (px + b * dx, pz + b * dz), width, nb, (dx, dz), ref, marked)
+    return Runway((px + a * dx, pz + a * dz), (px + b * dx, pz + b * dz), width, nb, (dx, dz), ref, nb >= MARK_BLOCKS_MIN,
+                  mode, bars_len, pave_len)
+
+
+def _choose_ends(c, sam, pav, clear, pave=None):
+    """Extremites d'un candidat (addendum 1, d) : un candidat a >= 2 blocs prend d'abord les barres de seuil, sauf si
+    la longueur entre barres est < 60 % de la longueur de revetement ; sinon, bout du revetement.
+    `pave` : resultat deja calcule de _finish_pavement. Retourne (ligne, largeur, extremites, mode, bars_len, pave_len)."""
+    pave = pave or _finish_pavement(c['ln'], c['hw'], sam, pav, clear)
+    pave_len = pave[2][1] - pave[2][0]
+    bars_len = None
+    if c['nb'] >= MARK_BLOCKS_MIN:
+        ln2, width, ends = _finish_marked(c['ln'], c['hw'], sam, pav, clear)
+        if ends is not None:
+            bars_len = ends[1] - ends[0]
+            if bars_len >= BARS_MIN_SHARE * pave_len:
+                return ln2, width, ends, 'barres', bars_len, pave_len
+    return pave[0], pave[1], pave[2], 'revetement', bars_len, pave_len
 
 
 def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log=None):
@@ -394,9 +428,9 @@ def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log
 
     Sans `refs` : toutes les pistes marquees (comportement d'origine).
     Avec `refs` (liste de (nom, cap magnetique pydcs) : les pistes de pydcs, `R`) et `heading_fn(ligne) -> cap
-    magnetique modulo 180` : detection guidee par pydcs (cadrage 4.2 a 4.4). Les pistes marquees viennent d'abord (dans
-    l'ordre des candidats), puis les pistes non marquees (dans l'ordre de `refs`). Chaque Runway porte `ref`, l'indice
-    de sa piste pydcs."""
+    magnetique modulo 180` : detection guidee par pydcs (cadrage 4.2 a 4.4 et addendum 1). Les pistes appariees en
+    premier (candidats normaux a >= 2 blocs, dans l'ordre des candidats) viennent d'abord, puis les autres (dans l'ordre
+    de `refs`). Chaque Runway porte `ref`, l'indice de sa piste pydcs."""
     log = log or (lambda *a: None)
     mpp = georef.mpp
     sam = Sampler(georef)
@@ -416,7 +450,7 @@ def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log
         for k in marked:
             ln2, width, ends = _finish_marked(info[k]['ln'], info[k]['hw'], sam, pav, clear)
             if ends is not None:
-                out.append(_make_runway(ln2, width, ends, info[k]['nb'], None, True))
+                out.append(_make_runway(ln2, width, ends, info[k]['nb'], None, 'barres', ends[1] - ends[0], None))
         return out
 
     ref_h = [h for _, h in refs]
@@ -432,11 +466,9 @@ def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log
     found = {}                                                          # ref -> Runway
     for i in sorted(taken, key=lambda i: taken[i]):
         c = info[taken[i]]
-        ln2, width, ends = _finish_marked(c['ln'], c['hw'], sam, pav, clear)
-        if ends is None:
-            ln2, width, ends = _finish_pavement(c['ln'], c['hw'], sam, pav, clear)
-        found[i] = _make_runway(ln2, width, ends, c['nb'], i, True)
-    # regle 3 : pistes non marquees <-> candidats libres (normaux, puis de secours)
+        ln2, width, ends, mode, bars_len, pave_len = _choose_ends(c, sam, pav, clear)
+        found[i] = _make_runway(ln2, width, ends, c['nb'], i, mode, bars_len, pave_len)
+    # regle 3 : candidats libres (normaux non marques, puis de secours) <-> pistes pydcs libres
     free_refs = [i for i in range(len(refs)) if i not in found]
     if free_refs:
         pool = [c for k, c in enumerate(info) if k not in marked]
@@ -447,14 +479,26 @@ def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log
             hw = half_width_along(ln, dist_s, m2s, georef, SPARE_HALF_WIDTH_MIN_M)
             pool.append({'ln': ln, 'hw': hw, 'width': 2 * hw, 'heading': heading_fn(ln), 'nb': count_blocks(ln, hw, blocks),
                          'spare': True})
-        m3 = pair_free(ref_h, free_refs, [{'heading': c['heading'], 'width': c['width']} for c in pool])
+        for c in pool:                                                  # longueur de revetement des candidats eligibles
+            if any(heading_diff(ref_h[i], c['heading']) <= MATCH_MAX_DEG for i in free_refs):
+                c['pave'] = _finish_pavement(c['ln'], c['hw'], sam, pav, clear)
+                c['length'] = c['pave'][2][1] - c['pave'][2][0]
+            else:
+                c['pave'], c['length'] = None, 0.0
+        m3 = pair_free(ref_h, free_refs, [{'heading': c['heading'], 'width': c['width'], 'length': c['length'], 'blocks': c['nb']}
+                                          for c in pool])
         for i in sorted(m3):
             c = pool[m3[i]]
-            ln2, width, ends = _finish_pavement(c['ln'], c['hw'], sam, pav, clear)
-            found[i] = _make_runway(ln2, width, ends, c['nb'], i, False)
+            ln2, width, ends, mode, bars_len, pave_len = _choose_ends(c, sam, pav, clear, c['pave'])
+            found[i] = _make_runway(ln2, width, ends, c['nb'], i, mode, bars_len, pave_len)
     for i, (name, _) in enumerate(refs):
         if i not in found:
             log(f'piste pydcs {name} introuvable sur la carte')
-    marked_first = [found[i] for i in sorted((i for i in found if found[i].marked), key=lambda i: taken.get(i, 0))]
-    unmarked = [found[i] for i in sorted(found) if not found[i].marked]
-    return marked_first + unmarked
+        else:
+            r = found[i]
+            log(f'piste pydcs {name} : extremites {r.ends_mode}, longueur {r.length:.0f} m, entre barres '
+                f'{"-" if r.bars_len is None else format(r.bars_len, ".0f")} m, revetement {r.pave_len:.0f} m, blocs {r.n_blocks}')
+    first = [found[i] for i in sorted(taken)] if taken else []
+    first.sort(key=lambda r: taken[r.ref])
+    rest = [found[i] for i in sorted(found) if i not in taken]
+    return first + rest
