@@ -6,6 +6,15 @@ Airfield charts for DCS World, built from the game's own data.
 
 The goal is to share a complete set of charts for every airfield, as PDF and PNG, ready for print and for the DCS kneeboard.
 
+## Download the charts
+
+**Syria — first batch: 31 of the 80 airfields** (magnetic declination for 1985), rendered with no manual drawing.
+
+- One PDF per airfield (all its pages): see the list in [`downloads/syria/`](downloads/syria/README.md).
+- Everything in one zip — every page as PDF, PNG (1748 × 2480 px, for the DCS kneeboard) and SVG (Inkscape layers): [DCS_Airfield_Charts_Syria_1985.zip](downloads/DCS_Airfield_Charts_Syria_1985.zip?raw=true).
+
+The other 49 Syria airfields follow once the renderer handles runways that the F10 map draws without threshold or designator markings (most Syrian, Jordanian and smaller fields) and airfields with several runways where one is still missed. Taxiway names appear only where OpenStreetMap has them. These charts are for DCS only, not for real-world navigation.
+
 ## Example charts
 
 Three Syria airfields, rendered by `render/build_chart.py` from the F10 capture and the game files, with no manual drawing (work in progress: the full set is not published yet). A5 portrait, magnetic declination for **1985** (the default; `--annee` changes it). Every page comes as **SVG** (vector, organised as Inkscape layers; editing needs the Barlow Condensed fonts from `render/fonts/`), **PNG** (1748 × 2480 px, 300 dpi, ready for the DCS kneeboard) and **PDF** (one file per airfield, all pages). The links download the files themselves; when saving from a GitHub file page, use its *Download raw file* button (saving the page itself gives an HTML file that Inkscape cannot open).
@@ -35,6 +44,7 @@ What a chart shows: pavement, runways and their markings, buildings and hardened
 | `capture/f10probe.py` | the original probe (link, stabilisation, scale, alignment) |
 | `render/` | the renderer: vectorises a captured base (pavement, buildings, runways), reads the game facts through pydcs, lays out the A5 pages and exports SVG, PDF and PNG; `build_chart.py` renders a base, `fetch_osm.py` downloads real taxiway names from OpenStreetMap; fonts in `render/fonts/` |
 | `tests/` | `python -m pytest`; the tests that need captured samples or DCS files run when `DCS_CHARTS_SAMPLES` points to a folder holding them, and are skipped otherwise |
+| `downloads/` | the published charts: one PDF per airfield in `downloads/<theatre>/` (with its index), and a zip per theatre holding every page as PDF, PNG and SVG |
 
 ## Installation (Windows)
 
