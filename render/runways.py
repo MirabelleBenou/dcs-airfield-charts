@@ -34,6 +34,7 @@ EXTEND_MAX_M = 6000.0               # prolongement maximal de chaque cote de la 
 SPARE_HALF_WIDTH_MIN_M = 8.0        # candidats de secours (cadrage 4.2)
 SPARE_SEGMENT_MIN_M = 400.0
 SPARE_HOUGH_VOTES = HOUGH_VOTES * SPARE_SEGMENT_MIN_M / SEGMENT_MIN_M    # seuil d'accumulation proportionnel a la longueur (non fixe par le cadrage)
+HELI_SPARE_SEGMENT_MIN_M = 150.0    # lot heliports : mode helicoptere, les pistes des bases d'helicopteres sont courtes (cadrage 4.1)
 MATCH_MAX_DEG = 13.0                # ecart de cap maximal d'un appariement (cadrage 4.3 ; addendum 1 : 13 deg)
 FREE_LENGTH_SHARE = 0.75            # regle 3 : longueur de revetement >= 75 % du plus long candidat eligible (addendum 1)
 BARS_MIN_SHARE = 0.60               # barres de seuil trop courtes : < 60 % de la longueur de revetement (addendum 1)
@@ -423,14 +424,16 @@ def _choose_ends(c, sam, pav, clear, pave=None):
     return pave[0], pave[1], pave[2], 'revetement', bars_len, pave_len
 
 
-def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log=None):
+def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log=None, spare_segment_min=SPARE_SEGMENT_MIN_M):
     """Pistes d'une mosaique. Retourne une liste de Runway.
 
     Sans `refs` : toutes les pistes marquees (comportement d'origine).
     Avec `refs` (liste de (nom, cap magnetique pydcs) : les pistes de pydcs, `R`) et `heading_fn(ligne) -> cap
     magnetique modulo 180` : detection guidee par pydcs (cadrage 4.2 a 4.4 et addendum 1). Les pistes appariees en
     premier (candidats normaux a >= 2 blocs, dans l'ordre des candidats) viennent d'abord, puis les autres (dans l'ordre
-    de `refs`). Chaque Runway porte `ref`, l'indice de sa piste pydcs."""
+    de `refs`). Chaque Runway porte `ref`, l'indice de sa piste pydcs.
+    `spare_segment_min` : longueur minimale (m) des candidats de secours (lot heliports : 150 m en mode helicoptere) ;
+    le seuil d'accumulation reste proportionnel a cette longueur."""
     log = log or (lambda *a: None)
     mpp = georef.mpp
     sam = Sampler(georef)
@@ -472,7 +475,8 @@ def detect_runways(img, pav, georef, clear=None, refs=None, heading_fn=None, log
     free_refs = [i for i in range(len(refs)) if i not in found]
     if free_refs:
         pool = [c for k, c in enumerate(info) if k not in marked]
-        spare, dist_s, m2s = candidate_lines(pav, georef, SPARE_HALF_WIDTH_MIN_M, SPARE_SEGMENT_MIN_M, SPARE_HOUGH_VOTES)
+        spare, dist_s, m2s = candidate_lines(pav, georef, SPARE_HALF_WIDTH_MIN_M, spare_segment_min,
+                                             HOUGH_VOTES * spare_segment_min / SEGMENT_MIN_M)
         for ln in spare:
             if any(_same_line(ln, c['ln']) for c in info):
                 continue

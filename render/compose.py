@@ -9,7 +9,7 @@ from . import geo, layout, vector
 from .fonts import CAP_HEIGHT, pt, text_width
 from .page import (SYM_INSET_R, SYM_PLAN_R, CORNER_PAD, CORNER_PAD_Y, FRAME_CELL, FRAME_W, FRAME_X, FT, LAST_ROW_Y, LEGEND_Y, PAGE_H, PAGE_W, PLAN_MARGIN_M,
                    ROW_PITCH, X0, X1, PageOut, View, cells_from_mask, draw_scene, edge_ticks, footer, header,
-                   legend, north_block, number_elems, rot_box, rw_axes, runway_table, runway_polygon, scale_block)
+                   legend, north_block, number_elems, rot_box, rw_axes, runway_table, runway_polygon, scale_block, scale_plan)
 from .svgdoc import BAND, INK, INK2, TAXI, Doc, circle, f, line, rect, slug, text
 
 NORTH_WH = (16.0, 20.0)
@@ -171,7 +171,7 @@ def build_pages(data, log=print):
     # ---- page 10-9 : cadre
     doc = Doc()
     doc.add('Background', rect(0, 0, PAGE_W, PAGE_H, '#FFFFFF'))
-    bottom = header(doc, data, '10-9', 'AÉRODROME', bands=True)
+    bottom = header(doc, data, '10-9', "BASE D'HÉLICOPTÈRES" if data.heli_mode else 'AÉRODROME', bands=True)
     n_rows = len(data.ends)
     first_row = LAST_ROW_Y - (n_rows - 1) * ROW_PITCH
     head_y = first_row - 3.8
@@ -206,7 +206,7 @@ def build_pages(data, log=print):
     occ |= pk > 0
 
     # ---- coins : nord et echelle
-    scale_len = max(250.0, math.floor(38.0 / s / 250.0) * 250.0) * s
+    scale_len = scale_plan(s)[0] * s                # lot heliports (4.3) : la barre de moins de 500 m a son propre pas
     scale_wh = (scale_len + 9.0, SCALE_H)
 
     def cover(rc):
@@ -311,7 +311,7 @@ def build_pages(data, log=print):
     # ---- tableau, legende, pied
     rows_y = [first_row + i * ROW_PITCH for i in range(n_rows)]
     runway_table(doc, data, frame_bottom, head_y, rows_y)
-    legend(doc, LEGEND_Y, x_right=X1)
+    legend(doc, LEGEND_Y, x_right=X1, heli=data.heli_mode)
     footer(doc, data, osm)
 
     pages = [PageOut('10-9', doc.render(), {'mode': mode, 'zones': len(zones), 'labels': placed, 'n_numbers': n_numbers,
@@ -330,7 +330,7 @@ def build_pages(data, log=print):
             n = 0
             for b in pg:
                 n += draw_inset(d2, b, data, parkings)
-            legend(d2, 199.3, x_left=X0, note='NUMÉROS DE PARKING TELS QUE DANS DCS', sym_r=SYM_INSET_R)
+            legend(d2, 199.3, x_left=X0, note='NUMÉROS DE PARKING TELS QUE DANS DCS', sym_r=SYM_INSET_R, heli=data.heli_mode)
             footer(d2, data, False)
             pages.append(PageOut(f'10-9{letter}', d2.render(), {'insets': [b.zone.label for b in pg], 'n_numbers': n,
                                                               'k': {b.zone.label: b.k for b in pg}}))

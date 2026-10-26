@@ -83,6 +83,8 @@ class ChartData:
     osm_icao: str = None
     projection: object = None
     n_shelter: int = 0
+    heli_mode: bool = False    # lot heliports (4.1) : toutes les aires pydcs sont reservees aux helicopteres
+    icao_known: bool = True    # un OACI a ete donne (option --icao ou fichier OSM) ; sinon `icao` porte le nom de la capture
 
 
 def load_rn4_points(folder, cfg, theatre, base):
@@ -184,13 +186,24 @@ def read_osm(path, proj, pav, g, mpp):
     return d.get('icao'), ways
 
 
+def heliport_has_radio(bj, theatre):
+    """Lot heliports (4.2) : un `base.json` de `kind: heliport` se rend en chart si son aerodrome pydcs a une radio de tour.
+    L'aerodrome est apparie par le centre de l'emprise .rn4 de base.json (le .rn4 lui-meme n'existe que pour ces heliports)."""
+    center = (bj.get('extent_rn4') or {}).get('center')
+    if not center:
+        return False
+    ap = dcsdata.match_airport(dcsdata.load_terrain(theatre), center[0], center[1])
+    return ap is not None and getattr(ap, 'atc_radio', None) is not None
+
+
 def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=None, log=print):
     out_root = Path(cfg.work_dir) / 'out' / theatre.lower()
     folder = out_root / base
     if not (folder / 'base.json').is_file():
         raise ChartError(f'base capturee introuvable : {folder}')
     bj = georef.load_base_json(folder)
-    if bj.get('kind') == 'heliport':
+    is_heliport = bj.get('kind') == 'heliport'
+    if is_heliport and not heliport_has_radio(bj, theatre):
         raise ChartError(f'{base} est une helistation : pas de chart d\'aerodrome')
     g = georef.georef_from_base(bj)
     img = np.asarray(Image.open(folder / 'mosaic.png').convert('RGB'))
@@ -215,7 +228,8 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     blist = dcsdata.airfield_beacons(all_beacons, facts.id)
 
     log(f'{base} -> {facts.name} (id {facts.id}), mosaique {g.width}x{g.height}, {g.mpp:.4f} m/px')
-    pav = vector.pavement_mask(img, g.mpp)
+    pav = vector.pavement_mask(img, g.mpp, vector.HELIPORT_PAVEMENT_MIN_M2 if is_heliport else vector.PAVEMENT_MIN_M2)
+    heli_mode = bool(facts.slots) and all(sl.heli_only for sl in facts.slots)
     bld, n_bld = vector.building_mask(img, pav, g.mpp)
     clear = vector.clear_marking_mask(img)
     lat, lon = proj.to_latlon(facts.x, facts.z)
@@ -228,9 +242,14 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
         return (az + proj.convergence(*ln['p']) - decl) % 180.0
 
     refs = [(f'{m.name}/{o.name}', m.heading) for m, o in facts.rw_refs]
-    rws = runways.detect_runways(img, pav, g, clear, refs=refs, heading_fn=mag_heading, log=log)
-    if not rws:
-        raise ChartError('aucune piste detectee')
+    if refs:
+        spare_min = runways.HELI_SPARE_SEGMENT_MIN_M if heli_mode else runways.SPARE_SEGMENT_MIN_M
+        rws = runways.detect_runways(img, pav, g, clear, refs=refs, heading_fn=mag_heading, log=log, spare_segment_min=spare_min)
+        if not rws:
+            raise ChartError('aucune piste detectee')
+    else:
+        rws = []                                          # lot heliports (4.2) : aucune piste pydcs, la detection ne tourne pas
+        log('aucune piste dans pydcs : detection des pistes non lancee')
     del img
 
     hints = [[(a.name, a.heading) for a in facts.rw_refs[r.ref]] if r.ref is not None else None for r in rws]
@@ -273,6 +292,7 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     if osm.is_file():
         osm_icao, osm_ways = read_osm(osm, proj, pav, g, g.mpp)
     code = icao or osm_icao or base
+    icao_known = bool(icao or osm_icao)
 
     if facts.atc is None:
         tower = {k: NO_FREQUENCY for k in ('vhf', 'uhf', 'fm', 'hf')}     # pas de radio de tour dans pydcs (cadrage 4.6)
@@ -286,4 +306,4 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
                      beacons=banner_beacons(blist), decl=decl, conv=conv, runways=rws, ends=ends, parkings=parkings,
                      georef=g, pav_rings=pav_rings, bld_rings=bld_rings, masks={'pav': pav, 'bld': bld, 'clear': None},
                      osm_ways=osm_ways, osm_kept=sorted({w['ref'] for w in osm_ways}, key=dcsdata.natural_key),
-                     osm_icao=osm_icao, projection=proj, n_shelter=n_shelter)
+                     osm_icao=osm_icao, projection=proj, n_shelter=n_shelter, heli_mode=heli_mode, icao_known=icao_known)

@@ -217,20 +217,51 @@ def north_block(cx, cy, conv, decl, year):
     return out
 
 
+SCALE_MAX_MM = 38.0
+SCALE_STEPS = ((100.0, 500.0), (50.0, 200.0), (25.0, 100.0))    # lot heliports (4.3) : (pas en m, pas en pieds)
+
+
+def scale_plan(s_mm_per_m):
+    """Barre d'echelle : (longueur en m, pas en m, pas en pieds). Regle d'origine (graduations de 250 m et de 1 000 ft,
+    pas = None) tant que 38 mm couvrent au moins 500 m. Lot heliports (4.3) : en dessous, le premier des pas (100 m,
+    500 ft), (50 m, 200 ft), (25 m, 100 ft) tel que 38 mm / s >= 2 x pas ; longueur = le plus grand multiple du pas qui
+    tient dans 38 mm (au moins un pas si 38 mm ne couvrent pas meme un pas)."""
+    span = SCALE_MAX_MM / s_mm_per_m
+    if span >= 500.0:
+        return math.floor(span / 250.0) * 250.0, None, None
+    mstep, fstep = SCALE_STEPS[-1]
+    for ms, fs in SCALE_STEPS:
+        if span >= 2 * ms:
+            mstep, fstep = ms, fs
+            break
+    return max(mstep, math.floor(span / mstep) * mstep), mstep, fstep
+
+
 def scale_block(x, y, s_mm_per_m):
-    """Echelle en pieds (graduations de 1 000 ft) et en metres (graduations de 250 m) ; (x, y) : debut de la barre."""
-    max_mm = 38.0
-    L_m = max(250.0, math.floor(max_mm / s_mm_per_m / 250.0) * 250.0)
+    """Echelle en pieds (graduations de 1 000 ft) et en metres (graduations de 250 m) ; (x, y) : debut de la barre.
+    Barre de moins de 500 m (lot heliports, 4.3) : graduations du pas de `scale_plan`, chacune porte sa valeur."""
+    L_m, mstep, fstep = scale_plan(s_mm_per_m)
     Lmm = L_m * s_mm_per_m
     out = [line(x, y, x + Lmm, y, INK, 0.35)]
     size = pt(5.3)
+    if mstep is not None:
+        n = int(round(L_m / mstep))
+        for i in range(n + 1):
+            xm = x + i * mstep * s_mm_per_m
+            out.append(line(xm, y, xm, y + 1.6, INK, 0.3))
+            out.append(text(xm, y + 4.2, f'{int(i * mstep)}' + (' M' if i == n else ''), size, 'regular', INK, 'middle'))
+        n_ft = int(L_m * FT // fstep)
+        for k in range(n_ft + 1):
+            xf = x + k * fstep / FT * s_mm_per_m
+            out.append(line(xf, y, xf, y - 1.6, INK, 0.3))
+            out.append(text(xf, y - 2.3, f'{int(k * fstep)}' + (' FT' if k == n_ft else ''), size, 'regular', INK, 'middle'))
+        return out, Lmm
     # metres, sous la barre
     for i in range(int(L_m // 250) + 1):
         xm = x + i * 250 * s_mm_per_m
         major = (i % 2 == 0)
         out.append(line(xm, y, xm, y + (1.6 if major else 1.0), INK, 0.3))
         if major:
-            lab = f'{int(i * 250)}' + (' M' if i == int(L_m // 250) or i == int(L_m // 250) - 0 and False else '')
             out.append(text(xm, y + 4.2, f'{int(i * 250)}' + (' M' if abs(i * 250 - L_m) < 1 else ''), size, 'regular', INK, 'middle'))
     # pieds, sur la barre
     n_ft = int(L_m * FT // 1000)
@@ -245,7 +276,8 @@ def scale_block(x, y, s_mm_per_m):
 def header(doc, data, index, kind, bands=True):
     L = 'Header'
     name = data.airport_name.upper()
-    doc.add(L, text(X0, 11.4, data.icao, pt(13), 'bold'))
+    if not (data.heli_mode and not data.icao_known):      # lot heliports (4.1) : sans OACI, le coin gauche d'une base d'helicopteres reste vide
+        doc.add(L, text(X0, 11.4, data.icao, pt(13), 'bold'))
     doc.add(L, text(X0, 14.7, f'{data.theatre.upper()} · DCS', pt(6.5), 'regular', INK2))
     doc.add(L, text(PAGE_W / 2, 11.9, name, pt(15), 'bold', INK, 'middle', spacing=1.1))
     doc.add(L, text(PAGE_W / 2, 15.0, kind, pt(6.5), 'regular', INK2, 'middle', spacing=0.8))
@@ -304,12 +336,15 @@ def footer(doc, data, osm):
     doc.add(L, text(X1, FOOTER_Y, 'PAS POUR LA NAVIGATION RÉELLE', pt(6.1), 'bold', INK, 'end'))
 
 
-def legend(doc, y, x_left=None, x_right=None, note=None, sym_r=SYM_PLAN_R):
+def legend(doc, y, x_left=None, x_right=None, note=None, sym_r=SYM_PLAN_R, heli=False):
     """Legende des parkings (symboles dessines, pas de glyphes de police) ; alignee a gauche (x_left) ou a droite (x_right) ;
-    `note` : texte secondaire aligne a droite sur la meme ligne."""
+    `note` : texte secondaire aligne a droite sur la meme ligne.
+    `heli` (lot heliports, 4.1) : base d'helicopteres, un seul element (l'aire d'helicoptere), sans texte secondaire."""
     L = 'Runway table'
     size = pt(6.3)
     items = [('open', 'OUVERT'), ('shelter', 'ABRI (HAS, HANGAR)'), ('heli', 'H\u00c9LICOPT\u00c8RE SEUL')]
+    if heli:
+        items, note = [('heli', "AIRE D'H\u00c9LICOPT\u00c8RE (NUM\u00c9RO DCS)")], None
     widths = [3.8 + text_width(t, 'regular', size) for _, t in items]
     gap = 7.0
     total = sum(widths) + gap * (len(items) - 1)
@@ -334,10 +369,12 @@ def runway_table(doc, data, frame_bottom_unused, head_y, rows_y):
     L = 'Runway table'
     cols = [6.0, 20.0, 40.0, 68.0, 94.0]
     heads = ['PISTE', 'CAP MAG', 'LONGUEUR × LARGEUR', 'ÉLÉV. SEUIL', 'ILS']
-    for x, h in zip(cols, heads):
-        doc.add(L, text(x, head_y, h, pt(5.2), 'semibold', INK2, spacing=0.4))
+    if data.runways:                                   # lot heliports (4.2) : sans piste, ni tableau ni en-tetes
+        for x, h in zip(cols, heads):
+            doc.add(L, text(x, head_y, h, pt(5.2), 'semibold', INK2, spacing=0.4))
     n_total, n_shel = len(data.parkings), data.n_shelter
-    doc.add(L, text(X1, head_y, f'PARKINGS : {n_total} DONT {n_shel} EN ABRI', pt(6.6), 'bold', INK, 'end'))
+    count = f'AIRES : {n_total}' if data.heli_mode else f'PARKINGS : {n_total} DONT {n_shel} EN ABRI'
+    doc.add(L, text(X1, head_y, count, pt(6.6), 'bold', INK, 'end'))
     for e, y in zip(data.ends, rows_y):
         rw = data.runways[e.rw]
         Lm, Wm = rw.length, rw.width
