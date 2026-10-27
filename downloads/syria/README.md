@@ -1,8 +1,8 @@
 # Syria — all airfields and heliports
 
-One PDF per airfield and helicopter base (all its pages: 10-9, then the parking pages 10-9A, 10-9B… when needed). Magnetic declination for **1985**. Every page as PNG (kneeboard) and SVG (Inkscape layers) is in the [global zip](../DCS_Airfield_Charts_Syria_1985.zip?raw=true).
+One PDF per airfield and helicopter base (all its pages: 10-9, then the parking pages 10-9A, 10-9B… when needed). Magnetic declination for **1985**. Every page as PNG (kneeboard) and SVG (Inkscape layers) is in the two zips attached to the latest release: [airfields](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_Syria_1985_airfields.zip) and [helicopters](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_Syria_1985_helicopters.zip).
 
-**Heliport directory**: the 141 other heliports of Syria, four to a page with a plan of their pads and pad numbers, position, elevation and nearest town, and an index: [Syria_heliports_directory.pdf](Syria_heliports_directory.pdf?raw=true) (the pages as JPEG for the kneeboard are in the zip, folder `heliports/`).
+**Heliport directory**: the 141 other heliports of Syria, four to a page with a plan of their pads and pad numbers, position, elevation and nearest town, and an index: [Syria_heliports_directory.pdf](Syria_heliports_directory.pdf?raw=true) (the pages as JPEG for the kneeboard are in the helicopters zip, folder `heliports/`).
 
 | Airfield | ICAO | PDF | Pages |
 |---|---|---|---|
