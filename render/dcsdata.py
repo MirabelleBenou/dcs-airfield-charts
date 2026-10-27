@@ -11,6 +11,7 @@ from pathlib import Path
 from . import geo
 
 MATCH_MAX_M = 3000.0
+WORLD_MAX_M = 5000.0          # balise `world_` rattachee a l'aerodrome le plus proche, a 5 km au plus (lot balises, 4.3)
 
 
 class DataError(Exception):
@@ -47,13 +48,14 @@ class Beacon:
     channel: int = None
     x: float = 0.0
     z: float = 0.0
+    direction: float = 0.0     # degres, tel quel dans beacons.lua (0 si absent) ; pour un localizer : direction de l'antenne
 
 
 _BLOCK = re.compile(r'beaconId\s*=\s*\'([^\']+)\'')
 
 
 def parse_beacons_lua(path):
-    """Blocs `beaconId = 'airfield<id>_<n>'` de beacons.lua ; retourne {beaconId: Beacon}."""
+    """Blocs `beaconId = '...'` de beacons.lua (`airfield<id>_<n>` et `world_<n>`) ; retourne {beaconId: Beacon}."""
     text = Path(path).read_text(encoding='utf-8', errors='replace')
     out = {}
     for blk in re.split(r'\n\t\{\n', text):
@@ -71,7 +73,7 @@ def parse_beacons_lua(path):
         ch = grab(r'channel\s*=\s*(\d+)', int)
         out[m.group(1)] = Beacon(m.group(1), typ, grab(r"callsign\s*=\s*'([^']*)'") or '',
                                  grab(r'frequency\s*=\s*([-\d.eE+]+)', float) or 0.0, ch,
-                                 float(pos.group(1)), float(pos.group(3)))
+                                 float(pos.group(1)), float(pos.group(3)), grab(r'direction\s*=\s*([-\d.eE+]+)', float) or 0.0)
     return out
 
 
@@ -79,6 +81,20 @@ def airfield_beacons(beacons, airport_id):
     """Balises `airfield<id>_<n>` d'un aerodrome."""
     pre = f'airfield{airport_id}_'
     return [b for k, b in beacons.items() if k.startswith(pre)]
+
+
+def world_beacons_near(beacons, airports, airport_id, max_m=WORLD_MAX_M):
+    """Balises `world_...` rattachees a l'aerodrome `airport_id` : celles dont il est l'aerodrome pydcs le plus proche
+    (distance horizontale a `airport.position`), a `max_m` au plus. Retourne [(Beacon, distance_m)] dans l'ordre du fichier.
+    `airports` : objets pydcs (id, position.x, position.y)."""
+    out = []
+    for k, b in beacons.items():
+        if not k.startswith('world_'):
+            continue
+        best = min(((math.hypot(a.position.x - b.x, a.position.y - b.z), a.id) for a in airports), default=None)
+        if best is not None and best[1] == airport_id and best[0] <= max_m:
+            out.append((b, best[0]))
+    return out
 
 
 @dataclass
@@ -96,7 +112,6 @@ class Slot:
 class Approach:
     name: str                  # '01L'
     heading: float             # cap pydcs (degres)
-    beacon_ids: list = field(default_factory=list)   # balises dont runway_side == name
 
 
 @dataclass
@@ -125,8 +140,7 @@ def airport_facts(ap):
     for rw in ap.runways:
         pair = []
         for app in (rw.main, rw.opposite):
-            ids = [b.id for b in app.beacons if getattr(b, 'runway_side', None) == app.name]
-            pair.append(Approach(app.name, float(app.heading), ids))
+            pair.append(Approach(app.name, float(app.heading)))
         aps.extend(pair)
         rw_refs.append(tuple(pair))
     slots = []

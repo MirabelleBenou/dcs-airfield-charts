@@ -50,13 +50,13 @@ def test_at_tanf_pdf_image_is_jpeg(work, tmp_path):
     images = _images(pdf)
     assert len(images) == 1
     size, obj = images[0]
-    assert size == (1488, 1866)
+    assert size == (1488, 1795)                                  # lot balises : la ligne BALISES (TAN) reduit le cadre de 158 a 152 mm (avant : 1866 px)
     assert obj['/Filter'] == '/DCTDecode'
     assert pdf.stat().st_size <= 1_000_000
     out = tmp_path / 'At_Tanf_charts.pdf'
     export.merge_pdfs([pdf], out)                                # le recueil reprend la page deja en JPEG
     (rsize, robj), = _images(out)
-    assert rsize == (1488, 1866) and robj['/Filter'] == '/DCTDecode'
+    assert rsize == (1488, 1795) and robj['/Filter'] == '/DCTDecode'
     assert out.stat().st_size <= 1_000_000
 
 

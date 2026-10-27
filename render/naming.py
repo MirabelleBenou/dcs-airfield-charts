@@ -20,6 +20,12 @@ def number_of(name):
     return m.group(1).zfill(2) if m else name
 
 
+def letter_of(name):
+    """Lettre qui suit le numero d'un nom de piste pydcs ('06L' -> 'L', '06' -> '')."""
+    m = re.match(r'\d+([A-Z]?)', name)
+    return m.group(1) if m else ''
+
+
 def name_ends(runways, approaches, hints=None):
     """runways : liste de (p0, p1) en (x, z). approaches : liste de (nom pydcs, cap pydcs).
     `hints` (optionnel) : pour chaque piste, la liste des approches de sa piste pydcs appariee (ou None) ; le numero est
@@ -27,19 +33,22 @@ def name_ends(runways, approaches, hints=None):
     Retourne, pour chaque piste i, [(nom_extremite_p0, azimut_p0), (nom_extremite_p1, azimut_p1)].
 
     Le cap pydcs le plus proche de l'azimut grille d'atterrissage donne le numero ; entre extremites de meme numero
-    (pistes paralleles), la plus a gauche vue dans le sens d'atterrissage prend L, puis C, puis R."""
+    (pistes paralleles), la plus a gauche vue dans le sens d'atterrissage prend L, puis C, puis R ; une extremite seule de
+    son numero prend la lettre du nom pydcs apparie (piste unique '06L/24R' : 06L et 24R)."""
     ends = []
     for i, (p0, p1) in enumerate(runways):
         for k, (a, b) in enumerate(((p0, p1), (p1, p0))):
             az = landing_azimuth(a, b)
             pool = hints[i] if hints and hints[i] else approaches
             best = min(pool, key=lambda ap: (angdiff(az, ap[1]), ap[0]))
-            ends.append({'rw': i, 'end': k, 'pos': a, 'az': az, 'num': number_of(best[0]), 'letter': ''})
+            ends.append({'rw': i, 'end': k, 'pos': a, 'az': az, 'num': number_of(best[0]), 'letter': '',
+                         'py_letter': letter_of(best[0])})
     groups = {}
     for e in ends:
         groups.setdefault(e['num'], []).append(e)
     for grp in groups.values():
         if len(grp) < 2:
+            grp[0]['letter'] = grp[0]['py_letter']                # lot balises (4.4) : seule de son numero, elle garde la lettre du jeu
             continue
         mean_az = math.degrees(math.atan2(sum(math.sin(math.radians(e['az'])) for e in grp),
                                           sum(math.cos(math.radians(e['az'])) for e in grp))) % 360.0

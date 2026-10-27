@@ -21,6 +21,11 @@ OSM_ON_PAVEMENT, OSM_PAVEMENT_GROW_M = 0.80, 5.0
 BEACON_BANNER = {'TACAN': 'TACAN', 'VORTAC': 'VORTAC', 'VOR_DME': 'VOR/DME', 'VOR': 'VOR',
                  'AIRPORT_HOMER': 'NDB', 'AIRPORT_HOMER_WITH_MARKER': 'NDB', 'HOMER': 'NDB'}
 BANNER_ORDER = ['TACAN', 'VORTAC', 'VOR/DME', 'VOR', 'NDB']
+LOCALIZER_TYPES = ('ILS_LOCALIZER', 'PRMG_LOCALIZER')
+GLIDESLOPE_TYPES = ('ILS_GLIDESLOPE', 'PRMG_GLIDESLOPE')
+ILS_MIN_HZ = 1e6                # lot balises (4.2) : une frequence de 1 MHz ou moins n'est pas un ILS
+ILS_COURSE_TOL_DEG = 10.0       # ecart maximal entre le cap d'approche du localizer et l'azimut d'atterrissage de l'extremite
+ILS_LATERAL_MAX_M = 150.0       # ecart maximal du localizer a l'axe prolonge de l'extremite
 
 
 class ChartError(Exception):
@@ -134,15 +139,53 @@ def banner_beacons(blist):
     return out
 
 
-def ils_text(blist, ids):
-    """`<indicatif LOC> <MHz>` si un localizer est rattache a l'extremite ; ` (LOC)` sans glide ; sinon None."""
-    by = [b for b in blist if b.id in ids]
-    loc = [b for b in by if b.type in ('ILS_LOCALIZER', 'PRMG_LOCALIZER')]
-    if not loc:
-        return None
-    gs = [b for b in by if b.type in ('ILS_GLIDESLOPE', 'PRMG_GLIDESLOPE')]
-    s = f'{loc[0].callsign} {loc[0].frequency / 1e6:.2f}'
-    return s if gs else s + ' (LOC)'
+def with_world_beacons(blist, world):
+    """Balises du bandeau de l'aerodrome (`blist`) et balises `world_` rattachees (`world`) ; une balise `world_` de meme
+    type et de meme texte qu'une balise deja presente n'est pas ajoutee. Ordre : BANNER_ORDER, puis indicatif."""
+    out = banner_beacons(blist)
+    for w in banner_beacons(world):
+        if not any(o.kind == w.kind and o.text == w.text for o in out):
+            out.append(w)
+    out.sort(key=lambda b: (BANNER_ORDER.index(b.kind), b.callsign))
+    return out
+
+
+def attach_ils(ends, blist, log=None):
+    """Lot balises (4.2) : rattache chaque localizer (> 1 MHz) de l'aerodrome a l'extremite dont l'azimut d'atterrissage
+    est a 10 deg au plus de son cap d'approche (direction + 180) et dont l'axe prolonge passe a 150 m au plus de la balise
+    (la plus proche de l'axe). Remplit `End.ils`. Retourne la liste des rattachements :
+    [{'beacon', 'end' (End ou None), 'lateral_m', 'text', 'duplicate'}]."""
+    for e in ends:
+        e.ils = None
+    gss = [b for b in blist if b.type in GLIDESLOPE_TYPES]
+    res = []
+    for b in blist:
+        if b.type not in LOCALIZER_TYPES or b.frequency <= ILS_MIN_HZ:
+            continue
+        course = (b.direction + 180.0) % 360.0
+        best = None
+        for e in ends:
+            if naming.angdiff(e.az_grid, course) > ILS_COURSE_TOL_DEG:
+                continue
+            u = (math.cos(math.radians(e.az_grid)), math.sin(math.radians(e.az_grid)))
+            v = (b.x - e.pos[0], b.z - e.pos[1])
+            lat = abs(u[0] * v[1] - u[1] * v[0])
+            if lat <= ILS_LATERAL_MAX_M and (best is None or lat < best[0]):
+                best = (lat, e)
+        glide = any(abs(g.frequency - b.frequency) < 1.0 for g in gss)
+        text = f'{b.callsign} {b.frequency / 1e6:.2f}'.strip() + ('' if glide else ' (LOC)')
+        r = {'beacon': b, 'end': None, 'lateral_m': None, 'text': text, 'duplicate': False}
+        if best:
+            r['end'], r['lateral_m'] = best[1], best[0]
+            if best[1].ils is None:
+                best[1].ils = text
+            else:
+                r['duplicate'] = True                       # deux localizers sur la meme extremite : le premier du fichier reste
+        res.append(r)
+        if log:
+            tgt = f"{r['end'].name} ({r['lateral_m']:.0f} m de l'axe)" if r['end'] else 'aucune extremite'
+            log(f"ILS {text} -> {tgt}" + (' [doublon ecarte]' if r['duplicate'] else ''))
+    return res
 
 
 def shelter_flags(parkings_xz, bld, g):
@@ -233,6 +276,9 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
         raise ChartError(f'beacons.lua introuvable : {beacons_lua}')
     all_beacons = dcsdata.parse_beacons_lua(beacons_lua)
     blist = dcsdata.airfield_beacons(all_beacons, facts.id)
+    world = dcsdata.world_beacons_near(all_beacons, terrain.airports.values(), facts.id)      # lot balises, 4.3
+    for b, d in world:
+        log(f'balise world {b.type} {b.callsign} a {d:.0f} m')
 
     log(f'{base} -> {facts.name} (id {facts.id}), mosaique {g.width}x{g.height}, {g.mpp:.4f} m/px')
     pav = vector.pavement_mask(img, g.mpp)
@@ -281,14 +327,7 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
             if d.min() <= THRESHOLD_ELEV_MAX_M:
                 thr = int(round(float(np.median(pts[np.argsort(d)[:THRESHOLD_ELEV_N], 1])) * FT))
             ends.append(End(nm, az, mag, pos, i, thr))
-    # ILS : balises de piste dont runway_side = nom de l'approche pydcs de meme nom
-    side_ids = {a.name: a.beacon_ids for a in facts.approaches}
-    for e in ends:
-        ids = side_ids.get(e.name)
-        if ids is None:
-            cand = [a for a in facts.approaches if naming.number_of(a.name) == naming.number_of(e.name)]
-            ids = cand[0].beacon_ids if len(cand) == 1 else []
-        e.ils = ils_text(blist, ids)
+    attach_ils(ends, blist, log=log)                        # ILS rattaches par la geometrie (lot balises, 4.2)
     ends.sort(key=lambda e: naming.sort_key(e.name))
 
     parkings = []
@@ -314,7 +353,7 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     bld_rings = vector.mask_rings(bld, g, vector.BUILDING_SIMPLIFY_M)
     return ChartData(theatre=theatre, base=base, airport_name=facts.name, icao=code, year=float(year), lat=lat, lon=lon,
                      arp=(facts.x, facts.z), elev_ft=int(round(elev_m * FT)), tower=tower,
-                     beacons=banner_beacons(blist), decl=decl, conv=conv, runways=rws, ends=ends, parkings=parkings,
+                     beacons=with_world_beacons(blist, [b for b, _ in world]), decl=decl, conv=conv, runways=rws, ends=ends, parkings=parkings,
                      georef=g, pav_rings=pav_rings, bld_rings=bld_rings, masks={'pav': pav, 'bld': bld, 'clear': None},
                      osm_ways=osm_ways, osm_kept=sorted({w['ref'] for w in osm_ways}, key=dcsdata.natural_key),
                      osm_icao=osm_icao, projection=proj, n_shelter=n_shelter, heli_mode=heli_mode, icao_known=icao_known, f10_img=f10_img)
