@@ -9,6 +9,14 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - Cold War Germany.
 
+## AC-V1.3.1 — 27 October 2026
+
+Syria: the three heliports with a tower radio are now drawn **on the F10 map**.
+
+- **At Tanf, Kharab Ishk and Naqoura**: their plan showed only pavement and buildings, without roads, berms or camp, and was hard to read. It now shows the F10 map, softened, at about 1:5,000, as in the heliport directory. Each pad is circled in red at its real size, with its DCS number.
+- The north arrow and the scale bar sit on a white box, so they can be read on the map.
+- The other 78 charts and the heliport directory do not change.
+
 ## AC-V1.3.0 — 26 October 2026
 
 Syria: **helicopter bases and heliports**.
