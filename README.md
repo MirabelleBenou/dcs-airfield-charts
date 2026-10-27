@@ -121,7 +121,7 @@ Thanks to the pilots of the 4th VEAW for testing.
 - **Combat Wombat** (shu77) — [Combat Wombat's Airfield & Enroute Maps and Planning Tools](https://www.digitalcombatsimulator.com/en/files/filter/user-is-shu77/apply/): the airfield diagrams of Syria, the Persian Gulf, the Marianas and more, and the Syria rotary supplement. North-up diagrams, A5 for the kneeboard, frequencies on the page, and the clockwise rule for naming taxiways that have no name.
 - **CORSAIR** (V.E.A.F.) — airport and approach charts for Syria, the Persian Gulf, the Marianas and the South Atlantic, adapted from real charts and checked against the game, built to be read in VR.
 - **Flappie** — the hand-drawn Inkscape airfield SVGs of the Caucasus, whose way of drawing pavement, runways and shelters these charts follow. He also reviewed our SVG files and suggested the Inkscape layers.
-- **Dima Kozyrev**, published by Minsky on DCS Files — [Aerodrome Data and Frequencies](https://files.digitalcombatsimulator.com/en/files/3312200/): every aerodrome of every DCS map on kneeboard pages, with frequencies, navaids, coordinates, runway headings, elevation and magnetic declination, kept up to date with the game. A reference to check our own data against, theatre by theatre.
+- **Minsky** — [Aerodrome Data and Frequencies](https://files.digitalcombatsimulator.com/en/files/3312200/): every aerodrome of every DCS map on kneeboard pages, with frequencies, navaids, coordinates, runway headings, elevation and magnetic declination, kept up to date with the game. A reference to check our own data against, theatre by theatre.
 
 None of their drawings or data is copied here: these charts are generated from the F10 map and the game files. But they would not look like this without them.
 
