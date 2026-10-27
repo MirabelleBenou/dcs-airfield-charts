@@ -9,6 +9,16 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - Cold War Germany.
 
+## AC-V1.3.2 — 27 October 2026
+
+Syria: **navaids checked against the game files**, on 19 charts.
+
+- **ILS**: each localizer is now placed on its runway end from its position and course in the game's beacon file. 12 ILS that were missing now appear (among them Beirut 03 and 17, Gaziantep 28, Hatay 04, Sanliurfa 04, Marka 24, Prince Hassan 31, King Abdullah II 31, Ben Gurion 26, Hatzor 05, Chukurova 03R and 21L), and two were on the wrong end (Ben Gurion 08, Nevatim 08R). The "0.00" shown as an ILS at Bassel Al-Assad 35R is gone.
+- **Navaids on or next to the airfield** that the game does not tie to it are now in the header band: Kahramanmaras (VOR/DME and NDB KHM), Rene Mouawad (NDB RA), Kingsfield (NDB DKA), Muwaffaq Salti (VORTAC GHI), At Tanf (VOR/DME TAN).
+- Navaids drawn close together on the plan share one label (Hatay, Sanliurfa, Chukurova, Kahramanmaras).
+- Runway names follow the game: Marj Ruhayyil 06L/24R, Tha'lah 05R/23L.
+- Thanks to Minsky's *Aerodrome Data and Frequencies*, which we used to cross-check the charts.
+
 ## AC-V1.3.1 — 27 October 2026
 
 Syria: the three heliports with a tower radio are now drawn **on the F10 map**.
