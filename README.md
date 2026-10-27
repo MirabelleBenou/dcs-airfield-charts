@@ -21,7 +21,7 @@ Not yet covered: T3, which the F10 map does not draw; Nicosia, which pydcs does 
 
 ## Example charts
 
-Three Syria airfields, rendered by `render/build_chart.py` from the F10 capture and the game files, with no manual drawing (work in progress: the full set is not published yet). A5 portrait, magnetic declination for **1985** (the default; `--annee` changes it). Every page comes as **SVG** (vector, organised as Inkscape layers; editing needs the Barlow Condensed fonts from `render/fonts/`), **PNG** (1748 × 2480 px, 300 dpi, ready for the DCS kneeboard) and **PDF** (one file per airfield, all pages). The links download the files themselves; when saving from a GitHub file page, use its *Download raw file* button (saving the page itself gives an HTML file that Inkscape cannot open).
+Examples from Syria: three airfields, a helicopter base and a page of the heliport directory, rendered by `render/build_chart.py` and `render/build_directory.py` from the F10 capture and the game files, with no manual drawing. A5 portrait, magnetic declination for **1985** (the default; `--annee` changes it). Every page comes as **SVG** (vector, organised as Inkscape layers; editing needs the Barlow Condensed fonts from `render/fonts/`), **PNG** (1748 × 2480 px, 300 dpi, ready for the DCS kneeboard) and **PDF** (one file per airfield, all pages). The links download the files themselves; when saving from a GitHub file page, use its *Download raw file* button (saving the page itself gives an HTML file that Inkscape cannot open).
 
 | Airfield | PDF (all pages) | 10-9 (airfield) | Parking pages |
 |---|---|---|---|
@@ -36,6 +36,16 @@ Three Syria airfields, rendered by `render/build_chart.py` from the F10 capture 
 | Adana 10-9 | Ramat David 10-9 |
 |---|---|
 | ![Adana 10-9](docs/examples/syria/LTAF_Adana_10-9.png) | ![Ramat David 10-9](docs/examples/syria/LLRD_Ramat_David_10-9.png) |
+
+**Helicopters.** A helicopter base with no runway is drawn on the softened F10 map, each pad circled in red at its real size with its DCS number. The heliport directory gives the other heliports four to a page, all at the same scale, with position, elevation, pad sizes and the nearest town (the charts are in French: « 1,2 km SW de Yarka » is 1.2 km south-west of Yarka).
+
+| Helicopter base | PDF | 10-9 |
+|---|---|---|
+| Naqoura | [Naqoura_charts.pdf](docs/examples/syria/Naqoura_charts.pdf?raw=true) | [SVG](docs/examples/syria/Naqoura_10-9.svg?raw=true) · [PNG](docs/examples/syria/Naqoura_10-9.png?raw=true) |
+
+| Naqoura 10-9 (helicopter base) | Heliport directory, page 11 (HI16, HI17) |
+|---|---|
+| ![Naqoura 10-9](docs/examples/syria/Naqoura_10-9_preview.jpg) | ![Heliport directory, HI16 and HI17](docs/examples/syria/Syria_heliports_directory_p11.jpg) |
 
 What a chart shows: pavement, runways and their markings, buildings and hardened shelters (vectorised from the F10 map); runway designators, magnetic bearings, lengths and threshold elevations; tower frequencies, TACAN, VOR, NDB and ILS (from the game files); every parking spot with its number as in DCS; real taxiway names where OpenStreetMap has them; latitude/longitude ticks, true and magnetic north, a scale in feet and metres.
 
