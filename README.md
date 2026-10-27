@@ -114,7 +114,16 @@ MIT — see `LICENSE`.
 
 **How this project is built.** DCS Airfield Charts is built with [Claude](https://www.anthropic.com/claude), Anthropic's AI: it designed the methods, wrote the code and produced the charts, working as project lead and developer. Benoit (KHR-26 / 4th VEAW), a sim pilot with an IT background but not a developer or a graphic designer, had the idea, made the decisions and checked the results.
 
-Thanks to Flappie for reviewing the SVG files and suggesting the Inkscape layers, and to the pilots of the 4th VEAW for testing.
+Thanks to the pilots of the 4th VEAW for testing.
+
+**Standing on the shoulders of the chart makers.** For years the DCS community has flown with charts drawn by hand by a few people. Their work set the standard these charts are measured against, and it was studied closely while this project was designed:
+
+- **Combat Wombat** (shu77) — [Combat Wombat's Airfield & Enroute Maps and Planning Tools](https://www.digitalcombatsimulator.com/en/files/filter/user-is-shu77/apply/): the airfield diagrams of Syria, the Persian Gulf, the Marianas and more, and the Syria rotary supplement. North-up diagrams, A5 for the kneeboard, frequencies on the page, and the clockwise rule for naming taxiways that have no name.
+- **CORSAIR** (V.E.A.F.) — airport and approach charts for Syria, the Persian Gulf, the Marianas and the South Atlantic, adapted from real charts and checked against the game, built to be read in VR.
+- **Flappie** — the hand-drawn Inkscape airfield SVGs of the Caucasus, whose way of drawing pavement, runways and shelters these charts follow. He also reviewed our SVG files and suggested the Inkscape layers.
+- **Dima Kozyrev**, published by Minsky on DCS Files — [Aerodrome Data and Frequencies](https://files.digitalcombatsimulator.com/en/files/3312200/): every aerodrome of every DCS map on kneeboard pages, with frequencies, navaids, coordinates, runway headings, elevation and magnetic declination, kept up to date with the game. A reference to check our own data against, theatre by theatre.
+
+None of their drawings or data is copied here: these charts are generated from the F10 map and the game files. But they would not look like this without them.
 
 The principle — driving the F10 camera from `Export.lua` and capturing the screen — comes from the map generator of [DCS Olympus](https://github.com/Pax1601/DCSOlympus). No code is taken from it.
 
