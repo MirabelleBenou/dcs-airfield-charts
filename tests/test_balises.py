@@ -59,20 +59,24 @@ def test_localizer_course_wraps_around_north():
     assert e.ils is not None
 
 
-def test_localizer_refused_at_151_m_accepted_at_149_m():
+def test_localizer_refused_at_301_m_accepted_at_299_m_and_at_208_m():
     e = end('09', 90.0)
-    res = analysis.attach_ils([e], [loc(270.0, 151.0, 3000.0)])
+    res = analysis.attach_ils([e], [loc(270.0, 301.0, 3000.0)])
     assert e.ils is None and res[0]['end'] is None
-    analysis.attach_ils([e], [loc(270.0, -149.0, 3000.0)])
+    analysis.attach_ils([e], [loc(270.0, -299.0, 3000.0)])
     assert e.ils is not None
+    res = analysis.attach_ils([e], [loc(270.0, 208.0, 3000.0)])          # Ercan : 208 m
+    assert e.ils is not None and res[0]['lateral_m'] == pytest.approx(208.0)
 
 
 def test_localizer_goes_to_the_closest_axis_of_two_parallel_ends():
-    a, b = end('09L', 90.0, (-100.0, 0.0)), end('09R', 90.0, (100.0, 0.0))
-    analysis.attach_ils([a, b], [loc(270.0, 70.0, 3000.0)])          # a 170 m de l'axe de a (refuse), a 30 m de celui de b
+    a, b = end('09L', 90.0, (-250.0, 0.0)), end('09R', 90.0, (250.0, 0.0))
+    analysis.attach_ils([a, b], [loc(270.0, 100.0, 3000.0)])         # a 350 m de l'axe de a (refuse), a 150 m de celui de b
     assert a.ils is None and b.ils is not None
-    analysis.attach_ils([a, b], [loc(270.0, -60.0, 3000.0)])         # a 40 m de a, 160 m de b
+    analysis.attach_ils([a, b], [loc(270.0, -100.0, 3000.0)])        # a 150 m de a, 350 m de b
     assert a.ils is not None and b.ils is None
+    analysis.attach_ils([a, b], [loc(270.0, 20.0, 3000.0)])          # a 270 m de a, 230 m de b : la plus proche de l'axe
+    assert a.ils is None and b.ils is not None
 
 
 def test_zero_frequency_localizer_is_ignored():
@@ -187,3 +191,43 @@ def test_solo_end_without_letter_stays_plain_and_shared_numbers_keep_geometry():
     app = [('06L', 60.0), ('24R', 240.0), ('06R', 60.0), ('24L', 240.0)]
     out = naming.name_ends([rw(0, 0, 60), rw(-300, 520, 60)], app)
     assert sorted(e[0] for r in out for e in r) == ['06L', '06R', '24L', '24R']
+
+
+# ---------- etiquettes des balises du plan (compose.navaids) ----------
+class _Doc:
+    def __init__(self):
+        self.items = []
+
+    def add(self, layer, s):
+        self.items.append(s)
+
+
+def _navaids(beacons, s=1.0):
+    from render import compose
+    from render.page import View
+    doc = _Doc()
+    data = SimpleNamespace(beacons=beacons)
+    view = View(s, 0.0, 0.0, 50.0, 50.0)                              # X = 50 + z*s, Y = 50 - x*s
+    compose.navaids(doc, view, (0.0, 0.0, 100.0, 100.0), data)
+    return [i for i in doc.items if i.startswith('<text')]
+
+
+def _nb(kind, cs, text, z):
+    return analysis.Beacon(kind, cs, text, 0.0, z)
+
+
+def test_navaid_labels_two_beacons_at_2_mm_share_one_label():
+    labs = _navaids([_nb('VOR/DME', 'KHM', '113.90', 0.0), _nb('NDB', 'KHM', '374', 2.0)])
+    assert len(labs) == 2
+    assert 'VOR/DME · NDB KHM' in labs[0] and '113.90 · 374' in labs[1]
+    assert 'x="54.3"' in labs[0]                                      # X_max (52) + 2,3
+
+
+def test_navaid_labels_two_beacons_at_4_mm_have_two_labels():
+    labs = _navaids([_nb('VOR/DME', 'KHM', '113.90', 0.0), _nb('NDB', 'KHM', '374', 4.0)])
+    assert len(labs) == 4 and 'VOR/DME KHM' in labs[0] and 'NDB KHM' in labs[2]
+
+
+def test_navaid_labels_group_is_chained_and_keeps_different_callsigns():
+    labs = _navaids([_nb('VOR/DME', 'AAA', '1', 0.0), _nb('NDB', 'BBB', '2', 3.0), _nb('TACAN', 'CCC', '3', 6.0)])
+    assert len(labs) == 2 and 'VOR/DME AAA · NDB BBB · TACAN CCC' in labs[0] and '1 · 2 · 3' in labs[1]

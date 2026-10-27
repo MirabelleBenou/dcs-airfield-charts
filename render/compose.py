@@ -23,6 +23,7 @@ RUNWAY_FREE_M = 20.0
 PARKING_FREE_MM = 2.5
 NUM_SIZE = pt(6.0)
 BEARING_GAP_M = 70.0
+NAVAID_GROUP_MM = 3.0                 # lot balises (addendum 1) : symboles de balises regroupes sous une etiquette
 
 
 def ground_bbox(rings, parkings):
@@ -151,13 +152,31 @@ def graticule(doc, view, frame, proj):
 
 
 def navaids(doc, view, frame, data):
+    """Symboles des balises du plan. Les balises dont les symboles sont a 3 mm au plus sur la page (de proche en proche)
+    forment un groupe qui n'a qu'une etiquette (lot balises, addendum 1) : a X_max + 2,3 et au Y de la premiere balise
+    du groupe ; ligne 1 : les types (puis l'indicatif s'il est commun), ligne 2 : les textes, joints par ' · '."""
     L = 'Navaids'
     fx, fy, fw, fh = frame
-    out = []
+    shown = []
     for b in data.beacons:
         X, Y = view.pt(b.x, b.z)
-        if not (fx + 1.5 < X < fx + fw - 1.5 and fy + 1.5 < Y < fy + fh - 1.5):
-            continue
+        if fx + 1.5 < X < fx + fw - 1.5 and fy + 1.5 < Y < fy + fh - 1.5:
+            shown.append((b, X, Y))
+    parent = list(range(len(shown)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    for i in range(len(shown)):
+        for j in range(i + 1, len(shown)):
+            if math.hypot(shown[i][1] - shown[j][1], shown[i][2] - shown[j][2]) <= NAVAID_GROUP_MM:
+                parent[max(root(i), root(j))] = min(root(i), root(j))
+    members = {}
+    for i in range(len(shown)):
+        members.setdefault(root(i), []).append(i)
+    for i, (b, X, Y) in enumerate(shown):
         if b.kind == 'NDB':
             doc.add(L, circle(X, Y, 1.35, '#FFFFFF', INK, 0.3, 'stroke-dasharray="0.5 0.5"'))
             doc.add(L, circle(X, Y, 0.3, INK))
@@ -166,8 +185,22 @@ def navaids(doc, view, frame, data):
             pts = ' '.join(f'{f(X + r * math.cos(math.radians(60 * k)))},{f(Y + r * math.sin(math.radians(60 * k)))}' for k in range(6))
             doc.add(L, f'<polygon points="{pts}" fill="#FFFFFF" stroke="{INK}" stroke-width="0.3"/>')
             doc.add(L, circle(X, Y, 0.3, INK))
-        doc.add(L, text(X + 2.3, Y - 0.2, f'{b.kind} {b.callsign}', pt(5.6), 'bold'))
-        doc.add(L, text(X + 2.3, Y + 2.2, b.text, pt(5.2), 'regular', INK2))
+        grp = members[root(i)]
+        if grp[0] != i:
+            continue                                                  # l'etiquette du groupe est posee avec sa premiere balise
+        gb = [shown[k][0] for k in grp]
+        if len(gb) == 1:
+            l1, l2, lx = f'{b.kind} {b.callsign}', b.text, X + 2.3
+        else:
+            lx = max(shown[k][1] for k in grp) + 2.3
+            calls = {x.callsign for x in gb}
+            if len(calls) == 1:
+                l1 = ' · '.join(x.kind for x in gb) + f' {b.callsign}'
+            else:
+                l1 = ' · '.join(f'{x.kind} {x.callsign}' for x in gb)
+            l2 = ' · '.join(x.text for x in gb)
+        doc.add(L, text(lx, Y - 0.2, l1, pt(5.6), 'bold'))
+        doc.add(L, text(lx, Y + 2.2, l2, pt(5.2), 'regular', INK2))
 
 
 def draw_inset(doc, box, data, parkings_all, clip_prefix='clip-inset'):

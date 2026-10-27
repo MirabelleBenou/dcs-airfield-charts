@@ -25,7 +25,7 @@ LOCALIZER_TYPES = ('ILS_LOCALIZER', 'PRMG_LOCALIZER')
 GLIDESLOPE_TYPES = ('ILS_GLIDESLOPE', 'PRMG_GLIDESLOPE')
 ILS_MIN_HZ = 1e6                # lot balises (4.2) : une frequence de 1 MHz ou moins n'est pas un ILS
 ILS_COURSE_TOL_DEG = 10.0       # ecart maximal entre le cap d'approche du localizer et l'azimut d'atterrissage de l'extremite
-ILS_LATERAL_MAX_M = 150.0       # ecart maximal du localizer a l'axe prolonge de l'extremite
+ILS_LATERAL_MAX_M = 300.0       # ecart maximal du localizer a l'axe prolonge de l'extremite (addendum 1 : 150 m trop serre, Ercan 208 m)
 
 
 class ChartError(Exception):
@@ -152,7 +152,7 @@ def with_world_beacons(blist, world):
 
 def attach_ils(ends, blist, log=None):
     """Lot balises (4.2) : rattache chaque localizer (> 1 MHz) de l'aerodrome a l'extremite dont l'azimut d'atterrissage
-    est a 10 deg au plus de son cap d'approche (direction + 180) et dont l'axe prolonge passe a 150 m au plus de la balise
+    est a 10 deg au plus de son cap d'approche (direction + 180) et dont l'axe prolonge passe a 300 m au plus de la balise
     (la plus proche de l'axe). Remplit `End.ils`. Retourne la liste des rattachements :
     [{'beacon', 'end' (End ou None), 'lateral_m', 'text', 'duplicate'}]."""
     for e in ends:
