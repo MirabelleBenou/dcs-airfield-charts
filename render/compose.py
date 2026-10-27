@@ -23,7 +23,7 @@ RUNWAY_FREE_M = 20.0
 PARKING_FREE_MM = 2.5
 NUM_SIZE = pt(6.0)
 BEARING_GAP_M = 70.0
-NAVAID_GROUP_MM = 3.0                 # lot balises (addendum 1) : symboles de balises regroupes sous une etiquette
+NAVAID_GROUP_MM = 6.0                 # lot balises (addendum 1) : symboles de balises regroupes sous une etiquette
 
 
 def ground_bbox(rings, parkings):
@@ -152,7 +152,7 @@ def graticule(doc, view, frame, proj):
 
 
 def navaids(doc, view, frame, data):
-    """Symboles des balises du plan. Les balises dont les symboles sont a 3 mm au plus sur la page (de proche en proche)
+    """Symboles des balises du plan. Les balises dont les symboles sont a 6 mm au plus sur la page (de proche en proche)
     forment un groupe qui n'a qu'une etiquette (lot balises, addendum 1) : a X_max + 2,3 et au Y de la premiere balise
     du groupe ; ligne 1 : les types (puis l'indicatif s'il est commun), ligne 2 : les textes, joints par ' · '."""
     L = 'Navaids'

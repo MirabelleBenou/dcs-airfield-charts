@@ -216,18 +216,18 @@ def _nb(kind, cs, text, z):
     return analysis.Beacon(kind, cs, text, 0.0, z)
 
 
-def test_navaid_labels_two_beacons_at_2_mm_share_one_label():
-    labs = _navaids([_nb('VOR/DME', 'KHM', '113.90', 0.0), _nb('NDB', 'KHM', '374', 2.0)])
+def test_navaid_labels_two_beacons_at_5_mm_share_one_label():
+    labs = _navaids([_nb('VOR/DME', 'KHM', '113.90', 0.0), _nb('NDB', 'KHM', '374', 5.0)])
     assert len(labs) == 2
     assert 'VOR/DME · NDB KHM' in labs[0] and '113.90 · 374' in labs[1]
-    assert 'x="54.3"' in labs[0]                                      # X_max (52) + 2,3
+    assert 'x="57.3"' in labs[0]                                      # X_max (55) + 2,3
 
 
-def test_navaid_labels_two_beacons_at_4_mm_have_two_labels():
-    labs = _navaids([_nb('VOR/DME', 'KHM', '113.90', 0.0), _nb('NDB', 'KHM', '374', 4.0)])
+def test_navaid_labels_two_beacons_at_7_mm_have_two_labels():
+    labs = _navaids([_nb('VOR/DME', 'KHM', '113.90', 0.0), _nb('NDB', 'KHM', '374', 7.0)])
     assert len(labs) == 4 and 'VOR/DME KHM' in labs[0] and 'NDB KHM' in labs[2]
 
 
 def test_navaid_labels_group_is_chained_and_keeps_different_callsigns():
-    labs = _navaids([_nb('VOR/DME', 'AAA', '1', 0.0), _nb('NDB', 'BBB', '2', 3.0), _nb('TACAN', 'CCC', '3', 6.0)])
+    labs = _navaids([_nb('VOR/DME', 'AAA', '1', 0.0), _nb('NDB', 'BBB', '2', 6.0), _nb('TACAN', 'CCC', '3', 12.0)])
     assert len(labs) == 2 and 'VOR/DME AAA · NDB BBB · TACAN CCC' in labs[0] and '1 · 2 · 3' in labs[1]
