@@ -484,7 +484,7 @@ def page_frame(theatre, right_bold, right_grey):
     page = Image.new('RGB', PAGE_PX, WHITE)
     d = ImageDraw.Draw(page)
     x0, x1 = MARGIN_X, PAGE_PX[0] - MARGIN_X + 1
-    draw_text(d, (x0, 147), theatre.upper(), 'bold', 56, INK, 'ls')
+    draw_text(d, (x0, 147), geo.theatre_display(theatre), 'bold', 56, INK, 'ls')
     draw_text(d, (x0, 195), 'RÉPERTOIRE DES HÉLIPORTS', 'medium', 44, INK, 'ls')
     draw_text(d, (x1, 155), right_bold, 'bold', 57, INK, 'rs')
     draw_text(d, (x1, 194), right_grey, 'regular', 35, GREY, 'rs')

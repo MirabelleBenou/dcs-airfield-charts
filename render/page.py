@@ -304,7 +304,7 @@ def header(doc, data, index, kind, bands=True):
     name = data.airport_name.upper()
     if not (data.heli_mode and not data.icao_known):      # lot heliports (4.1) : sans OACI, le coin gauche d'une base d'helicopteres reste vide
         doc.add(L, text(X0, 11.4, data.icao, pt(13), 'bold'))
-    doc.add(L, text(X0, 14.7, f'{data.theatre.upper()} · DCS', pt(6.5), 'regular', INK2))
+    doc.add(L, text(X0, 14.7, f'{geo.theatre_display(data.theatre)} · DCS', pt(6.5), 'regular', INK2))
     doc.add(L, text(PAGE_W / 2, 11.9, name, pt(15), 'bold', INK, 'middle', spacing=1.1))
     doc.add(L, text(PAGE_W / 2, 15.0, kind, pt(6.5), 'regular', INK2, 'middle', spacing=0.8))
     doc.add(L, text(X1, 11.4, index, pt(13), 'bold', INK, 'end'))

@@ -283,7 +283,6 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     log(f'{base} -> {facts.name} (id {facts.id}), mosaique {g.width}x{g.height}, {g.mpp:.4f} m/px')
     pav = vector.pavement_mask(img, g.mpp)
     heli_mode = bool(facts.slots) and all(sl.heli_only for sl in facts.slots)
-    bld, n_bld = vector.building_mask(img, pav, g.mpp)
     clear = vector.clear_marking_mask(img)
     lat, lon = proj.to_latlon(facts.x, facts.z)
     decl = geo.declination(lat, lon, year)
@@ -303,6 +302,12 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     else:
         rws = []                                          # lot heliports (4.2) : aucune piste pydcs, la detection ne tourne pas
         log('aucune piste dans pydcs : detection des pistes non lancee')
+    if rws:                                              # lot « ac-germany » (4.3) : le revetement de l'aerodrome seul, apres la detection (masque complet)
+        pav, n_comp, n_drop = vector.airfield_pavement(pav, g, [(r.p0, r.p1) for r in rws], [(sl.x, sl.z) for sl in facts.slots])
+        log(f'revetement : {n_comp} composantes, {n_drop} ecartees (loin des pistes et des parkings)')
+    else:
+        log('revetement : aucune piste detectee, masque non filtre')       # mode helicoptere : le masque reste tel quel
+    bld, n_bld = vector.building_mask(img, pav, g.mpp)           # les batiments se gardent a 60 m du revetement filtre
     f10_img = None
     if heli_mode and not rws:                              # lot heliports-fond (4.1, 4.3) : le plan prend le fond de la F10
         r, c = g.xz_to_rc(facts.x, facts.z)

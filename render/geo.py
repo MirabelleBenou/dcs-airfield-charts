@@ -10,9 +10,35 @@ GEOD = Geod(ellps='WGS84')
 GRID_PROBE_M = 500.0
 
 
+# Lot « ac-germany » : theatres dont le module pydcs n'a pas le nom du theatre DCS. pydcs range GermanyColdWar
+# (dossier du jeu Mods/terrains/GermanyColdWar) sous `dcs.terrain.germany`. Le nom du theatre reste GermanyColdWar partout
+# ailleurs (arguments, dossiers de capture et de sortie).
+THEATRE_MODULES = {'GermanyColdWar': 'germany'}
+
+# Lot « ac-germany » : nom affiche d'un theatre (en-tete de la chart, titre du repertoire des heliports) ;
+# hors table : le nom du theatre en majuscules.
+THEATRE_DISPLAY = {'GermanyColdWar': 'GERMANY COLD WAR'}
+
+
+def _table_get(table, theatre):
+    """Entree de `table` pour `theatre`, sans tenir compte de la casse ni des espaces (germanycoldwar = GermanyColdWar)."""
+    key = theatre.replace(' ', '').lower()
+    for name, value in table.items():
+        if name.replace(' ', '').lower() == key:
+            return value
+    return None
+
+
 def theatre_module(theatre):
-    """Nom du module pydcs d'un theatre : Syria -> syria (PersianGulf -> persiangulf ...)."""
-    return theatre.replace(' ', '').lower()
+    """Nom du module pydcs d'un theatre : table THEATRE_MODULES (GermanyColdWar -> germany), sinon le nom en minuscules
+    sans espaces (Syria -> syria, PersianGulf -> persiangulf ...)."""
+    return _table_get(THEATRE_MODULES, theatre) or theatre.replace(' ', '').lower()
+
+
+def theatre_display(theatre):
+    """Nom affiche d'un theatre : table THEATRE_DISPLAY (GermanyColdWar -> GERMANY COLD WAR), sinon `theatre.upper()`
+    (Syria -> SYRIA)."""
+    return _table_get(THEATRE_DISPLAY, theatre) or theatre.upper()
 
 
 class Projection:

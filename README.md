@@ -87,6 +87,8 @@ The file is looked up in this order: the `--config <path>` command-line option, 
 
 Dependencies: Python 3.12+ and `pip install -r requirements.txt`. The game facts (airfield, runway headings, parking slots, tower frequencies) are read with [pydcs](https://github.com/pydcs/dcs), pinned to one commit and imported as a library; the navaids are read from `<dcs_install>/Mods/terrains/<Theatre>/beacons.lua`. [CairoSVG](https://cairosvg.org/) needs the Cairo library: on Linux and macOS it comes with the system packages; on Windows install the GTK runtime, or run the renderer under WSL.
 
+Theatres rendered so far: **Syria** and **GermanyColdWar** (captured in full; pydcs keeps it under its `germany` module, the theatre name stays `GermanyColdWar` everywhere, and the chart header reads GERMANY COLD WAR).
+
 ```
 python -I render/build_chart.py <Theatre> <Base> [--annee 1985] [--icao LTAN] [--osm <file>] [--out <folder>] [--config <path>]
 ```

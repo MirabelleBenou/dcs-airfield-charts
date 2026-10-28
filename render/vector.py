@@ -13,6 +13,10 @@ PAVEMENT_HOLE_M2, PAVEMENT_MIN_M2 = 400.0, 1500.0
 PAVEMENT_SIMPLIFY_M = 0.8
 BUILDING_OPEN_M, BUILDING_NEAR_M = 1.0, 60.0
 BUILDING_SIMPLIFY_M, BUILDING_MIN_M2 = 0.5, 40.0
+# Lot « ac-germany » : revetement de l'aerodrome (cadrage 4.3). Apres la detection des pistes, on ne garde que les composantes
+# connexes (8-connexite) du masque qui touchent une piste elargie de RUNWAY_NEAR_M de chaque cote de son axe, ou qui sont a
+# PARKING_NEAR_M au plus d'un point de parking du jeu (bretelles d'autoroute, echangeurs : revetement gris de la F10 hors aerodrome).
+RUNWAY_NEAR_M, PARKING_NEAR_M = 30.0, 60.0
 
 
 def near_color(img, rgb, tol):
@@ -73,6 +77,54 @@ def pavement_mask(img, mpp):
     m = fill_small_holes(m, PAVEMENT_HOLE_M2, mpp)
     m = open_mask(m, PAVEMENT_OPEN_M, mpp)
     return keep_components(m, PAVEMENT_MIN_M2, mpp)
+
+
+def _window(r0, r1, c0, c1, shape):
+    """Fenetre (r0, r1, c0, c1) ramenee dans l'image `shape` ; None si elle est vide."""
+    r0, c0 = max(int(r0), 0), max(int(c0), 0)
+    r1, c1 = min(int(r1), shape[0]), min(int(c1), shape[1])
+    return (r0, r1, c0, c1) if r1 > r0 and c1 > c0 else None
+
+
+def airfield_pavement(mask, georef, runway_segments, parking_xz, runway_near_m=RUNWAY_NEAR_M, parking_near_m=PARKING_NEAR_M):
+    """Revetement de l'aerodrome (lot « ac-germany », cadrage 4.3) : ne garde de `mask` que les composantes connexes
+    (8-connexite) qui touchent une piste detectee, elargie de `runway_near_m` de chaque cote de son axe et sur toute sa longueur
+    (`runway_segments` : [((x, z) extremite A, (x, z) extremite B)]), ou qui sont a `parking_near_m` au plus d'un point de
+    parking (`parking_xz` : [(x, z)], toutes categories). Retourne (masque filtre, composantes avant, composantes ecartees)."""
+    h, w = mask.shape
+    n, lab = cv2.connectedComponents(mask.view(np.uint8), connectivity=8)
+    keep = np.zeros(n, bool)
+    mpp = georef.mpp
+    for (ax, az), (bx, bz) in runway_segments:
+        a, b = np.array(georef.xz_to_rc(ax, az)), np.array(georef.xz_to_rc(bx, bz))        # (r, c) en pixels
+        d = b - a
+        L = float(np.hypot(*d))
+        if L == 0.0:
+            continue
+        nrm = np.array([-d[1], d[0]]) / L * (runway_near_m / mpp)                          # normale a l'axe, en pixels
+        quad = np.array([a + nrm, b + nrm, b - nrm, a - nrm])
+        win = _window(np.floor(quad[:, 0].min()), np.ceil(quad[:, 0].max()) + 1, np.floor(quad[:, 1].min()), np.ceil(quad[:, 1].max()) + 1, mask.shape)
+        if win is None:
+            continue
+        r0, r1, c0, c1 = win
+        band = np.zeros((r1 - r0, c1 - c0), np.uint8)
+        pts = np.stack([quad[:, 1] - c0, quad[:, 0] - r0], axis=1)                         # (colonne, ligne) dans la fenetre
+        cv2.fillPoly(band, [np.round(pts * 16).astype(np.int32)], 1, lineType=cv2.LINE_8, shift=4)
+        keep[np.unique(lab[r0:r1, c0:c1][band > 0])] = True
+    rad = parking_near_m / mpp
+    for x, z in parking_xz:
+        r, c = georef.xz_to_rc(x, z)
+        win = _window(np.floor(r - rad), np.ceil(r + rad) + 1, np.floor(c - rad), np.ceil(c + rad) + 1, mask.shape)
+        if win is None:
+            continue
+        r0, r1, c0, c1 = win
+        rr, cc = np.ogrid[r0:r1, c0:c1]
+        disk_px = (rr - r) ** 2 + (cc - c) ** 2 <= rad * rad
+        keep[np.unique(lab[r0:r1, c0:c1][disk_px])] = True
+    keep[0] = False                                                                        # le fond n'est pas une composante
+    total = n - 1
+    kept = int(keep.sum())
+    return keep[lab], total, total - kept
 
 
 def distance_to_mask_m(mask, mpp):
