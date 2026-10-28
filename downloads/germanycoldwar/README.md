@@ -2,7 +2,7 @@
 
 One PDF per airfield (all its pages: 10-9, then the parking pages 10-9A, 10-9B… when needed). Magnetic declination for **1985**. Every page as PNG (kneeboard) and SVG (Inkscape layers) is in the [airfields zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_GermanyColdWar_1985_airfields.zip) attached to the latest release.
 
-The charts carry the DCS name of the airfield; ICAO codes and taxiway names from OpenStreetMap will come in a later version. The 25 grass strips (no runway drawn on the F10 map) and the helicopter sites are not charted yet.
+The charts carry the DCS name of the airfield; ICAO codes and taxiway names from OpenStreetMap will come in a later version. The 25 grass strips (no runway drawn on the F10 map) are not charted yet.
 
 **Heliport directory**: the 108 heliports of Cold War Germany, four to a page with a plan of their pads and pad numbers, position, elevation and nearest town, and an index: [GermanyColdWar_heliports_directory.pdf](GermanyColdWar_heliports_directory.pdf?raw=true) (the pages as JPEG for the kneeboard are in the [helicopters zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_GermanyColdWar_1985_helicopters.zip)).
 

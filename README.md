@@ -21,7 +21,7 @@ The goal is to share a complete set of charts for every airfield, as PDF and PNG
 - **Heliport directory**: the 108 heliports, four to a page — a plan of the pads with their numbers, position, elevation and nearest town, with an index: [GermanyColdWar_heliports_directory.pdf](downloads/germanycoldwar/GermanyColdWar_heliports_directory.pdf?raw=true).
 - One zip, attached to the latest release, with every chart page as PDF, PNG and SVG: [DCS_Airfield_Charts_GermanyColdWar_1985_airfields.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_GermanyColdWar_1985_airfields.zip).
 - **Helicopters**: the heliport directory (PDF, and its pages as JPEG for the kneeboard) — [DCS_Airfield_Charts_GermanyColdWar_1985_helicopters.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_GermanyColdWar_1985_helicopters.zip).
-- Not yet: ICAO codes and taxiway names (from OpenStreetMap), the 25 grass strips whose runway the F10 map does not draw, and the helicopter sites.
+- Not yet: ICAO codes and taxiway names (from OpenStreetMap), and the 25 grass strips whose runway the F10 map does not draw.
 
 - What changed from one version to the next: [CHANGELOG.md](CHANGELOG.md) (each version is also a GitHub release).
 

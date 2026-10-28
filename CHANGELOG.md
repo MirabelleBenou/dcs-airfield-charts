@@ -7,7 +7,7 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Coming next
 
-- Cold War Germany: ICAO codes and taxiway names from OpenStreetMap; the 25 grass strips; the helicopter sites and their directory.
+- Cold War Germany: ICAO codes and taxiway names from OpenStreetMap; the 25 grass strips.
 
 ## AC-V1.4.1 — 28 October 2026
 
