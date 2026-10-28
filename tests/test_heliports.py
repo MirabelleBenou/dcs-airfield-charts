@@ -285,3 +285,23 @@ def test_f10_background_has_no_blue_cluster_near_the_airport(heli):
     cx, cy = (round((v) * page.FOND_PX_MM) for v in (view.pt(*data.arp)[0] - fx, view.pt(*data.arp)[1] - fy))
     n, big = directory.blue_clusters(im, (cx, cy), 20.0 * view.s * page.FOND_PX_MM)
     assert big <= 3
+
+
+# ---------- lot ac-heliports-germany : cle des villes (tests purs, sans echantillons) ----------
+def test_towns_key_table():
+    from render import geo
+    assert geo.theatre_towns_key('GermanyColdWar') == 'GermanyCW'
+    assert geo.theatre_towns_key('germanycoldwar') == 'GermanyCW'
+    assert geo.theatre_towns_key('Germany Cold War') == 'GermanyCW'
+    assert geo.theatre_towns_key('Syria') == 'Syria'
+
+
+def test_load_towns_germany_and_syria_untouched():
+    import json
+    raw = json.loads(directory.TOWNS_PATH.read_text(encoding='utf-8'))['theatres']
+    de = directory.load_towns('GermanyColdWar')
+    assert len(de) == 127 and de == directory.load_towns('germanycoldwar')
+    assert de == [(n, float(a), float(b)) for n, a, b in raw['GermanyCW']]
+    assert any(n == 'Braunschweig' for n, _, _ in de)
+    sy = directory.load_towns('Syria')
+    assert len(sy) == 1182 and sy == [(n, float(a), float(b)) for n, a, b in raw['Syria']]

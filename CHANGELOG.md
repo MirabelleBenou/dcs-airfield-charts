@@ -9,6 +9,14 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - Cold War Germany: ICAO codes and taxiway names from OpenStreetMap; the 25 grass strips; the helicopter sites and their directory.
 
+## AC-V1.4.1 — 28 October 2026
+
+**Cold War Germany: the heliport directory.**
+
+- **Heliport directory**: the 108 heliports of Cold War Germany, four to a page (30 pages of plans and 3 of index, 33 in all), with a plan of the pads and their numbers, position, elevation and nearest town. Nearest towns come from the German list of the town file.
+- Fix: the directory looked up the towns of Cold War Germany under the wrong key and stopped with an error; the theatre name `GermanyColdWar` now maps to its town list. Syria does not change.
+- **Downloads**: a fourth zip attached to the release, **Cold War Germany helicopters** (the directory as PDF, and its pages as JPEG for the kneeboard). The other zips are attached again, unchanged.
+
 ## AC-V1.4.0 — 28 October 2026
 
 **Cold War Germany: 94 airfields.**

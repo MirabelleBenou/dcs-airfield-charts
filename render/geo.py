@@ -19,6 +19,10 @@ THEATRE_MODULES = {'GermanyColdWar': 'germany'}
 # hors table : le nom du theatre en majuscules.
 THEATRE_DISPLAY = {'GermanyColdWar': 'GERMANY COLD WAR'}
 
+# Lot « ac-heliports-germany » : cle d'un theatre dans `render/data/towns.json` quand elle differe du nom du theatre
+# (la liste allemande y est rangee sous `GermanyCW`) ; hors table : le nom du theatre (Syria -> Syria).
+THEATRE_TOWNS = {'GermanyColdWar': 'GermanyCW'}
+
 
 def _table_get(table, theatre):
     """Entree de `table` pour `theatre`, sans tenir compte de la casse ni des espaces (germanycoldwar = GermanyColdWar)."""
@@ -39,6 +43,12 @@ def theatre_display(theatre):
     """Nom affiche d'un theatre : table THEATRE_DISPLAY (GermanyColdWar -> GERMANY COLD WAR), sinon `theatre.upper()`
     (Syria -> SYRIA)."""
     return _table_get(THEATRE_DISPLAY, theatre) or theatre.upper()
+
+
+def theatre_towns_key(theatre):
+    """Cle d'un theatre dans towns.json : table THEATRE_TOWNS (GermanyColdWar -> GermanyCW), sinon le nom du theatre
+    (Syria -> Syria)."""
+    return _table_get(THEATRE_TOWNS, theatre) or theatre
 
 
 class Projection:

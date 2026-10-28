@@ -108,7 +108,7 @@ def series_key(series):
 
 def load_towns(theatre):
     d = json.loads(TOWNS_PATH.read_text(encoding='utf-8'))
-    return [(n, float(a), float(b)) for n, a, b in d['theatres'][theatre]]
+    return [(n, float(a), float(b)) for n, a, b in d['theatres'][geo.theatre_towns_key(theatre)]]
 
 
 def nearest_town(lat, lon, towns):
