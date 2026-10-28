@@ -14,7 +14,8 @@ PAVEMENT_SIMPLIFY_M = 0.8
 BUILDING_OPEN_M, BUILDING_NEAR_M = 1.0, 60.0
 BUILDING_SIMPLIFY_M, BUILDING_MIN_M2 = 0.5, 40.0
 # Lot « ac-germany » : revetement de l'aerodrome (cadrage 4.3). Apres la detection des pistes, on ne garde que les composantes
-# connexes (8-connexite) du masque qui touchent une piste elargie de RUNWAY_NEAR_M de chaque cote de son axe, ou qui sont a
+# connexes (8-connexite) du masque qui touchent le tampon de RUNWAY_NEAR_M autour du segment de chaque piste detectee (une bande de
+# RUNWAY_NEAR_M de chaque cote de l'axe, prolongee de RUNWAY_NEAR_M au-dela de chaque extremite ; addendum 1), ou qui sont a
 # PARKING_NEAR_M au plus d'un point de parking du jeu (bretelles d'autoroute, echangeurs : revetement gris de la F10 hors aerodrome).
 RUNWAY_NEAR_M, PARKING_NEAR_M = 30.0, 60.0
 
@@ -88,8 +89,9 @@ def _window(r0, r1, c0, c1, shape):
 
 def airfield_pavement(mask, georef, runway_segments, parking_xz, runway_near_m=RUNWAY_NEAR_M, parking_near_m=PARKING_NEAR_M):
     """Revetement de l'aerodrome (lot « ac-germany », cadrage 4.3) : ne garde de `mask` que les composantes connexes
-    (8-connexite) qui touchent une piste detectee, elargie de `runway_near_m` de chaque cote de son axe et sur toute sa longueur
-    (`runway_segments` : [((x, z) extremite A, (x, z) extremite B)]), ou qui sont a `parking_near_m` au plus d'un point de
+    (8-connexite) qui touchent le tampon de `runway_near_m` autour du segment d'une piste detectee, extremites comprises
+    (`runway_segments` : [((x, z) extremite A, (x, z) extremite B)] ; bande de `runway_near_m` de chaque cote de l'axe, prolongee
+    de `runway_near_m` au-dela de chaque extremite : addendum 1), ou qui sont a `parking_near_m` au plus d'un point de
     parking (`parking_xz` : [(x, z)], toutes categories). Retourne (masque filtre, composantes avant, composantes ecartees)."""
     h, w = mask.shape
     n, lab = cv2.connectedComponents(mask.view(np.uint8), connectivity=8)
@@ -102,6 +104,8 @@ def airfield_pavement(mask, georef, runway_segments, parking_xz, runway_near_m=R
         if L == 0.0:
             continue
         nrm = np.array([-d[1], d[0]]) / L * (runway_near_m / mpp)                          # normale a l'axe, en pixels
+        ext = d / L * (runway_near_m / mpp)                                                # prolongement au-dela des extremites
+        a, b = a - ext, b + ext
         quad = np.array([a + nrm, b + nrm, b - nrm, a - nrm])
         win = _window(np.floor(quad[:, 0].min()), np.ceil(quad[:, 0].max()) + 1, np.floor(quad[:, 1].min()), np.ceil(quad[:, 1].max()) + 1, mask.shape)
         if win is None:

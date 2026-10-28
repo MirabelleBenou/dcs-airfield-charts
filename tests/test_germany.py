@@ -106,11 +106,15 @@ def test_area_within_30_m_of_the_axis_is_kept_and_beyond_is_dropped():
     assert _kept(out, 877, 360) and not _kept(out, 852, 360)
 
 
-def test_runway_band_stops_at_the_ends_of_the_runway():
+def test_runway_buffer_extends_30_m_beyond_the_ends():
+    """Addendum 1 : tampon de 30 m autour du segment, extremites comprises (la piste finit a z = 600 et commence a z = 100)."""
     m = _scene()
-    _block(m, 905, 640, 10, 40)                            # dans le prolongement de l'axe, a 40 m du bout (z = 600) : hors de la bande
+    _block(m, 905, 620, 10, 10)                            # dans l'axe, a 20 m au-dela de l'extremite : gardee
+    _block(m, 905, 640, 10, 40)                            # dans l'axe, a 40 m au-dela de l'extremite : ecartee (a 10 m de la precedente, sans lien avec elle)
+    _block(m, 905, 40, 10, 40)                             # de l'autre cote : 20 m avant l'extremite z = 100, gardee
     out, total, dropped = vector.airfield_pavement(m, G, [RUNWAY], [])
-    assert dropped == 1 and not _kept(out, 900, 660)
+    assert (total, dropped) == (4, 1)
+    assert _kept(out, 900, 625) and _kept(out, 900, 60) and not _kept(out, 900, 660)
 
 
 def test_area_at_59_m_of_a_parking_is_kept_and_61_m_is_dropped():
