@@ -2,7 +2,7 @@
 
 Airfield charts for DCS World, built from the game's own data.
 
-**Status: work in progress.** The DCS F10 map (Alt mode) draws all the pavement of an airfield as flat fills, along with buildings, guidance lines and parking numbers. This repository contains the tool that captures that map, base by base, in the DCS terrain frame (`x` North, `z` East, in metres). The whole Syria theatre is captured (80 airbases, 144 heliports). The renderer, which turns a capture into an A5 chart (page 10-9, plus parking pages 10-9A, 10-9B… when needed), is in `render/` (see "Rendering charts").
+**Status: work in progress.** The DCS F10 map (Alt mode) draws all the pavement of an airfield as flat fills, along with buildings, guidance lines and parking numbers. This repository contains the tool that captures that map, base by base, in the DCS terrain frame (`x` North, `z` East, in metres). The whole Syria theatre (80 airbases, 144 heliports) and the whole Cold War Germany theatre (119 airbases, 108 heliports) are captured. The renderer, which turns a capture into an A5 chart (page 10-9, plus parking pages 10-9A, 10-9B… when needed), is in `render/` (see "Rendering charts").
 
 The goal is to share a complete set of charts for every airfield, as PDF and PNG, ready for print and for the DCS kneeboard.
 
@@ -15,6 +15,12 @@ The goal is to share a complete set of charts for every airfield, as PDF and PNG
 - Two zips, attached to the latest release, with every chart page as PDF, PNG (1748 × 2480 px, for the DCS kneeboard) and SVG (Inkscape layers):
   - **Airfields**: the 73 airfields — [DCS_Airfield_Charts_Syria_1985_airfields.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_Syria_1985_airfields.zip);
   - **Helicopters**: the 8 helicopter bases, plus the heliport directory (PDF, and its pages as JPEG for the kneeboard) — [DCS_Airfield_Charts_Syria_1985_helicopters.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_Syria_1985_helicopters.zip).
+**Cold War Germany — 94 airfields** (magnetic declination for 1985), from the large NATO and Warsaw Pact bases to the motorway strips.
+
+- One PDF per airfield (all its pages): see the list in [`downloads/germanycoldwar/`](downloads/germanycoldwar/README.md).
+- One zip, attached to the latest release, with every chart page as PDF, PNG and SVG: [DCS_Airfield_Charts_GermanyColdWar_1985_airfields.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_GermanyColdWar_1985_airfields.zip).
+- Not yet: ICAO codes and taxiway names (from OpenStreetMap), the 25 grass strips whose runway the F10 map does not draw, and the helicopter sites.
+
 - What changed from one version to the next: [CHANGELOG.md](CHANGELOG.md) (each version is also a GitHub release).
 
 Not yet covered: T3, which the F10 map does not draw; Nicosia, which pydcs does not list as an airfield; the heliport HMed22, which has no taxiway points in DCS and could not be captured. Runways are found on the F10 map guided by the game's runway list, so their count and names follow DCS (including the parking names DCS repeats at some bases). Taxiway names appear only where OpenStreetMap has them. These charts are for DCS only, not for real-world navigation.

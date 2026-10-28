@@ -7,7 +7,18 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Coming next
 
-- Cold War Germany.
+- Cold War Germany: ICAO codes and taxiway names from OpenStreetMap; the 25 grass strips; the helicopter sites and their directory.
+
+## AC-V1.4.0 — 28 October 2026
+
+**Cold War Germany: 94 airfields.**
+
+- **94 new charts**, one PDF per airfield with its parking pages, from Ramstein, Hahn, Bitburg, Spangdahlem and Frankfurt to the Warsaw Pact bases (Templin, Sperenberg, Wittstock, Laage, Altes Lager…), Kastrup and the motorway strips (Adelsheim, Thurland, Zollschen, Perwenitz). Magnetic declination for 1985.
+- The header names the theatre "GERMANY COLD WAR".
+- Each chart carries the DCS name of the airfield: ICAO codes and taxiway names from OpenStreetMap come in a later version.
+- The 25 grass strips (the F10 map draws no runway there) and the helicopter sites are not charted yet.
+- On every theatre, grey areas of the F10 map that are not part of the airfield (motorway slip roads, for instance) are no longer drawn as pavement; at Bitburg this brings the plan to a larger scale. The Syria charts do not change.
+- **Downloads**: a third zip attached to the release, **Cold War Germany airfields**. The two Syria zips are attached again, unchanged.
 
 ## AC-V1.3.2 — 27 October 2026
 
