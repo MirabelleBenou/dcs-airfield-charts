@@ -15,12 +15,15 @@ The goal is to share a complete set of charts for every airfield, as PDF and PNG
 - Two zips, attached to the latest release, with every chart page as PDF, PNG (1748 × 2480 px, for the DCS kneeboard) and SVG (Inkscape layers):
   - **Airfields**: the 73 airfields — [DCS_Airfield_Charts_Syria_1985_airfields.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_Syria_1985_airfields.zip);
   - **Helicopters**: the 8 helicopter bases, plus the heliport directory (PDF, and its pages as JPEG for the kneeboard) — [DCS_Airfield_Charts_Syria_1985_helicopters.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_Syria_1985_helicopters.zip).
+- **Route Planner**: every chart page and heliport directory page as an image, with an index that names the DCS airfield or heliport of each page, read by the Route Planner of [DCS Mission Plan](https://github.com/MirabelleBenou/dcs-mission-plan) — [DCS_Airfield_Charts_Syria_1985_route_planner.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_Syria_1985_route_planner.zip).
+
 **Cold War Germany — 94 airfields, 108 heliports** (magnetic declination for 1985), from the large NATO and Warsaw Pact bases to the motorway strips.
 
 - One PDF per airfield (all its pages): see the list in [`downloads/germanycoldwar/`](downloads/germanycoldwar/README.md).
 - **Heliport directory**: the 108 heliports, four to a page — a plan of the pads with their numbers, position, elevation and nearest town, with an index: [GermanyColdWar_heliports_directory.pdf](downloads/germanycoldwar/GermanyColdWar_heliports_directory.pdf?raw=true).
 - One zip, attached to the latest release, with every chart page as PDF, PNG and SVG: [DCS_Airfield_Charts_GermanyColdWar_1985_airfields.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_GermanyColdWar_1985_airfields.zip).
 - **Helicopters**: the heliport directory (PDF, and its pages as JPEG for the kneeboard) — [DCS_Airfield_Charts_GermanyColdWar_1985_helicopters.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_GermanyColdWar_1985_helicopters.zip).
+- **Route Planner**: every chart page and heliport directory page as an image, with an index that names the DCS airfield or heliport of each page, read by the Route Planner of [DCS Mission Plan](https://github.com/MirabelleBenou/dcs-mission-plan) — [DCS_Airfield_Charts_GermanyColdWar_1985_route_planner.zip](https://github.com/MirabelleBenou/dcs-airfield-charts/releases/latest/download/DCS_Airfield_Charts_GermanyColdWar_1985_route_planner.zip).
 - Not yet: ICAO codes and taxiway names (from OpenStreetMap), and the 25 grass strips whose runway the F10 map does not draw.
 
 - What changed from one version to the next: [CHANGELOG.md](CHANGELOG.md) (each version is also a GitHub release).
@@ -106,6 +109,14 @@ Input: the captured base folder `<work_dir>/out/<theatre>/<Base>/` (`mosaic.png`
 Real taxiway names come from OpenStreetMap (optional): `python -I render/fetch_osm.py <Theatre> [--bases A,B…] [--force]` queries the Overpass API once per captured base and writes `<osm_dir>/<theatre>/<Base>.json`; a base already fetched is skipped unless `--force`, a failure does not stop the pass, and `run.json` in the same folder gives the outcome. Without this file, charts have no taxiway labels.
 
 The SVG pages are organised as Inkscape layers (Pavement, Runways, Parking numbers, Taxiway labels…, one sub-layer per parking inset), so a layer can be hidden or edited without touching the rest; editing an SVG needs the Barlow Condensed font installed (the `.ttf` files are in `render/fonts/`).
+
+The pages for the Route Planner of [DCS Mission Plan](https://github.com/MirabelleBenou/dcs-mission-plan) are packed from the zips of a release, without drawing anything again:
+
+```
+python -I render/build_fiches.py <Theatre> --zips <airfields zip> <helicopters zip> --airfields <airfields.json> --edition AC-V1.4.2 --out <folder>
+```
+
+Input: the *airfields* and *helicopters* zips of the theatre (`GermanyColdWar` or `Syria`) and the `airfields.json` of Mission Plan. Each chart is matched to its DCS airfield by the ARP written on its page (the nearest airfield of `airfields.json`, 500 m at most); each heliport is matched to its box on a directory page by replaying the directory layout with `render/directory.py` and pydcs alone, and the replay is checked against the published pages (it stops, writing nothing, if a page does not match). Output: `<folder>/<Theatre>/` with the page images (a page over 1 MB is re-encoded as JPEG) and `index.json` (format `dcs-fiches-v1`), and `<folder>/DCS_Airfield_Charts_<Theatre>_1985_route_planner.zip` with the same files at its root. An existing output folder is never overwritten.
 
 Tests: `python -m pytest` (see the table above for the tests that need samples).
 
