@@ -9,14 +9,6 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - Cold War Germany: ICAO codes and taxiway names from OpenStreetMap; the 25 grass strips.
 
-## AC-V1.4.2 — 30 October 2026
-
-**Chart pages for the Route Planner of DCS Mission Plan.**
-
-- **Downloads**: two new zips attached to the release, **Cold War Germany route planner** and **Syria route planner**: every chart page and every heliport directory page as an image, with an index that names the DCS airfield or heliport of each page (for a heliport, its box on the directory page). The Route Planner of DCS Mission Plan reads them to open the chart of an airfield or heliport you tap on its map. The other zips are attached again, unchanged.
-- New tool `render/build_fiches.py` builds these zips from the airfields and helicopters zips of the release.
-- The charts do not change.
-
 ## AC-V1.4.1 — 28 October 2026
 
 **Cold War Germany: the heliport directory.**
