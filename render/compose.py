@@ -10,9 +10,11 @@ from shapely.geometry import Polygon
 
 from . import directory, geo, layout, vector
 from .fonts import CAP_HEIGHT, pt, text_width
-from .page import (FOND_PX_MM, FOND_S_MAX, SYM_INSET_R, SYM_PLAN_R, CORNER_PAD, CORNER_PAD_Y, FRAME_CELL, FRAME_W, FRAME_X, FT, LAST_ROW_Y, LEGEND_Y, PAGE_H, PAGE_W, PLAN_MARGIN_M,
+from .page import (BEARING_SIZE, CapEnd, GradLabel, GRAD_SIZE, FOND_PX_MM, FOND_S_MAX, SYM_INSET_R, SYM_PLAN_R, CORNER_PAD, CORNER_PAD_Y, FRAME_CELL, FRAME_W, FRAME_X, FT, LAST_ROW_Y, LEGEND_Y, PAGE_H, PAGE_W, PLAN_MARGIN_M,
                    ROW_PITCH, X0, X1, PageOut, View, cells_from_mask, draw_scene, edge_ticks, fond_circles, fond_number_elems,
-                   footer, header, legend, north_block, number_elems, rot_box, rw_axes, runway_table, runway_polygon, scale_block, scale_plan)
+                   footer, header, legend, north_block, number_elems, rot_box, rw_axes, runway_table, runway_polygon, scale_block, scale_plan,
+                   elem_geom, elems_geom, grad_element, navaid_groups, navaid_label_elems, place_caps, place_graduations, place_navaid_labels,
+                   cap_element)
 from .svgdoc import BAND, INK, INK2, TAXI, Doc, circle, f, line, rect, slug, text
 
 NORTH_WH = (16.0, 20.0)
@@ -22,8 +24,6 @@ RW_EXT_M, RW_EXT_W = 120.0, 8.0
 RUNWAY_FREE_M = 20.0
 PARKING_FREE_MM = 2.5
 NUM_SIZE = pt(6.0)
-BEARING_GAP_M = 70.0
-NAVAID_GROUP_MM = 6.0                 # lot balises (addendum 1) : symboles de balises regroupes sous une etiquette
 
 
 def ground_bbox(rings, parkings):
@@ -132,75 +132,103 @@ def choose_corners(frame, north_wh, scale_wh, cover, park_xy):
     return a, cn[a], b, cs[b]
 
 
-def graticule(doc, view, frame, proj):
-    L = 'Frame & grid'
+def graticule_specs(view, frame, proj):
+    """Graduations lat/lon a la minute : [(trait (chaine SVG), libelle GradLabel ou None)] dans l'ordre d'ecriture (bord gauche,
+    bord droit sans libelle, haut, bas)."""
     fx, fy, fw, fh = frame
     left, right, top, bot = edge_ticks(view, frame, proj)
-    size = pt(5.3)
+    size = GRAD_SIZE
     tl = 1.8
+    out = []
     for y, lab in left:
-        doc.add(L, line(fx, y, fx + tl, y, INK, 0.3))
-        doc.add(L, text(fx + tl + 0.6, y + size * CAP_HEIGHT / 2, lab, size, 'regular', INK2))
+        out.append((line(fx, y, fx + tl, y, INK, 0.3), GradLabel(fx + tl + 0.6, y + size * CAP_HEIGHT / 2, lab, 'start')))
     for y, lab in right:
-        doc.add(L, line(fx + fw, y, fx + fw - tl, y, INK, 0.3))
+        out.append((line(fx + fw, y, fx + fw - tl, y, INK, 0.3), None))
     for x, lab in top:
-        doc.add(L, line(x, fy, x, fy + tl, INK, 0.3))
-        doc.add(L, text(x, fy + tl + 0.6 + size * CAP_HEIGHT, lab, size, 'regular', INK2, 'middle'))
+        out.append((line(x, fy, x, fy + tl, INK, 0.3), GradLabel(x, fy + tl + 0.6 + size * CAP_HEIGHT, lab, 'middle')))
     for x, lab in bot:
-        doc.add(L, line(x, fy + fh, x, fy + fh - tl, INK, 0.3))
-        doc.add(L, text(x, fy + fh - tl - 0.6, lab, size, 'regular', INK2, 'middle'))
+        out.append((line(x, fy + fh, x, fy + fh - tl, INK, 0.3), GradLabel(x, fy + fh - tl - 0.6, lab, 'middle')))
+    return out
 
 
-def navaids(doc, view, frame, data):
-    """Symboles des balises du plan. Les balises dont les symboles sont a 6 mm au plus sur la page (de proche en proche)
-    forment un groupe qui n'a qu'une etiquette (lot balises, addendum 1) : a X_max + 2,3 et au Y de la premiere balise
-    du groupe ; ligne 1 : les types (puis l'indicatif s'il est commun), ligne 2 : les textes, joints par ' · '."""
-    L = 'Navaids'
+def graticule(doc, view, frame, proj, obstacles=None):
+    """Traits et libelles des graduations ; les libelles passent par `page.place_graduations` (cadrage 2.3). Retourne la liste
+    des resultats (un par libelle) pour le resume du moteur."""
+    L = 'Frame & grid'
+    specs = graticule_specs(view, frame, proj)
+    res = place_graduations([lab for _, lab in specs if lab], frame, obstacles or {})
+    it = iter(res)
+    for ln, lab in specs:
+        doc.add(L, ln)
+        if lab:
+            x, y, reason = next(it)
+            if x is not None:
+                doc.add(L, grad_element(lab, x, y))
+    return res
+
+
+def navaid_plan(view, frame, data):
+    """Balises du plan : ([(balise, X, Y)], groupes). Les balises dont les symboles sont a 6 mm au plus sur la page (de proche
+    en proche) forment un groupe qui n'a qu'une etiquette (lot balises, addendum 1) : ligne 1 : les types (puis l'indicatif
+    s'il est commun), ligne 2 : les textes, joints par ' · '. Chaque groupe : {'members', 'lines', 'xs', 'ys'}."""
     fx, fy, fw, fh = frame
     shown = []
     for b in data.beacons:
         X, Y = view.pt(b.x, b.z)
         if fx + 1.5 < X < fx + fw - 1.5 and fy + 1.5 < Y < fy + fh - 1.5:
             shown.append((b, X, Y))
-    parent = list(range(len(shown)))
-
-    def root(i):
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-    for i in range(len(shown)):
-        for j in range(i + 1, len(shown)):
-            if math.hypot(shown[i][1] - shown[j][1], shown[i][2] - shown[j][2]) <= NAVAID_GROUP_MM:
-                parent[max(root(i), root(j))] = min(root(i), root(j))
-    members = {}
-    for i in range(len(shown)):
-        members.setdefault(root(i), []).append(i)
-    for i, (b, X, Y) in enumerate(shown):
-        if b.kind == 'NDB':
-            doc.add(L, circle(X, Y, 1.35, '#FFFFFF', INK, 0.3, 'stroke-dasharray="0.5 0.5"'))
-            doc.add(L, circle(X, Y, 0.3, INK))
-        else:
-            r = 1.5
-            pts = ' '.join(f'{f(X + r * math.cos(math.radians(60 * k)))},{f(Y + r * math.sin(math.radians(60 * k)))}' for k in range(6))
-            doc.add(L, f'<polygon points="{pts}" fill="#FFFFFF" stroke="{INK}" stroke-width="0.3"/>')
-            doc.add(L, circle(X, Y, 0.3, INK))
-        grp = members[root(i)]
-        if grp[0] != i:
-            continue                                                  # l'etiquette du groupe est posee avec sa premiere balise
+    groups = []
+    for grp in navaid_groups([(X, Y) for _, X, Y in shown]):
         gb = [shown[k][0] for k in grp]
+        b = gb[0]
         if len(gb) == 1:
-            l1, l2, lx = f'{b.kind} {b.callsign}', b.text, X + 2.3
+            l1, l2 = f'{b.kind} {b.callsign}', b.text
         else:
-            lx = max(shown[k][1] for k in grp) + 2.3
             calls = {x.callsign for x in gb}
             if len(calls) == 1:
                 l1 = ' · '.join(x.kind for x in gb) + f' {b.callsign}'
             else:
                 l1 = ' · '.join(f'{x.kind} {x.callsign}' for x in gb)
             l2 = ' · '.join(x.text for x in gb)
-        doc.add(L, text(lx, Y - 0.2, l1, pt(5.6), 'bold'))
-        doc.add(L, text(lx, Y + 2.2, l2, pt(5.2), 'regular', INK2))
+        groups.append({'members': grp, 'lines': (l1, l2), 'xs': [shown[k][1] for k in grp], 'ys': [shown[k][2] for k in grp]})
+    return shown, groups
+
+
+def navaid_symbol_elems(kind, X, Y):
+    """Symbole d'une balise : cercle pointille (NDB) ou hexagone (les autres), et son point central."""
+    if kind == 'NDB':
+        return [circle(X, Y, 1.35, '#FFFFFF', INK, 0.3, 'stroke-dasharray="0.5 0.5"'), circle(X, Y, 0.3, INK)]
+    r = 1.5
+    pts = ' '.join(f'{f(X + r * math.cos(math.radians(60 * k)))},{f(Y + r * math.sin(math.radians(60 * k)))}' for k in range(6))
+    return [f'<polygon points="{pts}" fill="#FFFFFF" stroke="{INK}" stroke-width="0.3"/>', circle(X, Y, 0.3, INK)]
+
+
+def navaid_geoms(shown, groups, label_elems):
+    """Geometries (symboles, puis libelles) ; label_elems : liste, un element par groupe, de [ligne 1, ligne 2]."""
+    syms = [elems_geom(navaid_symbol_elems(b.kind, X, Y)) for b, X, Y in shown]
+    return syms + [elems_geom(e) for e in label_elems]
+
+
+def navaids(doc, view, frame, data, runways=(), caps=()):
+    """Symboles et libelles des balises du plan ; les libelles passent par `page.place_navaid_labels` (cadrage 2.2) : a droite
+    du symbole, ou a gauche, dessous, dessus s'ils touchent une piste (`runways`) ou un cap (`caps`, geometries shapely).
+    Retourne (geometries des symboles et des libelles, [(groupe, position, libre)])."""
+    L = 'Navaids'
+    shown, groups = navaid_plan(view, frame, data)
+    placed = place_navaid_labels([(g['lines'], g['xs'], g['ys']) for g in groups], frame, runways, caps)
+    first = {g['members'][0]: k for k, g in enumerate(groups)}
+    for i, (b, X, Y) in enumerate(shown):
+        for e in navaid_symbol_elems(b.kind, X, Y):
+            doc.add(L, e)
+        if i in first:
+            for e in placed[first[i]][1]:
+                doc.add(L, e)
+    return navaid_geoms(shown, groups, [p[1] for p in placed]), [(g, p[0], p[2]) for g, p in zip(groups, placed)]
+
+
+def inset_cover_elem(box):
+    """Le fond blanc d'un encart : cadre et titre (ce que l'encart masque sur le plan)."""
+    return rect(box.x - 0.3, box.y - layout.TITLE_MM, box.w + 0.6, box.total_h + 0.3, '#FFFFFF')
 
 
 def draw_inset(doc, box, data, parkings_all, clip_prefix='clip-inset'):
@@ -227,7 +255,7 @@ def draw_inset(doc, box, data, parkings_all, clip_prefix='clip-inset'):
     doc.defs.append(f'<clipPath id="{cid}"><rect x="{f(box.x)}" y="{f(box.y)}" width="{f(box.w)}" height="{f(box.h)}"/></clipPath>')
     ident = f'layer-inset-{z.label.lower()}'
     out = [f'<g inkscape:groupmode="layer" id="{ident}" inkscape:label="{z.label}">',
-           rect(box.x - 0.3, box.y - layout.TITLE_MM, box.w + 0.6, box.total_h + 0.3, '#FFFFFF'),
+           inset_cover_elem(box),
            f'<g clip-path="url(#{cid})">']
     for k in ('Pavement', 'Runways', 'Runway markings', 'Buildings', 'Parking'):
         out.extend(lay[k])
@@ -333,25 +361,23 @@ def build_pages(data, log=print):
             nums, n_numbers = number_elems(parkings, view, NUM_SIZE, SYM_PLAN_R, clip=None)
         for e in nums:
             doc.add('Parking numbers', e)
-    navaids(doc, view, frame, data)
-    bear_boxes = []
-    size_b = pt(6.4)
+    # ---- caps de piste (cadrage 2.1), puis libelles de balises (2.2) : les deux voient les pistes, les encarts et les balises
+    runway_geoms = [elem_geom(e) for e in lay['Runways']]
+    inset_covers = [elem_geom(inset_cover_elem(b)) for b in decision['boxes']] if mode == 2 else []
+    shown, ngroups = navaid_plan(view, frame, data)
+    nav_right = [navaid_label_elems(g['lines'], 'right', g['xs'], g['ys']) for g in ngroups]
+    cap_ends = []
     for e in data.ends:
-        # ligne de base perpendiculaire a l'axe (haut du texte = sens d'atterrissage, comme le designateur), ramenee dans
-        # [-90 ; +90] ; centre dans l'axe a 70 m + la demi-hauteur du texte (en m a l'echelle du plan) avant le seuil
-        u = np.array([math.cos(math.radians(e.az_grid)), math.sin(math.radians(e.az_grid))])
-        half_h_m = size_b * CAP_HEIGHT / 2 / s
-        q = np.array(e.pos) - u * (BEARING_GAP_M + half_h_m)
-        X, Y = view.pt(*q)
-        rot = e.az_grid % 360.0
-        if 90.0 < rot <= 270.0:
-            rot -= 180.0
-        elif rot > 270.0:
-            rot -= 360.0
-        label = f'{e.mag:05.1f}°'
-        doc.add('Runway bearings', f'<g transform="translate({f(X)} {f(Y)}) rotate({f(rot, 2)})">'
-                + text(0, size_b * CAP_HEIGHT / 2, label, size_b, 'bold', INK, 'middle') + '</g>')
-        bear_boxes.append((e.name, rot_box(X, Y, text_width(label, 'bold', size_b), size_b * CAP_HEIGHT, rot)))
+        rw = data.runways[e.rw]
+        az = math.radians(e.az_grid)
+        cap_ends.append(CapEnd(f'{e.mag:05.1f}°', view.pt(*e.pos), (math.sin(az), -math.cos(az)), rw.width / 2 * s, e.az_grid))
+    caps = place_caps(cap_ends, s, frame, runway_geoms, navaid_geoms(shown, ngroups, nav_right), inset_covers)
+    bear_boxes = []
+    for e, ce, (cx, cy, rot, poly, moved) in zip(data.ends, cap_ends, caps):
+        doc.add('Runway bearings', cap_element(ce.label, cx, cy, rot, BEARING_SIZE))
+        bear_boxes.append((e.name, rot_box(cx, cy, text_width(ce.label, 'bold', BEARING_SIZE), BEARING_SIZE * CAP_HEIGHT, rot)))
+    cap_polys = [c[3] for c in caps]
+    nav_geoms, nav_info = navaids(doc, view, frame, data, runway_geoms, cap_polys)
 
     # ---- encarts sur le plan
     inset_rects = []
@@ -366,6 +392,7 @@ def build_pages(data, log=print):
 
     # ---- etiquettes de taxiways
     placed = {}
+    taxi_rects = []
     if data.osm_ways:
         size = pt(6.0)
         ways = []
@@ -382,7 +409,8 @@ def build_pages(data, log=print):
                                      park_xy, 0.6, bounds)
         for nm, (cx, cy) in placed.items():
             w = text_width(nm, 'bold', size) + LABEL_PAD
-            doc.add('Taxiway labels', rect(cx - w / 2, cy - LABEL_H / 2, w, LABEL_H, TAXI, INK, 0.2))
+            taxi_rects.append(rect(cx - w / 2, cy - LABEL_H / 2, w, LABEL_H, TAXI, INK, 0.2))
+            doc.add('Taxiway labels', taxi_rects[-1])
             doc.add('Taxiway labels', text(cx, cy + size * CAP_HEIGHT / 2, nm, size, 'bold', INK, 'middle'))
         log(f'taxiways OSM gardes : {data.osm_kept}')
         log(f'etiquettes placees : {len(placed)}/{len(data.osm_kept)}')
@@ -390,18 +418,21 @@ def build_pages(data, log=print):
         log('taxiways OSM gardes : []')
 
     # ---- cadre, grille, nord, echelle
+    nx0 = (rn[0] + rn[2]) / 2
+    north_elems = north_block(nx0, rn[1] + 13.0 if cn[0] == 'B' else rn[1] + 13.0, data.conv, data.decl, data.year)
+    sb, Lmm = scale_block(rs[0] + 1.0, rs[1] + 5.0, s)
     doc.add('Frame & grid', rect(fx, fy, fw, fh, 'none', INK, 0.35))
-    graticule(doc, view, frame, data.projection)
+    grad_res = graticule(doc, view, frame, data.projection,
+                         {'encart': inset_covers, 'nord': [elems_geom(north_elems)], 'echelle': [elems_geom(sb)], 'cap': cap_polys,
+                          'balise': nav_geoms, 'taxi': [elem_geom(r) for r in taxi_rects]})
     if data.on_f10:                                  # lot heliports-fond (4.5) : un rectangle blanc sous chacun des deux blocs
         doc.add('Frame & grid', rect(rn[0] - 1, rn[1] - 1, rn[2] - rn[0] + 2, rn[3] - rn[1] + 2, '#FFFFFF',
                                      extra='rx="1" fill-opacity="0.85"'))
-    nx0 = (rn[0] + rn[2]) / 2
-    for e in north_block(nx0, rn[1] + 13.0 if cn[0] == 'B' else rn[1] + 13.0, data.conv, data.decl, data.year):
+    for e in north_elems:
         doc.add('Frame & grid', e)
     if data.on_f10:
         doc.add('Frame & grid', rect(rs[0] - 1, rs[1] - 1, rs[2] - rs[0] + 2, rs[3] - rs[1] + 2, '#FFFFFF',
                                      extra='rx="1" fill-opacity="0.85"'))
-    sb, Lmm = scale_block(rs[0] + 1.0, rs[1] + 5.0, s)
     for e in sb:
         doc.add('Frame & grid', e)
 
@@ -414,7 +445,9 @@ def build_pages(data, log=print):
     pages = [PageOut('10-9', doc.render(), {'mode': mode, 'zones': len(zones), 'labels': placed, 'n_numbers': n_numbers,
                                           'scale': s, 'frame': frame, 'f': decision.get('f'),
                                           'reduced': decision.get('reduced', {}), 'inset_rects': inset_rects,
-                                          'bearing_boxes': bear_boxes, 'runway_polys': [b for k, b in scene_boxes if k == 'runway'],
+                                          'bearing_boxes': bear_boxes, 'bearings_moved': [e.name for e, c in zip(data.ends, caps) if c[4]],
+                                          'navaid_positions': [(g['lines'][0], p, free) for g, p, free in nav_info],
+                                          'graduations': [(r[0] is None, r[2]) for r in grad_res], 'runway_polys': [b for k, b in scene_boxes if k == 'runway'],
                                           'designator_polys': [b for k, b in scene_boxes if k == 'designator']})]
 
     # ---- pages de parkings

@@ -116,7 +116,7 @@ python -I render/build_fiches.py <Theatre> --zips <airfields zip> <helicopters z
 
 Input: the *airfields* and *helicopters* zips of the theatre (`GermanyColdWar` or `Syria`) and the `airfields.json` of Mission Plan. Each chart is matched to its DCS airfield by the ARP written on its page (the nearest airfield of `airfields.json`, 500 m at most); each heliport is matched to its box on a directory page by replaying the directory layout with `render/directory.py` and pydcs alone, and the replay is checked against the published pages (it stops, writing nothing, if a page does not match). Output: `<folder>/<Theatre>/` with the page images (a page over 1 MB is re-encoded as JPEG) and `index.json` (format `dcs-fiches-v1`), and `<folder>/DCS_Airfield_Charts_<Theatre>_1985_route_planner.zip` with the same files at its root. An existing output folder is never overwritten.
 
-The header line of every chart page gives the airfield reference point three ways: degrees and decimal minutes, degrees-minutes-seconds, and MGRS to 10 m. `render/republish.py` applies every correction the renderer knows to the charts of a release zip, without the F10 captures: the coordinates line, the end label of the scale bar, the PNG size of pages drawn on the F10 map:
+The header line of every chart page gives the airfield reference point three ways: degrees and decimal minutes, degrees-minutes-seconds, and MGRS to 10 m. `render/republish.py` applies every correction the renderer knows to the charts of a release zip, without the F10 captures: the coordinates line, the end label of the scale bar, the placement of bearing, navaid and grid labels, the PNG size of pages drawn on the F10 map:
 
 ```
 python -I render/republish.py <Theatre> --zip <release zip> --out <new zip>

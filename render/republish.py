@@ -7,7 +7,11 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
   2. la fin de la barre d'echelle : la page `10-9` a exactement une barre (ligne horizontale de 0,35 mm) ; si aucune etiquette
      de metres ne finit par ` M`, la graduation de fin recoit `page.scale_end_label` (750 M, 1250 M, 1750 M). Une page de
      parkings (`10-9A`, `10-9B`…) n'a pas de barre ; en trouver une est une erreur ;
-  3. `xlink:href` sur une `<image>` qui ne l'a pas (page dessinee sur le fond F10).
+  3. les etiquettes de la page `10-9` (lot caps-balises-graduations) : caps de piste, libelles de balises, graduations lat/lon,
+     placees par les memes fonctions que le moteur (`page.place_caps`, `place_navaid_labels`, `place_graduations`) d'apres la
+     geometrie relue dans le SVG ; pour chaque cap, la place d'origine recalculee depuis le seuil, l'axe et l'echelle du plan
+     doit etre la place publiee a 0,01 mm pres (sinon arret) ;
+  4. `xlink:href` sur une `<image>` qui ne l'a pas (page dessinee sur le fond F10).
 Chaque page est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
 recueil `pdf/<stem>_charts.pdf` de chaque chart est refait. Sortie : un nouveau zip, memes entrees dans le meme ordre ; les
 entrees hors charts sont recopiees a l'octet (un zip sans page de chart est recopie tel quel). Un fichier de sortie qui existe
@@ -16,6 +20,7 @@ deja : arret. Au moindre doute, rien n'est ecrit.
 import argparse
 import html
 import io
+import math
 import re
 import shutil
 import sys
@@ -29,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))      # python -I
 from pypdf import PdfReader                                           # noqa: E402
 
 from render import dcsdata, export, page, update_coords               # noqa: E402
+from render.svgdoc import INK, INK2, f                                # noqa: E402
 from render.update_coords import ROW_Y, UpdateError, _PAGE_NAME, _PAGE_SVG, _TEXT, _Y   # noqa: E402
 
 RepublishError = UpdateError
@@ -145,7 +151,312 @@ def complete_scale_bar(svg_text, name, suffix):
     return svg_text[:end] + '\n' + el + svg_text[end:], (f'{L} M', xm, y + 4.2)
 
 
-# ---------- 3. xlink:href ----------
+# ---------- 3. etiquettes : caps, balises, graduations ----------
+_NAV_DOT = re.compile(r'^<circle cx="([-\d.]+)" cy="([-\d.]+)" r="0\.3" fill="#1A1A1A"/>$')
+_NAV_SHAPE = re.compile(r'^<(polygon|circle) ')
+_NAV_TEXT = re.compile(r'^<text x="([-\d.]+)" y="([-\d.]+)" [^>]*>(.*)</text>$')
+_CAP_G = re.compile(r'^<g transform="translate\(([-\d.]+) ([-\d.]+)\) rotate\(([-\d.]+)\)"><text [^>]*>(.*)</text></g>$')
+_RECT_WHITE = re.compile(r'<g inkscape:groupmode="layer" id="layer-inset-[^"]*" inkscape:label="[^"]*">\n(<rect [^>]*fill="#FFFFFF"/>)')
+_GRAD_TEXT = re.compile(r'^<text x="([-\d.]+)" y="([-\d.]+)" font-family="Barlow Condensed" font-size="([-\d.]+)" fill="#5A5A5A"'
+                        r'(?: text-anchor="(\w+)")?>(\d{2,3}-\d{2})</text>$')
+CAP_CHECK_MM = 0.01                # controle du cadrage 2.4 : place d'origine recalculee = place publiee, a 0,01 mm (et 0,01 deg) pres
+
+
+def _layer_lines(svg_text, label):
+    """[(debut, fin, ligne)] des lignes du calque `label` (son contenu est un element par ligne), ou [] s'il n'existe pas. Le
+    calque finit a la ligne `</g>` qui lui correspond."""
+    m = re.search(r'<g inkscape:groupmode="layer" id="[^"]*" inkscape:label="' + re.escape(label.replace('&', '&amp;')) + r'"[^>]*>\n',
+                  svg_text)
+    if not m:
+        return []
+    depth, pos, out = 1, m.end(), []
+    for t in re.finditer(r'<g\b|</g>', svg_text[pos:]):
+        depth += 1 if t.group(0) == '<g' else -1
+        if depth == 0:
+            body_end = pos + t.start()
+            break
+    else:
+        raise RepublishError(f'calque {label} : balise fermante introuvable')
+    i = pos
+    for line in svg_text[pos:body_end].rstrip('\n').split('\n'):
+        out.append((i, i + len(line), line))
+        i += len(line) + 1
+    return out
+
+
+def _clip_frame(svg_text, name):
+    m = re.findall(r'<clipPath id="clip-plan"><rect x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)"/></clipPath>', svg_text)
+    if len(m) != 1:
+        raise RepublishError(f'{name} : {len(m)} cadres « clip-plan » (attendu : un)')
+    return tuple(float(v) for v in m[0])
+
+
+def _runway_ends(pts, name):
+    """Polygone de piste (quatre points) -> (A, B, largeur) : A et B milieux des deux petits cotes (les seuils)."""
+    if len(pts) != 4:
+        raise RepublishError(f'{name} : un polygone du calque Runways a {len(pts)} points (attendu : 4)')
+    e = [(pts[i], pts[(i + 1) % 4]) for i in range(4)]
+    L = [math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in e]
+    if not (max(L[1], L[3]) < min(L[0], L[2])) or abs(L[1] - L[3]) > 0.01:
+        raise RepublishError(f'{name} : un polygone du calque Runways n\'est pas un rectangle allonge ({[round(v, 3) for v in L]})')
+    mid = lambda k: ((e[k][0][0] + e[k][1][0]) / 2, (e[k][0][1] + e[k][1][1]) / 2)
+    return mid(3), mid(1), L[1]
+
+
+def _scale_of(svg_text, name):
+    """Echelle du plan (mm par metre) lue sur la barre : premiere et derniere etiquette de metres."""
+    bars = find_bars(svg_text)
+    if len(bars) != 1:
+        raise RepublishError(f'{name} : {len(bars)} barres d\'echelle (attendu : une) : echelle du plan illisible')
+    a = bars[0][2]
+    x0, x1, y = float(a['x1']), float(a['x2']), float(a['y1'])
+    vals = []
+    for m in _TEXT.finditer(svg_text):
+        t = _attrs(m.group(1))
+        if t.get('text-anchor') == 'middle' and t.get('fill') == INK and abs(float(t['y']) - (y + 4.2)) < EPS \
+                and x0 - EPS <= float(t['x']) <= x1 + EPS:
+            v = html.unescape(m.group(2))
+            v = v[:-2] if v.endswith(' M') else v
+            if not v.isdigit():
+                raise RepublishError(f'{name} : etiquette de metres illisible : {m.group(2)!r}')
+            vals.append((float(t['x']), int(v)))
+    vals.sort()
+    if len(vals) < 2 or vals[-1][1] == vals[0][1]:
+        raise RepublishError(f'{name} : moins de deux etiquettes de metres sur la barre : echelle du plan illisible')
+    return (vals[-1][0] - vals[0][0]) / (vals[-1][1] - vals[0][1]), (x0, x1, y)
+
+
+def _same_text(published, expected):
+    """Deux elements <text> identiques, sauf x et y qui peuvent differer de 0,0015 mm (deux arrondis a trois decimales)."""
+    a, b = _attrs(re.match(r'<text ([^>]*)>', published).group(1)), _attrs(re.match(r'<text ([^>]*)>', expected).group(1))
+    return (set(a) == set(b) and all(a[k] == b[k] for k in a if k not in ('x', 'y'))
+            and abs(float(a['x']) - float(b['x'])) < EPS and abs(float(a['y']) - float(b['y'])) < EPS
+            and published.split('>', 1)[1] == expected.split('>', 1)[1])
+
+
+def _read_navaids(lines, name):
+    """Calque Navaids -> (symboles [(type, X, Y)], groupes [{members, lines, xs, ys, texts: [(debut, fin, ligne)]}]).
+    Un symbole = sa forme (polygone ou cercle pointille) puis son point central (cercle de 0,3) ; les deux textes d'un libelle
+    suivent le premier symbole de leur groupe ; le libelle publie doit etre a la place « a droite » que donne le moteur."""
+    syms, label_after = [], {}
+    shape = None
+    k = 0
+    while k < len(lines):
+        _, _, line = lines[k]
+        if _NAV_DOT.match(line):
+            if shape is None:
+                raise RepublishError(f'{name} : point central de balise sans symbole : {line}')
+            m = _NAV_DOT.match(line)
+            syms.append(('NDB' if shape.startswith('<circle') else 'VOR', float(m.group(1)), float(m.group(2))))
+            shape = None
+        elif _NAV_SHAPE.match(line):
+            if shape is not None:
+                raise RepublishError(f'{name} : deux symboles de balise de suite : {line}')
+            shape = line
+        elif _NAV_TEXT.match(line):
+            if not syms or shape is not None or k + 1 >= len(lines) or not _NAV_TEXT.match(lines[k + 1][2]):
+                raise RepublishError(f'{name} : libelle de balise mal place : {line}')
+            label_after[len(syms) - 1] = (lines[k], lines[k + 1])
+            k += 1
+        else:
+            raise RepublishError(f'{name} : element inattendu dans le calque Navaids : {line}')
+        k += 1
+    if shape is not None:
+        raise RepublishError(f'{name} : symbole de balise sans point central')
+    groups = []
+    for grp in page.navaid_groups([(X, Y) for _, X, Y in syms]):
+        if (grp[0] in label_after) != True or any(i in label_after for i in grp[1:]):
+            raise RepublishError(f'{name} : les libelles de balises ne suivent pas les premiers symboles des groupes')
+        l1, l2 = label_after[grp[0]]
+        texts = []
+        for _, _, ln in (l1, l2):
+            texts.append(html.unescape(_NAV_TEXT.match(ln).group(3)))
+        xs, ys = [syms[i][1] for i in grp], [syms[i][2] for i in grp]
+        current = None
+        for pos in page.NAVAID_POSITIONS:                   # la place publiee est l'une des quatre du moteur (une page deja retouchee)
+            expected = page.navaid_label_elems(texts, pos, xs, ys)
+            if all(_same_text(ln, exp) for (_, _, ln), exp in zip((l1, l2), expected)):
+                current = pos
+                break
+        if current is None:
+            raise RepublishError(f'{name} : libelle de balise different de ceux du moteur : {l1[2]!r}')
+        groups.append({'members': grp, 'lines': tuple(texts), 'xs': xs, 'ys': ys, 'span': (l1[0], l2[1]), 'elems': [l1[2], l2[2]],
+                       'current': current})
+    return syms, groups
+
+
+def _read_caps(lines, name):
+    out = []
+    for st, en, line in lines:
+        m = _CAP_G.match(line)
+        if not m:
+            raise RepublishError(f'{name} : element inattendu dans le calque Runway bearings : {line}')
+        out.append({'span': (st, en), 'line': line, 'X': float(m.group(1)), 'Y': float(m.group(2)), 'rot': float(m.group(3)),
+                    'label': html.unescape(m.group(4))})
+    return out
+
+
+def _cap_ends(caps, runways, s, name):
+    """Un CapEnd par cap publie : le seuil est le milieu du petit cote du polygone dont l'axe passe par l'etiquette, du cote de
+    l'etiquette ; le sens d'atterrissage est celui de l'angle publie qui va du seuil vers l'interieur de la piste.
+    Controle (cadrage 2.4) : la place d'origine recalculee par `page.cap_original` est la place publiee a 0,01 mm pres."""
+    ends = []
+    for c in caps:
+        best = None
+        for k, (A, B, w) in enumerate(runways):
+            dx, dy = B[0] - A[0], B[1] - A[1]
+            L = math.hypot(dx, dy)
+            ax, ay = dx / L, dy / L
+            vx, vy = c['X'] - A[0], c['Y'] - A[1]
+            t = vx * ax + vy * ay
+            dist = abs(ax * vy - ay * vx)
+            if dist > 0.05 or 0.0 <= t <= L:
+                continue
+            gap = -t if t < 0 else t - L
+            thr, far = (A, B) if t < 0 else (B, A)
+            if best is None or gap < best[0]:
+                best = (gap, thr, far, w)
+        if best is None:
+            raise RepublishError(f'{name} : cap {c["label"]} : aucune piste dont l\'axe passe par l\'etiquette ({c["X"]}, {c["Y"]})')
+        _, thr, far, w = best
+        d = math.hypot(far[0] - thr[0], far[1] - thr[1])
+        u1 = (math.sin(math.radians(c['rot'])), -math.cos(math.radians(c['rot'])))
+        az = c['rot'] if (u1[0] * (far[0] - thr[0]) + u1[1] * (far[1] - thr[1])) / d > 0 else c['rot'] + 180.0
+        u = (math.sin(math.radians(az)), -math.cos(math.radians(az)))
+        end = page.CapEnd(c['label'], thr, u, w / 2, az)
+        cx, cy, rot = page.cap_original(end, s)
+        if abs(cx - c['X']) > CAP_CHECK_MM or abs(cy - c['Y']) > CAP_CHECK_MM or abs(rot - c['rot']) > CAP_CHECK_MM:
+            raise RepublishError(f'{name} : cap {c["label"]} : la place d\'origine recalculee depuis la geometrie du SVG '
+                                 f'({cx:.3f}, {cy:.3f}, {rot:.2f}) differe de la place publiee ({c["X"]}, {c["Y"]}, {c["rot"]})')
+        ends.append(end)
+    return ends
+
+
+def retouch_labels(svg_text, name):
+    """(nouveau SVG, deplacements) : cadrage 2.4. deplacements : [(calque, texte, avant, apres)]."""
+    runways = []
+    for _, _, ln in _layer_lines(svg_text, 'Runways'):
+        m = re.match(r'^<polygon points="([^"]+)" fill="#1A1A1A"/>$', ln)
+        if not m:
+            raise RepublishError(f'{name} : element inattendu dans le calque Runways : {ln}')
+        runways.append([tuple(float(v) for v in p.split(',')) for p in m.group(1).split()])
+    runway_geoms = [page.elem_geom(f'<polygon points="{" ".join(f"{x},{y}" for x, y in p)}" fill="#1A1A1A"/>') for p in runways]
+    cap_lines = _layer_lines(svg_text, 'Runway bearings')
+    caps = _read_caps(cap_lines, name)
+    nav_lines = _layer_lines(svg_text, 'Navaids')
+    syms, groups = _read_navaids(nav_lines, name)
+    fg = _layer_lines(svg_text, 'Frame & grid')
+    labels, spans = [], []
+    for st, en, ln in fg:
+        m = _GRAD_TEXT.match(ln)
+        if m:
+            lab = page.GradLabel(float(m.group(1)), float(m.group(2)), m.group(5), m.group(4) or 'start')
+            if f(float(m.group(3))) != f(page.GRAD_SIZE) or lab.anchor not in ('start', 'middle') or page.grad_element(lab) != ln:
+                raise RepublishError(f'{name} : libelle de graduation different de celui du moteur : {ln!r}')
+            labels.append(lab)
+            spans.append((st, en))
+    if not (caps or groups or labels):
+        return svg_text, [], []                               # rien a placer sur cette page
+    frame = _clip_frame(svg_text, name)
+    covers = [page.elem_geom(m.group(1)) for m in _RECT_WHITE.finditer(svg_text)]
+    edits, moves = [], []
+
+    # --- caps
+    sym_geoms = [page.elems_geom(_sym_elems(k, X, Y)) for k, X, Y in syms]
+    nav_orig = sym_geoms + [page.elems_geom(page.navaid_label_elems(g['lines'], 'right', g['xs'], g['ys'])) for g in groups]
+    if caps:
+        if len(caps) != 2 * len(runways):
+            raise RepublishError(f'{name} : {len(caps)} caps pour {len(runways)} pistes (attendu : deux par piste)')
+        s, _ = _scale_of(svg_text, name)
+        ends = _cap_ends(caps, [_runway_ends(p, name) for p in runways], s, name)
+        placed = page.place_caps(ends, s, frame, runway_geoms, nav_orig, covers)
+    else:
+        ends, placed = [], []
+    cap_polys = []
+    for c, (cx, cy, rot, poly, moved) in zip(caps, placed):
+        if moved:
+            edits.append((c['span'][0], c['span'][1], page.cap_element(c['label'], cx, cy, rot)))
+            moves.append(('Runway bearings', c['label'], f'{c["X"]},{c["Y"]},{c["rot"]}', f'{f(cx)},{f(cy)},{f(rot, 2)}'))
+            cap_polys.append(poly)
+        else:
+            cap_polys.append(page.cap_box(c['label'], c['X'], c['Y'], c['rot']))
+
+    # --- balises
+    res = page.place_navaid_labels([(g['lines'], g['xs'], g['ys']) for g in groups], frame, runway_geoms, cap_polys)
+    nav_geoms = list(sym_geoms)
+    unplaced = []
+    for g, (pos, elems, free) in zip(groups, res):
+        if not free:
+            unplaced.append(g['lines'][0])
+        if pos != g['current']:
+            edits.append((g['span'][0], g['span'][1], '\n'.join(elems)))
+            moves.append(('Navaids', f'{g["lines"][0]} / {g["lines"][1]}', f'{g["current"]} ({_xy(g["elems"][0])})', f'{pos} ({_xy(elems[0])})'))
+            nav_geoms.append(page.elems_geom(elems))
+        else:
+            nav_geoms.append(page.elems_geom(g['elems']))
+
+    # --- graduations
+    if labels:
+        north, scale = _north_scale(fg, svg_text, name)
+        taxi = [page.elem_geom(ln) for _, _, ln in _layer_lines(svg_text, 'Taxiway labels') if ln.startswith('<rect ')]
+        res = page.place_graduations(labels, frame, {'encart': covers, 'nord': north, 'echelle': scale, 'cap': cap_polys,
+                                                    'balise': nav_geoms, 'taxi': taxi})
+        for lab, (st, en), (x, y, reason) in zip(labels, spans, res):
+            if x is None:
+                edits.append((st - 1, en, ''))                 # le libelle et son saut de ligne ; le trait reste
+                moves.append(('Frame & grid', lab.s, f'{lab.x},{lab.y}', f'retire ({reason})'))
+            elif reason == 'glisse':
+                edits.append((st, en, page.grad_element(lab, x, y)))
+                moves.append(('Frame & grid', lab.s, f'{lab.x},{lab.y}', f'{f(x)},{f(y)}'))
+    for st, en, rep in sorted(edits, reverse=True):
+        svg_text = svg_text[:st] + rep + svg_text[en:]
+    return svg_text, moves, unplaced
+
+
+def _xy(el):
+    a = _attrs(re.match(r'<text ([^>]*)>', el).group(1))
+    return f'{a["x"]},{a["y"]}'
+
+
+def _sym_elems(kind, X, Y):
+    from render import compose
+    return compose.navaid_symbol_elems(kind, X, Y)
+
+
+def _north_scale(fg, svg_text, name):
+    """Geometries du bloc du nord (deux fleches, textes VAR) et de l'echelle (barre, reperes, etiquettes), lues dans `Frame & grid`."""
+    arrows = [ln for _, _, ln in fg if ln.startswith('<g transform="translate(')]
+    if len(arrows) != 2:
+        raise RepublishError(f'{name} : {len(arrows)} fleches du nord (attendu : 2)')
+    cxy = {re.match(r'<g transform="translate\(([-\d.]+) ([-\d.]+)\)', a).groups() for a in arrows}
+    if len(cxy) != 1:
+        raise RepublishError(f'{name} : les deux fleches du nord n\'ont pas le meme pied')
+    cx, cy = (float(v) for v in next(iter(cxy)))
+    north = list(arrows)
+    scale = []
+    _, (x0, x1, y) = _scale_of(svg_text, name)
+    for _, _, ln in fg:
+        m = _TEXT.match(ln)
+        if m:
+            a = _attrs(m.group(1))
+            x_, y_ = float(a['x']), float(a['y'])
+            if abs(x_ - cx) < EPS and y_ > cy and a.get('fill') in (INK, INK2) and a.get('text-anchor') == 'middle' \
+                    and (html.unescape(m.group(2)).startswith('VAR') or html.unescape(m.group(2)).startswith('(')):
+                north.append(ln)
+            elif a.get('fill') == INK and x0 - EPS <= x_ <= x1 + EPS and (abs(y_ - (y + 4.2)) < EPS or abs(y_ - (y - 2.3)) < EPS):
+                scale.append(ln)
+        elif ln.startswith('<line '):
+            a = _attrs(ln)
+            if a.get('x1') == a.get('x2') and abs(float(a['y1']) - y) < EPS and x0 - EPS <= float(a['x1']) <= x1 + EPS:
+                scale.append(ln)
+            elif a.get('stroke-width') == BAR_WIDTH and a.get('y1') == a.get('y2') and abs(float(a['y1']) - y) < EPS:
+                scale.append(ln)
+    if len(north) != 4:
+        raise RepublishError(f'{name} : {len(north)} elements du bloc du nord (attendu : 4)')
+    return [page.elems_geom(north)], [page.elems_geom(scale)]
+
+
+# ---------- 4. xlink:href ----------
 def add_xlink_href(svg_text, name):
     """(nouveau SVG, nombre d'<image> corrigees) : `xlink:href` (meme valeur) juste apres `href` sur chaque <image> qui n'en a pas."""
     n = 0
@@ -165,12 +476,18 @@ def add_xlink_href(svg_text, name):
 
 # ---------- une page ----------
 def retouch_page(svg_text, name, suffix, index):
-    """(nouveau SVG, details) : toutes les retouches ; details = {fields, header, bar, image}."""
+    """(nouveau SVG, details) : toutes les retouches ; details = {fields, header, bar, image, xlink, moves, unplaced}."""
     svg, fields, header = check_or_rewrite_header(svg_text, name, index)
     svg, bar = complete_scale_bar(svg, name, suffix)
+    moves, unplaced = [], []
+    if suffix == '10-9':
+        try:
+            svg, moves, unplaced = retouch_labels(svg, name)
+        except page.PlacementError as e:
+            raise RepublishError(f'{name} : {e}') from None
     has_image = '<image' in svg
     svg, n_xlink = add_xlink_href(svg, name)
-    return svg, {'fields': fields, 'header': header, 'bar': bar, 'image': has_image, 'xlink': n_xlink}
+    return svg, {'fields': fields, 'header': header, 'bar': bar, 'image': has_image, 'xlink': n_xlink, 'moves': moves, 'unplaced': unplaced}
 
 
 @dataclass
@@ -183,6 +500,8 @@ class Result:
     bars: list = field(default_factory=list)          # [(page, texte, x, y)]
     f10: list = field(default_factory=list)           # noms des pages avec <image>
     lines: dict = field(default_factory=dict)         # {page: [champs]}
+    moves: list = field(default_factory=list)         # [(page, calque, texte, avant, apres)] : etiquettes deplacees ou retirees
+    unplaced: list = field(default_factory=list)      # [(page, libelle de balise)] : aucune position libre, reste a droite
 
 
 def republish_zip(theatre, zip_in, zip_out):
@@ -226,6 +545,8 @@ def republish_zip(theatre, zip_in, zip_out):
                 res.bars.append((name, *det['bar']))
             if det['image']:
                 res.f10.append(name)
+            res.moves.extend((name, *m) for m in det['moves'])
+            res.unplaced.extend((name, u) for u in det['unplaced'])
         res.pages = len(pages)
         charts = {}
         for n, (d, name, stem, suffix) in enumerate(pages):
@@ -267,22 +588,42 @@ def parse_args(argv):
     ap.add_argument('theatre', help='GermanyColdWar ou Syria')
     ap.add_argument('--zip', required=True, help='zip de release (airfields ou helicopters)')
     ap.add_argument('--out', required=True, help='nouveau zip (ne doit pas exister)')
+    ap.add_argument('--moves', help='fichier TSV (nouveau) : une ligne par etiquette deplacee ou retiree (page, calque, texte, avant, apres)')
     return ap.parse_args(argv)
 
 
 def main(argv):
     args = parse_args(argv)
+    if args.moves and Path(args.moves).exists():
+        print(f'ARRET : {args.moves} existe deja (pas d\'ecrasement)', file=sys.stderr)
+        return 1
     try:
         res = republish_zip(args.theatre, args.zip, args.out)
     except (RepublishError, dcsdata.DataError, FileNotFoundError, zipfile.BadZipFile) as e:
         print(f'ARRET : {e}', file=sys.stderr)
         return 1
+    if args.moves:
+        with open(args.moves, 'x', encoding='utf-8') as fh:
+            fh.write('page\tcalque\ttexte\tavant\tapres\n')
+            for m in res.moves:
+                fh.write('\t'.join(m) + '\n')
     print(f'{args.zip} -> {args.out}')
     print(f'pages reexportees : {res.pages}')
     print(f"en-tetes reecrits : {res.rewritten} ; verifies : {res.verified}")
     print(f"barres completees : {len(res.bars)}")
     for name, text, _, _ in res.bars:
         print(f'  {name} : {text}')
+    kinds = {k: [m for m in res.moves if m[1] == k] for k in ('Runway bearings', 'Navaids', 'Frame & grid')}
+    caps = kinds['Runway bearings']
+    print(f"caps deplaces : {len(caps)} sur {len({m[0] for m in caps})} pages")
+    navs = kinds['Navaids']
+    print(f"libelles de balises deplaces : {len(navs)} sur {len({m[0] for m in navs})} pages"
+          + (f" ; sans position libre (restent a droite) : {len(res.unplaced)}" if res.unplaced else ''))
+    for n, u in res.unplaced:
+        print(f'  {n} : {u}')
+    grads = kinds['Frame & grid']
+    slid = [m for m in grads if not m[4].startswith('retire')]
+    print(f"graduations glissees : {len(slid)} ; retirees : {len(grads) - len(slid)} (sur {len({m[0] for m in grads})} pages)")
     print(f"pages a fond F10 : {len(res.f10)}" + ''.join(f'\n  {n}' for n in res.f10))
     print(f'recueils refaits : {res.charts}')
     print(f'entrees recopiees telles quelles : {res.copied}')

@@ -1,9 +1,14 @@
 """Pages A5 : composition du SVG (calques Inkscape) d'un chart 10-9 et de ses pages de parkings (cadrage 4.4 et 4.5)."""
+import html
 import math
+import re
 from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
+from shapely import affinity
+from shapely.geometry import LineString, Point, Polygon, box
+from shapely.ops import unary_union
 
 from . import geo, layout, vector
 from .fonts import CAP_HEIGHT, pt, text_width
@@ -460,3 +465,270 @@ def cells_from_mask(mask, g, frame_ground, nx, ny):
     if a1 > a0 and b1 > b0:
         sub[a0 - r0:a1 - r0, b0 - c0:b1 - c0] = mask[a0:a1, b0:b1].view(np.uint8) * 255
     return cv2.resize(sub, (nx, ny), interpolation=cv2.INTER_AREA) > 8
+
+
+# ---------- placement des etiquettes : caps de piste, libelles de balises, graduations ----------
+# Fonctions partagees par le moteur (compose.py) et par republish.py : unites en mm de page ; « toucher » = intersection des
+# rectangles englobants (orientes pour un cap) ; la geometrie d'un element SVG se lit avec `elem_geom`, la meme dans les deux cas.
+BEARING_GAP_M = 70.0              # cap : place d'origine, dans l'axe, a 70 m (+ demi-hauteur) avant le seuil
+BEARING_SIZE = pt(6.4)
+CAP_EDGE_MM = 0.6                 # cap : distance minimale au cadre
+CAP_GAP_MM = 0.8                  # cap le long de la piste : ecart au seuil et au bord de la piste
+CAP_SLIDE_MAX_MM, CAP_SLIDE_STEP_MM = 20.0, 2.0
+NAVAID_OFFSET_MM = 2.3            # libelle de balise : bord du bloc a 2,3 mm du centre du symbole
+GRAD_SIZE = pt(5.3)
+GRAD_OUT_MM, GRAD_IN_MM, GRAD_TOUCH_MM = 0.3, 0.6, 1.0     # graduation : marge de sortie, retour dans le cadre, contact
+
+
+class PlacementError(Exception):
+    """Une etiquette de cap sans place (cadrage 2.1)."""
+
+
+_ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
+_ELEM = re.compile(r'<(\w+)\b([^>]*?)(?:/>|>(.*?)</\1>)', re.S)
+_NUM = r'(-?[\d.]+)'
+
+
+def text_rect(x, y, s, size, weight='regular', anchor='start'):
+    """Rectangle (x0, y0, x1, y1) d'un texte a la ligne de base y : largeur des glyphes, hauteur de capitale."""
+    w = text_width(s, weight, size)
+    x0 = x if anchor == 'start' else x - w / 2 if anchor == 'middle' else x - w
+    return x0, y - size * CAP_HEIGHT, x0 + w, y
+
+
+def _weight(a):
+    fam = a.get('font-family', '')
+    if 'SemiBold' in fam:
+        return 'semibold'
+    if 'Medium' in fam:
+        return 'medium'
+    return 'bold' if a.get('font-weight') == 'bold' else 'regular'
+
+
+def _points(s):
+    return [tuple(float(v) for v in p.split(',')) for p in s.split()]
+
+
+def elem_geom(s):
+    """Geometrie shapely (mm de page) des elements SVG de la chaine `s` : <text> (rectangle), <line>, <polyline>, <polygon>,
+    <circle>, <rect> (epaissis de la moitie du trait s'il y en a un), <g transform="translate(x y) rotate(a)"> (ses enfants)."""
+    out = []
+    for m in _ELEM.finditer(s):
+        tag, a, inner = m.group(1), dict(_ATTR.findall(m.group(2))), m.group(3)
+        sw = float(a['stroke-width']) if 'stroke' in a and 'stroke-width' in a else 0.0
+        if tag == 'text':
+            out.append(box(*text_rect(float(a['x']), float(a['y']), html.unescape(inner), float(a['font-size']), _weight(a),
+                                      a.get('text-anchor', 'start'))))
+        elif tag == 'line':
+            g = LineString([(float(a['x1']), float(a['y1'])), (float(a['x2']), float(a['y2']))])
+            out.append(g.buffer(sw / 2) if sw else g)
+        elif tag in ('polygon', 'polyline'):
+            pts = _points(a['points'])
+            g = Polygon(pts) if tag == 'polygon' and a.get('fill', 'none') != 'none' else LineString(pts + ([pts[0]] if tag == 'polygon' else []))
+            out.append(g.buffer(sw / 2) if sw else g)
+        elif tag == 'circle':
+            out.append(Point(float(a['cx']), float(a['cy'])).buffer(float(a['r']) + sw / 2))
+        elif tag == 'rect':
+            x, y, w, h = (float(a[k]) for k in ('x', 'y', 'width', 'height'))
+            out.append(box(x - sw / 2, y - sw / 2, x + w + sw / 2, y + h + sw / 2))
+        elif tag == 'g':
+            g = unary_union([elem_geom(inner)] if inner else [])
+            t = a.get('transform', '')
+            r = re.search(r'rotate\(' + _NUM + r'\)', t)
+            if r:
+                g = affinity.rotate(g, float(r.group(1)), origin=(0, 0))
+            tr = re.search(r'translate\(' + _NUM + ' ' + _NUM + r'\)', t)
+            if tr:
+                g = affinity.translate(g, float(tr.group(1)), float(tr.group(2)))
+            out.append(g)
+    return unary_union(out)
+
+
+def elems_geom(strings):
+    return unary_union([elem_geom(e) for e in strings])
+
+
+# ---------- 2.1 caps de piste ----------
+@dataclass
+class CapEnd:
+    label: str                    # '029.9°'
+    thr: tuple                    # seuil (X, Y), mm de page
+    u: tuple                      # sens d'atterrissage (vecteur unitaire, mm de page)
+    hw: float                     # demi-largeur de la piste, mm
+    az: float                     # azimut grille du sens d'atterrissage (deg) : u = (sin az, -cos az)
+
+
+def cap_norm(rot):
+    """Angle ramene dans ]-90 ; 90]."""
+    rot %= 360.0
+    if 90.0 < rot <= 270.0:
+        rot -= 180.0
+    elif rot > 270.0:
+        rot -= 360.0
+    return rot
+
+
+def cap_original(end, s, size=BEARING_SIZE):
+    """Place d'origine : dans l'axe, 70 m (a l'echelle s mm/m) + demi-hauteur avant le seuil, ligne de base perpendiculaire
+    a l'axe (haut du texte = sens d'atterrissage). Retourne (cx, cy, rot)."""
+    gap = BEARING_GAP_M * s + size * CAP_HEIGHT / 2
+    return end.thr[0] - end.u[0] * gap, end.thr[1] - end.u[1] * gap, cap_norm(end.az)
+
+
+def cap_element(label, cx, cy, rot, size=BEARING_SIZE):
+    return (f'<g transform="translate({f(cx)} {f(cy)}) rotate({f(rot, 2)})">'
+            + text(0, size * CAP_HEIGHT / 2, label, size, 'bold', INK, 'middle') + '</g>')
+
+
+def cap_box(label, cx, cy, rot, size=BEARING_SIZE):
+    return Polygon(rot_box(cx, cy, text_width(label, 'bold', size), size * CAP_HEIGHT, rot))
+
+
+def place_caps(ends, s, frame, runways, navaids, insets, size=BEARING_SIZE):
+    """Cadrage 2.1 : pour chaque extremite, dans l'ordre : la place d'origine si l'etiquette est entierement a 0,6 mm au moins
+    a l'interieur du cadre et ne touche ni une piste, ni un cap deja place, ni une balise, ni un encart ; sinon le long de la
+    piste (texte parallele a l'axe, angle dans ]-90 ; 90], centre a seuil + u (largeur / 2 + 0,8 + g) + n (demi-largeur + 0,8 +
+    hauteur / 2), n la normale a droite de u puis a gauche, g de 0 a 20 mm de 2 en 2 mm) : la premiere position libre.
+    runways, navaids, insets : listes de geometries shapely. Retourne [(cx, cy, rot, boite shapely, deplace)] ;
+    PlacementError si une extremite n'a aucune place."""
+    fx, fy, fw, fh = frame
+    inner = box(fx + CAP_EDGE_MM, fy + CAP_EDGE_MM, fx + fw - CAP_EDGE_MM, fy + fh - CAP_EDGE_MM)
+    blockers = list(runways) + list(navaids) + list(insets)
+    placed, out = [], []
+
+    def free(poly):
+        return inner.contains(poly) and not any(poly.intersects(b) for b in blockers) and not any(poly.intersects(p) for p in placed)
+    h = size * CAP_HEIGHT
+    for e in ends:
+        cx, cy, rot = cap_original(e, s, size)
+        poly = cap_box(e.label, cx, cy, rot, size)
+        if free(poly):
+            placed.append(poly)
+            out.append((cx, cy, rot, poly, False))
+            continue
+        w = text_width(e.label, 'bold', size)
+        rot = cap_norm(e.az - 90.0)
+        found = None
+        n_steps = int(round(CAP_SLIDE_MAX_MM / CAP_SLIDE_STEP_MM))
+        for k in range(n_steps + 1):
+            g = k * CAP_SLIDE_STEP_MM
+            for side in (1.0, -1.0):                              # a droite de u, puis a gauche (axes de la page : y vers le bas)
+                n = (-e.u[1] * side, e.u[0] * side)
+                da = w / 2 + CAP_GAP_MM + g
+                dn = e.hw + CAP_GAP_MM + h / 2
+                cx, cy = e.thr[0] + e.u[0] * da + n[0] * dn, e.thr[1] + e.u[1] * da + n[1] * dn
+                poly = cap_box(e.label, cx, cy, rot, size)
+                if free(poly):
+                    found = (cx, cy, rot, poly, True)
+                    break
+            if found:
+                break
+        if not found:
+            raise PlacementError(f"cap {e.label} : aucune place le long de la piste (seuil {e.thr[0]:.3f} {e.thr[1]:.3f})")
+        placed.append(found[3])
+        out.append(found)
+    return out
+
+
+# ---------- 2.2 libelles de balises ----------
+NAVAID_GROUP_MM = 6.0
+NAVAID_POSITIONS = ('right', 'left', 'below', 'above')
+
+
+def navaid_groups(points, max_mm=NAVAID_GROUP_MM):
+    """Groupes de symboles a `max_mm` au plus (de proche en proche) : liste d'indices croissants, par premier membre."""
+    parent = list(range(len(points)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    for i in range(len(points)):
+        for j in range(i + 1, len(points)):
+            if math.hypot(points[i][0] - points[j][0], points[i][1] - points[j][1]) <= max_mm:
+                parent[max(root(i), root(j))] = min(root(i), root(j))
+    members = {}
+    for i in range(len(points)):
+        members.setdefault(root(i), []).append(i)
+    return list(members.values())
+
+
+NAVAID_LINES = ((pt(5.6), 'bold', INK), (pt(5.2), 'regular', INK2))          # (taille, graisse, couleur) des deux lignes
+
+
+def navaid_label_elems(lines, pos, xs, ys):
+    """Les deux lignes (l1, l2) du libelle d'un groupe de symboles (abscisses xs, ordonnees ys ; la premiere balise donne
+    l'ordonnee de reference) a la position `pos` : 'right' (X_max + 2,3 ; ligne 1 a Y - 0,2, ligne 2 a Y + 2,2), 'left' (bloc
+    aligne a droite, bord a X_min - 2,3), 'below' / 'above' (bloc centre, bord haut a Y_max + 2,3 / bord bas a Y_min - 2,3)."""
+    (s1, w1, c1), (s2, w2, c2) = NAVAID_LINES
+    y0 = ys[0]
+    if pos == 'right':
+        x, anchor, ay = max(xs) + NAVAID_OFFSET_MM, 'start', y0
+    elif pos == 'left':
+        x, anchor, ay = min(xs) - NAVAID_OFFSET_MM, 'end', y0
+    elif pos == 'below':
+        x, anchor, ay = (min(xs) + max(xs)) / 2, 'middle', max(ys) + NAVAID_OFFSET_MM + 0.2 + s1 * CAP_HEIGHT
+    else:
+        x, anchor, ay = (min(xs) + max(xs)) / 2, 'middle', min(ys) - NAVAID_OFFSET_MM - 2.2
+    return [text(x, ay - 0.2, lines[0], s1, w1, c1, anchor), text(x, ay + 2.2, lines[1], s2, w2, c2, anchor)]
+
+
+def place_navaid_labels(groups, frame, runways, caps):
+    """Cadrage 2.2 : le bloc d'un libelle reste a droite du symbole s'il est dans le cadre et ne touche ni une piste ni un cap ;
+    sinon a gauche, puis dessous, puis dessus : la premiere position libre ; aucune : a droite.
+    groups : liste de (lignes (l1, l2), xs, ys). Retourne [(position, [element ligne 1, element ligne 2], libre)]."""
+    fx, fy, fw, fh = frame
+    inside = box(fx, fy, fx + fw, fy + fh)
+    out = []
+    for lines, xs, ys in groups:
+        chosen = None
+        for pos in NAVAID_POSITIONS:
+            elems = navaid_label_elems(lines, pos, xs, ys)
+            g = elems_geom(elems)
+            if inside.contains(g) and not any(g.intersects(r) for r in runways) and not any(g.intersects(c) for c in caps):
+                chosen = (pos, elems, True)
+                break
+        out.append(chosen or ('right', navaid_label_elems(lines, 'right', xs, ys), False))
+    return out
+
+
+# ---------- 2.3 graduations ----------
+@dataclass
+class GradLabel:
+    x: float
+    y: float                      # ligne de base
+    s: str                        # '035-28'
+    anchor: str                   # 'start' : bord gauche (glisse en y) ; 'middle' : bords haut et bas (glisse en x)
+
+
+def grad_element(lab, x=None, y=None):
+    return text(lab.x if x is None else x, lab.y if y is None else y, lab.s, GRAD_SIZE, 'regular', INK2, lab.anchor)
+
+
+def place_graduations(labels, frame, obstacles):
+    """Cadrage 2.3 : un libelle qui sort du cadre (marge 0,3 mm) glisse le long de son bord jusqu'a etre a 0,6 mm a l'interieur ;
+    un libelle qui, a 1 mm pres, touche un obstacle (encart, nord, echelle, cap, balise, etiquette de taxiway) est retire.
+    obstacles : {nom: [geometries]}. Retourne [(x, y, raison)] : x, y = None si retire (raison = nom de l'obstacle),
+    raison = 'glisse' ou None sinon."""
+    fx, fy, fw, fh = frame
+    out = []
+    for lab in labels:
+        x, y, reason = lab.x, lab.y, None
+        r = text_rect(x, y, lab.s, GRAD_SIZE, 'regular', lab.anchor)
+        if r[0] < fx + GRAD_OUT_MM or r[2] > fx + fw - GRAD_OUT_MM or r[1] < fy + GRAD_OUT_MM or r[3] > fy + fh - GRAD_OUT_MM:
+            if lab.anchor == 'start':
+                lo, hi = fy + GRAD_IN_MM, fy + fh - GRAD_IN_MM
+                d = lo - r[1] if r[1] < lo else (hi - r[3] if r[3] > hi else 0.0)
+                y += d
+                r = (r[0], r[1] + d, r[2], r[3] + d)
+            else:
+                lo, hi = fx + GRAD_IN_MM, fx + fw - GRAD_IN_MM
+                d = lo - r[0] if r[0] < lo else (hi - r[2] if r[2] > hi else 0.0)
+                x += d
+                r = (r[0] + d, r[1], r[2] + d, r[3])
+            reason = 'glisse' if d else None
+        g = box(*r)
+        hit = next((k for k, geoms in obstacles.items() if any(g.distance(o) < GRAD_TOUCH_MM for o in geoms)), None)
+        out.append((None, None, hit) if hit else (x, y, reason))
+    return out
