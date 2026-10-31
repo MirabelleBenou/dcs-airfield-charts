@@ -120,3 +120,65 @@ def test_runways_same_for_v1_and_v2(samples, f10, work):
     for a, b in zip(d1.runways, d2.runways):
         assert np.hypot(a.p0[0] - b.p0[0], a.p0[1] - b.p0[1]) < 1.0
         assert np.hypot(a.p1[0] - b.p1[0], a.p1[1] - b.p1[1]) < 1.0
+
+
+# ---------- lot capture-grille : grille decentree et QUESTION ----------
+def _zones(n=250, seed=20261031):
+    import random
+    r = random.Random(seed)
+    for _ in range(n):
+        x0, z0 = r.uniform(-300000, 300000), r.uniform(-400000, 400000)
+        h, w = r.uniform(500, 6000), r.uniform(500, 6000)
+        yield ({'x_min': x0, 'x_max': x0 + h, 'z_min': z0, 'z_max': z0 + w}, r.uniform(0.3, 1.7))
+
+
+def _mosaic_cover(f10, g, mpp, shift=(0.0, 0.0)):
+    """Couverture corrigee que donnerait la grille commandee (xs, zs decales de `shift`)."""
+    fh, fw = g['footprint_m']
+    xs, zs = [x + shift[0] for x in g['xs']], [z + shift[1] for z in g['zs']]
+    return f10.corrected_coverage({'x_min': min(xs) - fh / 2, 'x_max': max(xs) + fh / 2,
+                                   'z_min': min(zs) - fw / 2, 'z_max': max(zs) + fw / 2}, mpp)
+
+
+def _contains(c, z, eps=1e-6):
+    return (c['x_min'] <= z['x_min'] + eps and c['x_max'] >= z['x_max'] - eps
+            and c['z_min'] <= z['z_min'] + eps and c['z_max'] >= z['z_max'] - eps)
+
+
+def test_grid_covers_zone_and_old_grid_does_not(f10, monkeypatch):
+    monkeypatch.setattr(f10, 'screen_size', lambda: (1920, 1080))
+    n_old_fail = 0
+    for zone, mpp in _zones():
+        g = f10.plan_grid(zone, mpp)
+        assert _contains(_mosaic_cover(f10, g, mpp), zone), (zone, mpp)
+        dx, dz = f10.crop_offset(mpp)
+        if not _contains(_mosaic_cover(f10, g, mpp, (-dx, -dz)), zone):     # grille d'avant le lot
+            n_old_fail += 1
+    assert n_old_fail >= 1
+
+
+def test_grid_offset_value_and_shared(f10, monkeypatch):
+    monkeypatch.setattr(f10, 'screen_size', lambda: (1920, 1080))
+    assert f10.crop_offset(0.5) == (9.0, 22.5)
+    cover = {'x_min': 0.0, 'x_max': 10.0, 'z_min': 0.0, 'z_max': 10.0}
+    cc = f10.corrected_coverage(cover, 0.5)
+    assert (cover['x_min'] - cc['x_min'], cover['z_min'] - cc['z_min']) == (9.0, 22.5)
+    zone = {'x_min': 0.0, 'x_max': 100.0, 'z_min': 0.0, 'z_max': 100.0}      # 1 x 1 tuile : centre de zone + decalage
+    g = f10.plan_grid(zone, 0.5)
+    assert (g['nrow'], g['ncol']) == (1, 1)
+    assert (g['xs'][0], g['zs'][0]) == (50.0 + 9.0, 50.0 + 22.5)
+
+
+def test_missing_terrain_asks_cdp(f10, monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    monkeypatch.setattr(f10, 'CFG', SimpleNamespace(terrains=tmp_path / 'absent', work_dir=tmp_path / 'work'))
+    with pytest.raises(f10.AskCdP, match='dossier introuvable'):
+        f10.rn4_dir('Nowhere')
+    with pytest.raises(f10.AskCdP, match='dossier introuvable'):
+        f10.find_rn4('Nowhere', 'Base')
+    with pytest.raises(f10.AskCdP, match=r'index\.json introuvable \(lancer d.abord : index Nowhere\)'):
+        f10.load_index('Nowhere')
+    d = tmp_path / 'absent' / 'Nowhere' / 'AirfieldsTaxiways'
+    d.mkdir(parents=True)
+    with pytest.raises(f10.AskCdP, match=r'Base\.rn4 introuvable dans'):
+        f10.find_rn4('Nowhere', 'Base')

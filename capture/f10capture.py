@@ -386,8 +386,16 @@ def zone_of(ext):
             'z_min': ext['z_min'] - MARGIN_ZONE_M, 'z_max': ext['z_max'] + MARGIN_ZONE_M}
 
 
+def crop_offset(mpp):
+    """Decalage (dx, dz) en m entre le centre du contenu garde (ecran moins marges) et la camera : le contenu est decale de
+    dx vers le sud et dz vers l'ouest. Source unique, partagee par plan_grid (qui commande la camera en x + dx, z + dz) et
+    corrected_coverage (qui retranche dx, dz a la couverture de la mosaique)."""
+    return (MARGIN_T - MARGIN_B) / 2 * mpp, (MARGIN_R - MARGIN_L) / 2 * mpp
+
+
 def plan_grid(zone, mpp):
-    """Grille de tuiles couvrant la zone. Ligne 0 = nord. Retourne dict (empreinte, pas, centres)."""
+    """Grille de tuiles couvrant la zone. Ligne 0 = nord. Retourne dict (empreinte, pas, positions de camera commandees :
+    les centres de la zone decales de crop_offset pour que le contenu recadre, non centre, couvre la zone)."""
     uw, uh = usable_px()
     fw, fh = uw * mpp, uh * mpp                # empreinte au sol : fw selon z (Est), fh selon x (Nord)
     stw, sth = fw * (1 - OVERLAP), fh * (1 - OVERLAP)
@@ -397,6 +405,8 @@ def plan_grid(zone, mpp):
     cx, cz = (zone['x_min'] + zone['x_max']) / 2, (zone['z_min'] + zone['z_max']) / 2
     xs = [cx + ((nrow - 1) / 2 - i) * (sth if nrow > 1 else 0) for i in range(nrow)]
     zs = [cz + (j - (ncol - 1) / 2) * (stw if ncol > 1 else 0) for j in range(ncol)]
+    dx, dz = crop_offset(mpp)
+    xs, zs = [x + dx for x in xs], [z + dz for z in zs]
     return {'nrow': nrow, 'ncol': ncol, 'footprint_m': [fh, fw], 'step_m': [sth, stw], 'xs': xs, 'zs': zs}
 
 
@@ -404,7 +414,7 @@ def plan_grid(zone, mpp):
 def rn4_dir(theatre):
     d = CFG.terrains / theatre / 'AirfieldsTaxiways'
     if not d.is_dir():
-        raise SystemExit(f'ARRET : dossier introuvable {d}')
+        raise AskCdP(f'ARRET : dossier introuvable {d}')
     return d
 
 
@@ -420,7 +430,7 @@ def find_rn4(theatre, base):
     for q in d.glob('*.rn4'):
         if q.stem.lower() == base.lower():
             return q
-    raise SystemExit(f'ARRET : {base}.rn4 introuvable dans {d}')
+    raise AskCdP(f'ARRET : {base}.rn4 introuvable dans {d}')
 
 
 def visit_order(entries):
@@ -490,8 +500,7 @@ def corrected_coverage(cover, mpp):
     """Georeferencement (cadrage 4.1) : la mosaique place chaque image comme si son centre etait la camera, alors que le
     recadrage de l'ecran n'est pas centre (marges haut M_T, droite M_R). Le contenu est donc decale : x_min et x_max
     diminuent de (M_T - M_B)/2 x mpp, z_min et z_max de (M_R - M_L)/2 x mpp."""
-    dx = (MARGIN_T - MARGIN_B) / 2 * mpp
-    dz = (MARGIN_R - MARGIN_L) / 2 * mpp
+    dx, dz = crop_offset(mpp)
     return {'x_min': cover['x_min'] - dx, 'x_max': cover['x_max'] - dx,
             'z_min': cover['z_min'] - dz, 'z_max': cover['z_max'] - dz}
 
@@ -721,7 +730,7 @@ def cmd_capture(theatre, bases):
 def load_index(theatre):
     p = out_theatre(theatre) / 'index.json'
     if not p.is_file():
-        raise SystemExit(f'ARRET : {p} introuvable (lancer d\'abord : index {theatre})')
+        raise AskCdP(f'ARRET : {p} introuvable (lancer d\'abord : index {theatre})')
     idx = json.loads(p.read_text(encoding='utf-8'))
     return idx, {e['name']: e for e in idx['bases'] + idx['heliports']}
 
