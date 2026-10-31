@@ -9,6 +9,15 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - Cold War Germany: ICAO codes and taxiway names from OpenStreetMap; the 25 grass strips.
 
+## AC-V1.5.1 — 31 October 2026
+
+**Scale bars, and the three helicopter bases drawn on the F10 map.**
+
+- Scale bars: the end of every scale bar now carries its length in metres. On 64 charts the bar ended between two labelled marks (750, 1,250 or 1,750 m) and had no "M" at all.
+- At Tanf, Kharab Ishk and Naqoura: the PNG pages are 256-colour images, 0.9 to 1.4 MB instead of 1.9 to 3.7 MB, with no visible change; in the PDF, viewers smooth the map image when zooming; the SVG shows its map image in older Inkscape versions too.
+- New tool `render/republish.py` applies every correction to the charts of a release zip, without the F10 captures.
+- **Downloads**: the four zips attached to the release again; the Cold War Germany helicopters zip is unchanged.
+
 ## AC-V1.5.0 — 31 October 2026
 
 **Coordinates in degrees-minutes-seconds and MGRS on every chart.**

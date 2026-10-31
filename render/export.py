@@ -36,20 +36,35 @@ def export_page(svg_text, base_path):
     cairosvg.svg2pdf(bytestring=data, write_to=str(pdf_path))
     if '<image' in svg_text:
         jpeg_images_in_pdf(pdf_path)
-    cairosvg.svg2png(bytestring=data, write_to=str(base_path.with_suffix('.png')),
-                     output_width=PNG_SIZE[0], output_height=PNG_SIZE[1])
+    png_path = base_path.with_suffix('.png')
+    cairosvg.svg2png(bytestring=data, write_to=str(png_path), output_width=PNG_SIZE[0], output_height=PNG_SIZE[1])
+    if '<image' in svg_text:
+        quantize_png(png_path)
     return svg_path, base_path.with_suffix('.pdf'), base_path.with_suffix('.png')
+
+
+def quantize_png(png_path):
+    """Page dessinee sur le fond F10 (SVG avec `<image>`) : le PNG de CairoSVG (RGBA, 1,9 a 3,7 Mo) est converti en RGB puis
+    reduit a 256 couleurs (mediane coupee), meme taille en pixels, et reecrit au meme chemin (PNG a palette, optimise)."""
+    from PIL import Image
+    png_path = Path(png_path)
+    with Image.open(png_path) as im:
+        q = im.convert('RGB').quantize(256, method=Image.Quantize.MEDIANCUT)
+    q.save(png_path, 'PNG', optimize=True)
 
 
 def jpeg_images_in_pdf(pdf_path, quality=JPEG_QUALITY):
     """Remplace chaque image de chaque page du PDF par la meme image en RGB encodee en JPEG (CairoSVG les ecrit sans
-    perte, FlateDecode : 3,8 Mo la page au lieu de 40 ko). Le PDF est reecrit au meme chemin."""
+    perte, FlateDecode : 3,8 Mo la page au lieu de 40 ko). Le drapeau /Interpolate que CairoSVG ecrit sur l'image est perdu
+    au remplacement : il est remis (les lecteurs lissent l'image au zoom). Le PDF est reecrit au meme chemin."""
     from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import BooleanObject, NameObject
     pdf_path = Path(pdf_path)
     writer = PdfWriter(clone_from=str(pdf_path))
     for page in writer.pages:
         for image in page.images:
             image.replace(image.image.convert('RGB'), quality=quality)
+            image.indirect_reference.get_object()[NameObject('/Interpolate')] = BooleanObject(True)
     with open(pdf_path, 'wb') as fh:
         writer.write(fh)
 

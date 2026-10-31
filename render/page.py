@@ -263,6 +263,12 @@ def scale_plan(s_mm_per_m):
     return max(mstep, math.floor(span / mstep) * mstep), mstep, fstep
 
 
+def scale_end_label(xm, y, L_m):
+    """Etiquette de la graduation de fin d'une barre de metres (`750 M`) quand cette graduation est mineure (250 m) ;
+    (xm, y) : pied de la graduation et ordonnee de la barre. Partagee par `scale_block` et `republish.py`."""
+    return text(xm, y + 4.2, f'{int(L_m)} M', pt(5.3), 'regular', INK, 'middle')
+
+
 def scale_block(x, y, s_mm_per_m):
     """Echelle en pieds (graduations de 1 000 ft) et en metres (graduations de 250 m) ; (x, y) : debut de la barre.
     Barre de moins de 500 m (lot heliports, 4.3) : graduations du pas de `scale_plan`, chacune porte sa valeur."""
@@ -283,12 +289,15 @@ def scale_block(x, y, s_mm_per_m):
             out.append(text(xf, y - 2.3, f'{int(k * fstep)}' + (' FT' if k == n_ft else ''), size, 'regular', INK, 'middle'))
         return out, Lmm
     # metres, sous la barre
-    for i in range(int(L_m // 250) + 1):
+    n_last = int(L_m // 250)
+    for i in range(n_last + 1):
         xm = x + i * 250 * s_mm_per_m
         major = (i % 2 == 0)
         out.append(line(xm, y, xm, y + (1.6 if major else 1.0), INK, 0.3))
         if major:
             out.append(text(xm, y + 4.2, f'{int(i * 250)}' + (' M' if abs(i * 250 - L_m) < 1 else ''), size, 'regular', INK, 'middle'))
+        elif i == n_last:                      # lot echelle-heliports-fond : la fin de la barre porte toujours sa valeur en metres
+            out.append(scale_end_label(xm, y, L_m))
     # pieds, sur la barre
     n_ft = int(L_m * FT // 1000)
     for k in range(n_ft + 1):

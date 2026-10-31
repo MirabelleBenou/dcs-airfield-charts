@@ -83,7 +83,7 @@ def fond_image_elem(view, frame, data):
     buf = io.BytesIO()
     fond_image(view, frame, data).save(buf, 'JPEG', quality=88)
     href = 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
-    return f'<image x="{f(fx)}" y="{f(fy)}" width="{f(fw)}" height="{f(fh)}" preserveAspectRatio="none" href="{href}"/>'
+    return f'<image x="{f(fx)}" y="{f(fy)}" width="{f(fw)}" height="{f(fh)}" preserveAspectRatio="none" href="{href}" xlink:href="{href}"/>'
 
 
 def poly_cells(poly_mm, origin, shape, grow_mm=0.0):

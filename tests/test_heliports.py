@@ -104,7 +104,7 @@ def test_scale_bar_800_m_keeps_the_original_rule():
     assert page.scale_plan(s) == (750.0, None, None)
     elems, L = _labels(s)
     t = [html.unescape(re.sub(r'<[^>]+>', '', e)) for e in elems if e.startswith('<text')]
-    assert t == ['0', '500', '0', '1000', '2000 FT']
+    assert t == ['0', '500', '750 M', '0', '1000', '2000 FT']        # AC-V1.5.1 : la fin de la barre porte sa valeur
 
 
 @pytest.mark.parametrize('span, expect', [(499, (100.0, 500.0, 400.0)), (199, (50.0, 200.0, 150.0)), (99, (25.0, 100.0, 75.0)),
