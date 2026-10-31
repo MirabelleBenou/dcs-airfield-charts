@@ -10,7 +10,7 @@ from shapely.geometry import Polygon
 
 from . import directory, geo, layout, vector
 from .fonts import CAP_HEIGHT, pt, text_width
-from .page import (BEARING_SIZE, CapEnd, GradLabel, GRAD_SIZE, FOND_PX_MM, FOND_S_MAX, SYM_INSET_R, SYM_PLAN_R, CORNER_PAD, CORNER_PAD_Y, FRAME_CELL, FRAME_W, FRAME_X, FT, LAST_ROW_Y, LEGEND_Y, PAGE_H, PAGE_W, PLAN_MARGIN_M,
+from .page import (BEARING_SIZE, CapEnd, GradLabel, GRAD_SIZE, grad_blockers, FOND_PX_MM, FOND_S_MAX, SYM_INSET_R, SYM_PLAN_R, CORNER_PAD, CORNER_PAD_Y, FRAME_CELL, FRAME_W, FRAME_X, FT, LAST_ROW_Y, LEGEND_Y, PAGE_H, PAGE_W, PLAN_MARGIN_M,
                    ROW_PITCH, X0, X1, PageOut, View, cells_from_mask, draw_scene, edge_ticks, fond_circles, fond_number_elems,
                    footer, header, legend, north_block, number_elems, rot_box, rw_axes, runway_table, runway_polygon, scale_block, scale_plan,
                    elem_geom, elems_geom, grad_element, navaid_groups, navaid_label_elems, place_caps, place_graduations, place_navaid_labels,
@@ -151,11 +151,11 @@ def graticule_specs(view, frame, proj):
     return out
 
 
-def graticule(doc, view, frame, proj, obstacles=None):
+def graticule(doc, view, frame, proj, obstacles=None, specs=None):
     """Traits et libelles des graduations ; les libelles passent par `page.place_graduations` (cadrage 2.3). Retourne la liste
     des resultats (un par libelle) pour le resume du moteur."""
     L = 'Frame & grid'
-    specs = graticule_specs(view, frame, proj)
+    specs = specs if specs is not None else graticule_specs(view, frame, proj)
     res = place_graduations([lab for _, lab in specs if lab], frame, obstacles or {})
     it = iter(res)
     for ln, lab in specs:
@@ -371,7 +371,9 @@ def build_pages(data, log=print):
         rw = data.runways[e.rw]
         az = math.radians(e.az_grid)
         cap_ends.append(CapEnd(f'{e.mag:05.1f}°', view.pt(*e.pos), (math.sin(az), -math.cos(az)), rw.width / 2 * s, e.az_grid))
-    caps = place_caps(cap_ends, s, frame, runway_geoms, navaid_geoms(shown, ngroups, nav_right), inset_covers)
+    grad_specs = graticule_specs(view, frame, data.projection)
+    caps = place_caps(cap_ends, s, frame, runway_geoms, navaid_geoms(shown, ngroups, nav_right), inset_covers,
+                      grad_blockers([lab for _, lab in grad_specs if lab]))      # les taxiways, posees apres, evitent les caps
     bear_boxes = []
     for e, ce, (cx, cy, rot, poly, moved) in zip(data.ends, cap_ends, caps):
         doc.add('Runway bearings', cap_element(ce.label, cx, cy, rot, BEARING_SIZE))
@@ -398,7 +400,7 @@ def build_pages(data, log=print):
         ways = []
         for w in data.osm_ways:
             ways.append((w['ref'], view.pts(w['pts_xz']), w['length']))
-        forbidden = [(r[0] - 1.5, r[1] - 1.5, r[2] + 1.5, r[3] + 1.5) for r in (rn, rs)] + inset_rects
+        forbidden = [(r[0] - 1.5, r[1] - 1.5, r[2] + 1.5, r[3] + 1.5) for r in (rn, rs)] + inset_rects + cap_polys
         for rw in data.runways:
             u, n, L = rw_axes(rw)
             P0, P1 = np.array(rw.p0) - u * RW_EXT_M, np.array(rw.p1) + u * RW_EXT_M
@@ -424,7 +426,7 @@ def build_pages(data, log=print):
     doc.add('Frame & grid', rect(fx, fy, fw, fh, 'none', INK, 0.35))
     grad_res = graticule(doc, view, frame, data.projection,
                          {'encart': inset_covers, 'nord': [elems_geom(north_elems)], 'echelle': [elems_geom(sb)], 'cap': cap_polys,
-                          'balise': nav_geoms, 'taxi': [elem_geom(r) for r in taxi_rects]})
+                          'balise': nav_geoms, 'taxi': [elem_geom(r) for r in taxi_rects]}, grad_specs)
     if data.on_f10:                                  # lot heliports-fond (4.5) : un rectangle blanc sous chacun des deux blocs
         doc.add('Frame & grid', rect(rn[0] - 1, rn[1] - 1, rn[2] - rn[0] + 2, rn[3] - rn[1] + 2, '#FFFFFF',
                                      extra='rx="1" fill-opacity="0.85"'))

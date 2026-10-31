@@ -296,34 +296,65 @@ def _read_caps(lines, name):
     return out
 
 
+def _cap_end_perpendicular(c, runways, s):
+    """CapEnd d'un cap a sa place d'origine (perpendiculaire a l'axe, avant le seuil), ou None s'il n'en a pas la forme."""
+    best = None
+    for k, (A, B, w) in enumerate(runways):
+        dx, dy = B[0] - A[0], B[1] - A[1]
+        L = math.hypot(dx, dy)
+        ax, ay = dx / L, dy / L
+        vx, vy = c['X'] - A[0], c['Y'] - A[1]
+        t = vx * ax + vy * ay
+        dist = abs(ax * vy - ay * vx)
+        if dist > 0.05 or 0.0 <= t <= L:
+            continue
+        gap = -t if t < 0 else t - L
+        thr, far = (A, B) if t < 0 else (B, A)
+        if best is None or gap < best[0]:
+            best = (gap, thr, far, w)
+    if best is None:
+        return None
+    _, thr, far, w = best
+    d = math.hypot(far[0] - thr[0], far[1] - thr[1])
+    u1 = (math.sin(math.radians(c['rot'])), -math.cos(math.radians(c['rot'])))
+    az = c['rot'] if (u1[0] * (far[0] - thr[0]) + u1[1] * (far[1] - thr[1])) / d > 0 else c['rot'] + 180.0
+    u = (math.sin(math.radians(az)), -math.cos(math.radians(az)))
+    return page.CapEnd(c['label'], thr, u, w / 2, az)
+
+
+def _cap_end_parallel(c, runways):
+    """CapEnd d'un cap deja pose le long de la piste (republication d'une page deja retouchee) : un cap parallele a l'axe, sur une
+    des positions candidates du cadrage 2.1 (a 0,01 mm pres) du seuil le plus proche d'un des polygones ; None sinon."""
+    for A, B, w in runways:
+        for thr, far in ((A, B), (B, A)):
+            d = math.hypot(far[0] - thr[0], far[1] - thr[1])
+            u = ((far[0] - thr[0]) / d, (far[1] - thr[1]) / d)
+            az = math.degrees(math.atan2(u[0], -u[1])) % 360.0
+            end = page.CapEnd(c['label'], thr, u, w / 2, az)
+            if abs(page.cap_norm(az - 90.0) - c['rot']) > CAP_CHECK_MM:
+                continue
+            for cx, cy, rot in page.cap_candidates(end):
+                if abs(cx - c['X']) <= CAP_CHECK_MM and abs(cy - c['Y']) <= CAP_CHECK_MM and abs(rot - c['rot']) <= CAP_CHECK_MM:
+                    end.current = (c['X'], c['Y'], c['rot'])
+                    return end
+    return None
+
+
 def _cap_ends(caps, runways, s, name):
     """Un CapEnd par cap publie : le seuil est le milieu du petit cote du polygone dont l'axe passe par l'etiquette, du cote de
     l'etiquette ; le sens d'atterrissage est celui de l'angle publie qui va du seuil vers l'interieur de la piste.
-    Controle (cadrage 2.4) : la place d'origine recalculee par `page.cap_original` est la place publiee a 0,01 mm pres."""
+    Controle (cadrage 2.4) : la place d'origine recalculee par `page.cap_original` est la place publiee a 0,01 mm pres. Un cap
+    parallele a son axe sur une position candidate du 2.1 est un cap deja place (republication d une page deja retouchee)."""
     ends = []
     for c in caps:
-        best = None
-        for k, (A, B, w) in enumerate(runways):
-            dx, dy = B[0] - A[0], B[1] - A[1]
-            L = math.hypot(dx, dy)
-            ax, ay = dx / L, dy / L
-            vx, vy = c['X'] - A[0], c['Y'] - A[1]
-            t = vx * ax + vy * ay
-            dist = abs(ax * vy - ay * vx)
-            if dist > 0.05 or 0.0 <= t <= L:
-                continue
-            gap = -t if t < 0 else t - L
-            thr, far = (A, B) if t < 0 else (B, A)
-            if best is None or gap < best[0]:
-                best = (gap, thr, far, w)
-        if best is None:
-            raise RepublishError(f'{name} : cap {c["label"]} : aucune piste dont l\'axe passe par l\'etiquette ({c["X"]}, {c["Y"]})')
-        _, thr, far, w = best
-        d = math.hypot(far[0] - thr[0], far[1] - thr[1])
-        u1 = (math.sin(math.radians(c['rot'])), -math.cos(math.radians(c['rot'])))
-        az = c['rot'] if (u1[0] * (far[0] - thr[0]) + u1[1] * (far[1] - thr[1])) / d > 0 else c['rot'] + 180.0
-        u = (math.sin(math.radians(az)), -math.cos(math.radians(az)))
-        end = page.CapEnd(c['label'], thr, u, w / 2, az)
+        end = _cap_end_perpendicular(c, runways, s)
+        if end is None:
+            end = _cap_end_parallel(c, runways)
+            if end is None:
+                raise RepublishError(f'{name} : cap {c["label"]} : aucune piste dont l\'axe passe par l\'etiquette, et pas sur une '
+                                     f'position le long d\'une piste ({c["X"]}, {c["Y"]}, {c["rot"]})')
+            ends.append(end)
+            continue
         cx, cy, rot = page.cap_original(end, s)
         if abs(cx - c['X']) > CAP_CHECK_MM or abs(cy - c['Y']) > CAP_CHECK_MM or abs(rot - c['rot']) > CAP_CHECK_MM:
             raise RepublishError(f'{name} : cap {c["label"]} : la place d\'origine recalculee depuis la geometrie du SVG '
@@ -361,6 +392,8 @@ def retouch_labels(svg_text, name):
     covers = [page.elem_geom(m.group(1)) for m in _RECT_WHITE.finditer(svg_text)]
     edits, moves = [], []
 
+    taxi = [page.elem_geom(ln) for _, _, ln in _layer_lines(svg_text, 'Taxiway labels') if ln.startswith('<rect ')]
+
     # --- caps
     sym_geoms = [page.elems_geom(_sym_elems(k, X, Y)) for k, X, Y in syms]
     nav_orig = sym_geoms + [page.elems_geom(page.navaid_label_elems(g['lines'], 'right', g['xs'], g['ys'])) for g in groups]
@@ -369,7 +402,7 @@ def retouch_labels(svg_text, name):
             raise RepublishError(f'{name} : {len(caps)} caps pour {len(runways)} pistes (attendu : deux par piste)')
         s, _ = _scale_of(svg_text, name)
         ends = _cap_ends(caps, [_runway_ends(p, name) for p in runways], s, name)
-        placed = page.place_caps(ends, s, frame, runway_geoms, nav_orig, covers)
+        placed = page.place_caps(ends, s, frame, runway_geoms, nav_orig, covers, page.grad_blockers(labels) + taxi)
     else:
         ends, placed = [], []
     cap_polys = []
@@ -398,7 +431,6 @@ def retouch_labels(svg_text, name):
     # --- graduations
     if labels:
         north, scale = _north_scale(fg, svg_text, name)
-        taxi = [page.elem_geom(ln) for _, _, ln in _layer_lines(svg_text, 'Taxiway labels') if ln.startswith('<rect ')]
         res = page.place_graduations(labels, frame, {'encart': covers, 'nord': north, 'echelle': scale, 'cap': cap_polys,
                                                     'balise': nav_geoms, 'taxi': taxi})
         for lab, (st, en), (x, y, reason) in zip(labels, spans, res):

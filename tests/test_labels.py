@@ -1,5 +1,6 @@
 """Lot caps-balises-graduations : placement des caps de piste (2.1), des libelles de balises (2.2) et des graduations (2.3),
 dans le moteur et dans `republish` (memes fonctions)."""
+import copy
 import math
 import re
 
@@ -268,7 +269,8 @@ def build(data, monkeypatch, identity):
 def test_republish_of_the_old_engine_page_equals_the_new_engine_page(charts, monkeypatch, base):
     """Pour forcer des deplacements sur les trois bases, le cadre vu par le placement est reduit de 14 mm de chaque cote (meme
     reduction dans le moteur et dans republish) : les deux voies doivent donner les memes etiquettes aux memes places."""
-    data = charts[base][0]
+    data = copy.copy(charts[base][0])
+    data.osm_ways, data.osm_kept = [], []         # sans etiquettes de taxiway : le moteur les pose apres les caps, republish apres les avoir lues
     real_caps, real_nav, real_grad = page.place_caps, page.place_navaid_labels, page.place_graduations
     shrink = lambda fr: (fr[0] + 14.0, fr[1] + 14.0, fr[2] - 28.0, fr[3] - 28.0)
     forced = []
@@ -299,3 +301,46 @@ def test_republish_leaves_a_page_of_the_new_engine_alone(charts, base):
     svg = charts[base][1][0].svg
     new, moves, unplaced = republish.retouch_labels(svg, base + '_10-9')
     assert new == svg and moves == [] and unplaced == []
+
+
+# ---------- les caps evitent les graduations et les taxiways ; republish se rejoue ----------
+def test_cap_avoids_a_graduation_label_and_a_taxiway_label():
+    e = end('360.0°', (60.0, 120.0), 0.0)
+    cx, cy, _ = page.cap_original(e, S)
+    g = page.GradLabel(cx, cy + 0.5, '035-29', 'middle')
+    blk = page.grad_blockers([g])[0]
+    r = page.text_rect(g.x, g.y, g.s, page.GRAD_SIZE, 'regular', 'middle')
+    assert blk.bounds == pytest.approx((r[0] - 0.5, r[1] - 0.5, r[2] + 0.5, r[3] + 0.5))
+    for others in (page.grad_blockers([g]), [box(cx - 1, cy - 1, cx + 1, cy + 1)]):
+        (c, d, rot, poly, moved), = page.place_caps([e], S, FRAME, [], [], [], others)
+        assert moved and rot == page.cap_norm(0.0 - 90.0) and not poly.intersects(others[0])
+
+
+def test_cap_already_placed_along_the_runway_is_kept_when_free_and_replaced_when_not():
+    e = top_end()
+    (cx, cy, rot, poly, moved), = page.place_caps([e], S, FRAME, [], [], [])
+    e.current = (cx, cy, rot)
+    (c2, d2, r2, p2, m2), = page.place_caps([e], S, FRAME, [], [], [])
+    assert (c2, d2, r2, m2) == (cx, cy, rot, False)
+    (c3, d3, r3, p3, m3), = page.place_caps([e], S, FRAME, [], [], [], [poly.buffer(0.1)])
+    assert m3 and (c3, d3) != (cx, cy) and not p3.intersects(poly.buffer(0.1))
+
+
+def test_retouch_labels_recognises_a_cap_already_placed_along_the_runway():
+    new, moves, _ = republish.retouch_labels(synthetic_page(), 'T_10-9')
+    assert any(m[0] == 'Runway bearings' for m in moves)
+    again, moves2, _ = republish.retouch_labels(new, 'T_10-9')
+    assert again == new and moves2 == []
+    with pytest.raises(republish.RepublishError, match='position le long'):
+        republish.retouch_labels(new.replace('rotate(90)', 'rotate(80)', 1), 'T_10-9')
+
+
+def test_engine_taxiway_labels_avoid_the_placed_bearings(charts):
+    data, pages = charts['Konya']
+    info = pages[0].info
+    from shapely.geometry import Polygon
+    boxes = [Polygon(b) for _, b in info['bearing_boxes']]
+    root = re.findall(r'<rect x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)" fill="#FFCC00"', pages[0].svg)
+    for x, y, w, h in root:
+        x, y, w, h = map(float, (x, y, w, h))
+        assert not any(box(x, y, x + w, y + h).intersects(b) for b in boxes)

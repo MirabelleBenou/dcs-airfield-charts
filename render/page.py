@@ -556,6 +556,7 @@ class CapEnd:
     u: tuple                      # sens d'atterrissage (vecteur unitaire, mm de page)
     hw: float                     # demi-largeur de la piste, mm
     az: float                     # azimut grille du sens d'atterrissage (deg) : u = (sin az, -cos az)
+    current: tuple = None         # republication : (cx, cy, rot) d'un cap deja pose le long de la piste (position candidate du 2.1)
 
 
 def cap_norm(rot):
@@ -584,44 +585,66 @@ def cap_box(label, cx, cy, rot, size=BEARING_SIZE):
     return Polygon(rot_box(cx, cy, text_width(label, 'bold', size), size * CAP_HEIGHT, rot))
 
 
-def place_caps(ends, s, frame, runways, navaids, insets, size=BEARING_SIZE):
+def cap_candidates(end, size=BEARING_SIZE):
+    """Les positions le long de la piste, dans l'ordre du cadrage 2.1 : (cx, cy, rot), texte parallele a l'axe (angle dans
+    ]-90 ; 90]), centre a seuil + u (largeur / 2 + 0,8 + g) + n (demi-largeur + 0,8 + hauteur / 2), n la normale a droite de u
+    puis a gauche, g de 0 a 20 mm de 2 en 2 mm (pour chaque g, droite puis gauche)."""
+    h = size * CAP_HEIGHT
+    w = text_width(end.label, 'bold', size)
+    rot = cap_norm(end.az - 90.0)
+    for k in range(int(round(CAP_SLIDE_MAX_MM / CAP_SLIDE_STEP_MM)) + 1):
+        g = k * CAP_SLIDE_STEP_MM
+        for side in (1.0, -1.0):                              # a droite de u, puis a gauche (axes de la page : y vers le bas)
+            n = (-end.u[1] * side, end.u[0] * side)
+            da, dn = w / 2 + CAP_GAP_MM + g, end.hw + CAP_GAP_MM + h / 2
+            yield end.thr[0] + end.u[0] * da + n[0] * dn, end.thr[1] + end.u[1] * da + n[1] * dn, rot
+
+
+GRAD_PAD_MM = 0.5                 # un cap evite les libelles de graduation (boite agrandie de 0,5 mm)
+
+
+def grad_blockers(labels):
+    """Boites des libelles de graduation a leur place d'avant le 2.3, agrandies de 0,5 mm (obstacles d'un cap)."""
+    out = []
+    for lab in labels:
+        r = text_rect(lab.x, lab.y, lab.s, GRAD_SIZE, 'regular', lab.anchor)
+        out.append(box(r[0] - GRAD_PAD_MM, r[1] - GRAD_PAD_MM, r[2] + GRAD_PAD_MM, r[3] + GRAD_PAD_MM))
+    return out
+
+
+def place_caps(ends, s, frame, runways, navaids, insets, others=(), size=BEARING_SIZE):
     """Cadrage 2.1 : pour chaque extremite, dans l'ordre : la place d'origine si l'etiquette est entierement a 0,6 mm au moins
-    a l'interieur du cadre et ne touche ni une piste, ni un cap deja place, ni une balise, ni un encart ; sinon le long de la
-    piste (texte parallele a l'axe, angle dans ]-90 ; 90], centre a seuil + u (largeur / 2 + 0,8 + g) + n (demi-largeur + 0,8 +
-    hauteur / 2), n la normale a droite de u puis a gauche, g de 0 a 20 mm de 2 en 2 mm) : la premiere position libre.
-    runways, navaids, insets : listes de geometries shapely. Retourne [(cx, cy, rot, boite shapely, deplace)] ;
+    a l'interieur du cadre et ne touche ni une piste, ni un cap deja place, ni une balise, ni un encart, ni un libelle de
+    graduation (`grad_blockers`), ni une etiquette de taxiway (`others` : ces deux dernieres listes) ; sinon le long de la piste
+    (`cap_candidates`) : la premiere position libre. Un cap deja pose le long de la piste (`end.current`, republication) est
+    reverifie et laisse tel quel s'il est libre, sinon replace par la regle.
+    runways, navaids, insets, others : listes de geometries shapely. Retourne [(cx, cy, rot, boite shapely, deplace)] ;
     PlacementError si une extremite n'a aucune place."""
     fx, fy, fw, fh = frame
     inner = box(fx + CAP_EDGE_MM, fy + CAP_EDGE_MM, fx + fw - CAP_EDGE_MM, fy + fh - CAP_EDGE_MM)
-    blockers = list(runways) + list(navaids) + list(insets)
+    blockers = list(runways) + list(navaids) + list(insets) + list(others)
     placed, out = [], []
 
     def free(poly):
         return inner.contains(poly) and not any(poly.intersects(b) for b in blockers) and not any(poly.intersects(p) for p in placed)
-    h = size * CAP_HEIGHT
     for e in ends:
+        if e.current is not None:
+            poly = cap_box(e.label, *e.current, size)
+            if free(poly):
+                placed.append(poly)
+                out.append((*e.current, poly, False))
+                continue
         cx, cy, rot = cap_original(e, s, size)
         poly = cap_box(e.label, cx, cy, rot, size)
         if free(poly):
             placed.append(poly)
             out.append((cx, cy, rot, poly, False))
             continue
-        w = text_width(e.label, 'bold', size)
-        rot = cap_norm(e.az - 90.0)
         found = None
-        n_steps = int(round(CAP_SLIDE_MAX_MM / CAP_SLIDE_STEP_MM))
-        for k in range(n_steps + 1):
-            g = k * CAP_SLIDE_STEP_MM
-            for side in (1.0, -1.0):                              # a droite de u, puis a gauche (axes de la page : y vers le bas)
-                n = (-e.u[1] * side, e.u[0] * side)
-                da = w / 2 + CAP_GAP_MM + g
-                dn = e.hw + CAP_GAP_MM + h / 2
-                cx, cy = e.thr[0] + e.u[0] * da + n[0] * dn, e.thr[1] + e.u[1] * da + n[1] * dn
-                poly = cap_box(e.label, cx, cy, rot, size)
-                if free(poly):
-                    found = (cx, cy, rot, poly, True)
-                    break
-            if found:
+        for cx, cy, rot in cap_candidates(e, size):
+            poly = cap_box(e.label, cx, cy, rot, size)
+            if free(poly):
+                found = (cx, cy, rot, poly, True)
                 break
         if not found:
             raise PlacementError(f"cap {e.label} : aucune place le long de la piste (seuil {e.thr[0]:.3f} {e.thr[1]:.3f})")
