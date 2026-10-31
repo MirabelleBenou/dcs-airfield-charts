@@ -9,6 +9,15 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - Cold War Germany: ICAO codes and taxiway names from OpenStreetMap; the 25 grass strips.
 
+## AC-V1.5.0 — 31 October 2026
+
+**Coordinates in degrees-minutes-seconds and MGRS on every chart.**
+
+- The header line of every chart page now gives the airfield reference point three ways: degrees and decimal minutes (as before), degrees-minutes-seconds, and MGRS to 10 m (for example `32U PD 9233 0798`). Nothing else on the charts changes.
+- The heliport directories do not change: their positions stay in degrees and decimal minutes.
+- New tool `render/update_coords.py` brings the coordinates line of published charts up to date from the release zips, without the F10 captures.
+- **Downloads**: the four zips attached to the release again; the airfields and helicopters zips carry the updated charts, the heliport directories are unchanged.
+
 ## AC-V1.4.1 — 28 October 2026
 
 **Cold War Germany: the heliport directory.**

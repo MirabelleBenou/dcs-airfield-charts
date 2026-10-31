@@ -116,6 +116,14 @@ python -I render/build_fiches.py <Theatre> --zips <airfields zip> <helicopters z
 
 Input: the *airfields* and *helicopters* zips of the theatre (`GermanyColdWar` or `Syria`) and the `airfields.json` of Mission Plan. Each chart is matched to its DCS airfield by the ARP written on its page (the nearest airfield of `airfields.json`, 500 m at most); each heliport is matched to its box on a directory page by replaying the directory layout with `render/directory.py` and pydcs alone, and the replay is checked against the published pages (it stops, writing nothing, if a page does not match). Output: `<folder>/<Theatre>/` with the page images (a page over 1 MB is re-encoded as JPEG) and `index.json` (format `dcs-fiches-v1`), and `<folder>/DCS_Airfield_Charts_<Theatre>_1985_route_planner.zip` with the same files at its root. An existing output folder is never overwritten.
 
+The header line of every chart page gives the airfield reference point three ways: degrees and decimal minutes, degrees-minutes-seconds, and MGRS to 10 m. `render/update_coords.py` brings the coordinates line of published charts up to date from the release zips, without the F10 captures:
+
+```
+python -I render/update_coords.py <Theatre> --zip <release zip> --out <new zip>
+```
+
+Input: one zip of the release (*airfields* or *helicopters*). Each chart page's coordinates line is replaced by the five fields (elevation, ARP, degrees-minutes-seconds, MGRS, variation), matched to its DCS airfield by the ARP written on the page; the page is exported again as SVG, PDF and PNG and the PDF collection of each chart is rebuilt. Output: a new zip with the same entries in the same order; entries that are not chart pages (the heliport directory) are copied byte for byte. It stops, writing nothing, if a page does not match, and an existing output file is never overwritten.
+
 Tests: `python -m pytest` (see the table above for the tests that need samples).
 
 Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports.

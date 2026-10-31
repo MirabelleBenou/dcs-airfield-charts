@@ -299,6 +299,26 @@ def scale_block(x, y, s_mm_per_m):
 
 
 # ---------- en-tete, bandeaux, tableau, pied ----------
+HEADER_ROW_Y = 21.2
+HEADER_ROW_GAP_MIN = 4.0       # mm : ecart minimal entre deux champs de la ligne d'en-tete
+
+
+def header_row(elev_text, lat, lon, var_text):
+    """Les cinq champs de la ligne d'en-tete (elevation, ARP en degres et minutes decimales, degres-minutes-secondes, MGRS,
+    declinaison), en elements SVG : le premier en X0, le dernier finissant en X1, les ecarts egaux (ValueError sous 4 mm)."""
+    items = [elev_text, geo.arp_text(lat, lon), geo.dms(lat, 'N', 'S', 2) + ' ' + geo.dms(lon, 'E', 'W', 3),
+             'MGRS ' + geo.mgrs(lat, lon), var_text]
+    widths = [text_width(s, 'bold', pt(7.2)) for s in items]
+    gap = (X1 - X0 - sum(widths)) / (len(items) - 1)
+    if gap < HEADER_ROW_GAP_MIN:
+        raise ValueError(f"ligne d'en-tete : ecart de {gap:.2f} mm entre les champs (minimum {HEADER_ROW_GAP_MIN:g} mm) : {items}")
+    out, x = [], X0
+    for s, w in zip(items, widths):
+        out.append(text(x, HEADER_ROW_Y, s, pt(7.2), 'bold'))
+        x += w + gap
+    return out
+
+
 def header(doc, data, index, kind, bands=True):
     L = 'Header'
     name = data.airport_name.upper()
@@ -311,9 +331,8 @@ def header(doc, data, index, kind, bands=True):
     doc.add(L, text(X1, 14.7, VERSION, pt(6.5), 'regular', INK2, 'end'))
     doc.add(L, line(X0, 17.1, X1, 17.1, INK, 0.5))
     var, yl = geo.var_text(data.decl, data.year)
-    doc.add(L, text(X0, 21.2, f'ÉLÉV. {data.elev_ft} FT', pt(7.2), 'bold'))
-    doc.add(L, text(51.3, 21.2, geo.arp_text(data.lat, data.lon), pt(7.2), 'bold'))
-    doc.add(L, text(96.7, 21.2, f'{var} {yl}', pt(7.2), 'bold'))
+    for el in header_row(f'ÉLÉV. {data.elev_ft} FT', data.lat, data.lon, f'{var} {yl}'):
+        doc.add(L, el)
     doc.add(L, line(X0, 22.8, X1, 22.8, INK, 0.25))
     if not bands:
         return 22.8
