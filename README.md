@@ -68,6 +68,7 @@ What a chart shows: pavement, runways and their markings, buildings and hardened
 | `render/` | the renderer: vectorises a captured base (pavement, buildings, runways), reads the game facts through pydcs, lays out the A5 pages and exports SVG, PDF and PNG; `build_chart.py` renders a base, `fetch_osm.py` downloads real taxiway names from OpenStreetMap; fonts in `render/fonts/` |
 | `tests/` | `python -m pytest`; the tests that need captured samples or DCS files run when `DCS_CHARTS_SAMPLES` points to a folder holding them, and are skipped otherwise |
 | `downloads/` | the published charts: one PDF per airfield in `downloads/<theatre>/` (with its index), and a zip per theatre holding every page as PDF, PNG and SVG |
+| `downloads/parkings/` | every parking stand of every DCS theatre, with the identifiers a mission file uses, its position and the aircraft it takes (JSON, from pydcs; see its README) |
 
 ## Installation (Windows)
 
@@ -123,6 +124,14 @@ python -I render/republish.py <Theatre> --zip <release zip> --out <new zip>
 ```
 
 Input: one zip of the release (*airfields* or *helicopters*). On each chart page, the coordinates line is checked against the five fields the renderer writes (elevation, ARP, degrees-minutes-seconds, MGRS, variation), or rewritten to them if it still has three; the scale bar of a `10-9` page gets the length in metres at its end when it has none; a page drawn on the F10 map gets its `xlink:href`. Each page is exported again as SVG, PDF and PNG (a page on the F10 map as a 256-colour PNG) and the PDF collection of each chart is rebuilt. Output: a new zip with the same entries in the same order; entries that are not chart pages (the heliport directory) are copied byte for byte. It stops, writing nothing, if a page does not match, and an existing output file is never overwritten. `render/update_coords.py` remains, for the coordinates line only.
+
+The parking stands of every DCS theatre, with the identifiers a mission file uses, come from pydcs alone, without a capture:
+
+```
+python -I render/export_parkings.py --out downloads/parkings
+```
+
+It writes one `<theatre>.json` per theatre and `aircraft.json` (the size of every aircraft type) to the folder, and prints a line per file; run it again after a pydcs update to refresh the published files.
 
 Tests: `python -m pytest` (see the table above for the tests that need samples).
 

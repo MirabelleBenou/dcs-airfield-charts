@@ -19,6 +19,7 @@ What changed in the published charts, version by version. Each version is a GitH
 - Runway bearing labels: a label that did not fit inside the frame, or touched another label, a runway or a navaid, now runs along the runway beside its threshold (115 labels on 85 charts, and runways 34 and 35 at Beirut).
 - Navaid labels that crossed a runway now sit to the left of, below or above their symbol (13 labels on 13 charts).
 - Latitude and longitude labels on the frame: a label that crossed the frame now slides inside it; a label that touched an inset, the north arrow, a bearing or a navaid label is left out, and its tick stays.
+- Parking stands: new files in `downloads/parkings/`, one per DCS theatre, give every parking stand with the identifiers a mission file uses (`airdromeId`, `parking`, `parking_id`), its position and the aircraft it takes (helicopters, airplanes, length, width, height), from the DCS mission editor through pydcs; `aircraft.json` gives the size of every aircraft type. New tool `render/export_parkings.py` writes them.
 - **Downloads**: the four zips attached to the release again; the Cold War Germany helicopters zip is unchanged.
 
 ## AC-V1.5.0 — 31 October 2026
