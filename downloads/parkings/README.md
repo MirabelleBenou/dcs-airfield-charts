@@ -1,6 +1,6 @@
 # Parking stands of the DCS theatres
 
-One file per DCS theatre, named after the `theatre` value a mission file carries (`Caucasus.json`, `GermanyCW.json`, `Syria.json`…), gives every parking stand of every airfield, heliport and FARP that DCS lists, with what a mission file needs to place an aircraft on it cold:
+One file per DCS theatre, named after the `theatre` value a mission file carries (`Caucasus.json`, `GermanyCW.json`, `Syria.json`…), gives every parking stand of every airfield and heliport of the theatre (FARPs placed in a mission are not included), with what a mission file needs to place an aircraft on it cold:
 
 - `airdromeId` — the airfield, as written on the first waypoint of a group that starts from a parking stand (`TakeOffParking`);
 - `parking` — the stand's index, written as `parking` on the unit; unique within an airfield;
@@ -13,6 +13,6 @@ One file per DCS theatre, named after the `theatre` value a mission file carries
 
 **Which aircraft fits which stand.** pydcs puts a helicopter only on a stand marked `heli`, an airplane only on a stand marked `plane`, and only when the aircraft is smaller than the stand in length, width and height. Whether DCS also accepts a helicopter on a stand marked for airplanes only is not settled here: the files give the editor's marks as they are.
 
-Not given: hardened shelters, and the heading of an aircraft on its stand. The airfield names are pydcs's (the helipads of Syria, all named "H" in DCS, are `Helipad_<id>`): match airfields by `airdromeId`.
+Not given: hardened shelters, and the heading of an aircraft on its stand. The airfield names are pydcs's (Syria's helipads are `HC01`, `HI01`, `HS02`…): match airfields by `airdromeId`.
 
 **Source**: [pydcs](https://github.com/pydcs/dcs) (LGPL-3.0), which reads them from the DCS mission editor; the commit is given in each file (`source`). Regenerate with `python -I render/export_parkings.py --out downloads/parkings` after a pydcs update. These data follow DCS, not the real world.

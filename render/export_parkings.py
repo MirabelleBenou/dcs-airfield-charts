@@ -50,6 +50,26 @@ def source_text(requirements=None):
     return f'pydcs {pinned_commit(requirements)[:7]} (LGPL-3.0): parking stands of the DCS mission editor'
 
 
+def installed_commit():
+    """Commit de pydcs installe (direct_url.json), ou None."""
+    from importlib import metadata
+    try:
+        txt = metadata.distribution('pydcs').read_text('direct_url.json')
+    except metadata.PackageNotFoundError:
+        return None
+    if not txt:
+        return None
+    return (json.loads(txt).get('vcs_info') or {}).get('commit_id')
+
+
+def check_installed(requirements=None, installed=None):
+    """Arret si le pydcs installe n'est pas au commit de requirements.txt."""
+    want = pinned_commit(requirements)
+    have = installed_commit() if installed is None else installed
+    if not have or have.lower() != want.lower():
+        raise ExportError(f'pydcs installe : {have or "commit inconnu"} ; requirements.txt : {want}')
+
+
 def load_terrain(module):
     import dcs.terrain.terrain as T
     mod = importlib.import_module(f'dcs.terrain.{module}')
@@ -131,6 +151,9 @@ def aircraft_data(requirements=None):
     types = {}
     for table in (plane_map, helicopter_map):
         for cls in table.values():
+            for f in ('length', 'width', 'height'):
+                if getattr(cls, f, None) is None:
+                    raise ExportError(f'type {cls.id} : {f} absent')
             types[cls.id] = {
                 'heli': bool(cls.helicopter),
                 'length': _r(cls.length, 3),
@@ -150,25 +173,32 @@ def aircraft_text(data):
     return '\n'.join(out) + '\n'
 
 
-def export(out_dir, requirements=None, log=print):
-    """Ecrit les douze fichiers dans `out_dir` ; retourne {nom de fichier: texte}."""
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    written = {}
+def build_all(requirements=None):
+    """Calcule les douze textes sans rien ecrire ; retourne ([(nom, texte, ligne de log)])."""
+    check_installed(requirements)
+    files = []
     for module, key in THEATRES:
         data = theatre_data(key, load_terrain(module), requirements)
         text = theatre_text(data)
-        raw = text.encode('utf-8')
-        (out / f'{key}.json').write_bytes(raw)
-        written[f'{key}.json'] = text
         n_places = sum(len(a['parkings']) for a in data['airdromes'])
-        log(f'{key}: {len(data["airdromes"])} airdromes, {n_places} places, {len(raw)} octets')
+        files.append((f'{key}.json', text, f'{key}: {len(data["airdromes"])} airdromes, {n_places} stands, '
+                                           f'{len(text.encode("utf-8"))} bytes'))
     adata = aircraft_data(requirements)
     atext = aircraft_text(adata)
-    (out / 'aircraft.json').write_bytes(atext.encode('utf-8'))
-    written['aircraft.json'] = atext
-    log(f'aircraft.json: {len(adata["aircraft"])} types, {len(atext.encode("utf-8"))} octets')
-    return written
+    files.append(('aircraft.json', atext, f'aircraft.json: {len(adata["aircraft"])} types, '
+                                          f'{len(atext.encode("utf-8"))} bytes'))
+    return files
+
+
+def export(out_dir, requirements=None, log=print):
+    """Ecrit les douze fichiers dans `out_dir` (rien si un arret) ; retourne {nom de fichier: texte}."""
+    files = build_all(requirements)
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    for name, text, line in files:
+        (out / name).write_bytes(text.encode('utf-8'))
+        log(line)
+    return {n: t for n, t, _ in files}
 
 
 def main(argv=None):
