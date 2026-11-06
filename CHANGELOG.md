@@ -7,12 +7,13 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Coming next
 
-- Cold War Germany: ICAO codes and taxiway names from OpenStreetMap; the 25 grass strips.
+- Cold War Germany: the 25 grass strips.
 
-## Unreleased
+## AC-V1.5.1 — 6 November 2026
 
-**Scale bars, and the three helicopter bases drawn on the F10 map.**
+**ICAO codes and taxiway names in Cold War Germany, scale bars, label corrections, and the parking stands of every DCS theatre.**
 
+- Cold War Germany: 62 airfields now carry their ICAO code, in the chart header and in the file names (`EDDF_Frankfurt_10-9.png`), and 39 airfields their taxiway names from OpenStreetMap (364 names; data © OpenStreetMap contributors, ODbL). The other 32 airfields are unchanged.
 - Scale bars: the end of every scale bar now carries its length in metres. On 64 charts the bar ended between two labelled marks (750, 1,250 or 1,750 m) and had no "M" at all.
 - At Tanf, Kharab Ishk and Naqoura: the PNG pages are 256-colour images, 0.9 to 1.4 MB instead of 1.9 to 3.7 MB, with no visible change; in the PDF, viewers smooth the map image when zooming; the SVG shows its map image in older Inkscape versions too.
 - New tool `render/republish.py` applies every correction to the charts of a release zip, without the F10 captures.
