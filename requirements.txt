@@ -1,7 +1,7 @@
 # Python 3.12+
 # capture (Windows)
 numpy>=1.26
-pillow>=10.0
+pillow>=10.1
 mss>=9.0
 # rendering (render/)
 opencv-python-headless>=4.8
