@@ -17,6 +17,8 @@ What changed in the published charts, version by version. Each version is a GitH
 - North arrows: the thin arrow now shows the game's north (the map grid, straight up the page) and the solid arrow magnetic north. The variation value does not change.
 - Runway bearing, navaid and grid labels are placed again around the new headings, by the same rules.
 - `render/republish.py` applies the new headings and north arrows to the charts of a release zip, without the F10 captures.
+- Heliport directory, Syria: on seven boxes (HS03, HS07, HS12, HS13, HS17, HT02, H_med_orig_09), the nearest-town line ran into or close to the pad dimensions; it is now set smaller, just enough to leave a gap before them. The other boxes and the index pages do not change.
+- `render/republish.py` also corrects the heliport directory of a *helicopters* zip, on its JPEG pages and in its PDF, without the F10 captures.
 
 ## AC-V1.5.1 — 6 November 2026
 
