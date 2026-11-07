@@ -9,7 +9,7 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - Cold War Germany: the 25 grass strips.
 
-## Unreleased
+## AC-V1.6.0 — 7 November 2026
 
 **Magnetic headings now match the cockpit compass.**
 
