@@ -60,6 +60,8 @@ FONT_FILES = {'regular': 'BarlowCondensed-Regular.ttf', 'medium': 'BarlowCondens
 
 
 def font(weight, size):
+    if float(size).is_integer():
+        size = int(size)                   # 36 et 36.0 : une seule police (la taille entiere reste celle d'avant)
     key = (weight, size)
     if key not in _fonts:
         _fonts[key] = ImageFont.truetype(str(FONT_DIR / FONT_FILES[weight]), size)
@@ -437,6 +439,44 @@ def aires_count_text(n):
     return f'{n} AIRE' if n == 1 else f'{n} AIRES'
 
 
+# ---- deuxieme ligne sous le plan : ville (a gauche) et dimensions des aires (a droite)
+LINE_SIZE = 36                              # taille des dimensions et taille maximale de la ville (px)
+TOWN_STEP = 0.5                             # la ville se reduit par pas de 0,5 px
+TOWN_GAP_PX = 24                            # blanc minimal entre la fin de la ville et le debut des dimensions
+LINE2_DY = 108                              # ligne de base de la deuxieme ligne : bas du premier plan + 108
+
+
+def dims_line(aires):
+    """Texte des dimensions : « AIRES 42×34 M »."""
+    return f'AIRES {dims_text(aires)} M'
+
+
+def town_size(town, dims, w):
+    """Taille (px) de la ville dans une vignette de largeur `w` : la plus grande, par pas de TOWN_STEP a partir de LINE_SIZE,
+    telle que la fin de la ville laisse au moins TOWN_GAP_PX avant le debut des dimensions (`regular` LINE_SIZE, alignees a
+    droite a `w - PLAN_DX`) ; la ville est ecrite a partir de PLAN_DX. Une ville qui tient a LINE_SIZE reste a LINE_SIZE.
+    Fonction unique du moteur (`draw_tile`) et de `render/republish.py`."""
+    dims_start = w - PLAN_DX - font('regular', LINE_SIZE).getlength(dims)
+    size = float(LINE_SIZE)
+    while PLAN_DX + font('regular', size).getlength(town) > dims_start - TOWN_GAP_PX:
+        size -= TOWN_STEP
+        if size < TOWN_STEP:
+            raise DirectoryError(f'ville « {town} » : ne tient pas avant « {dims} » dans {w} px')
+    return int(size) if size.is_integer() else size
+
+
+def tile_base2(form, y):
+    """Ligne de base de la deuxieme ligne de la vignette dont le coin haut est a `y` : y + PLAN_DY + hauteur du premier plan + 108."""
+    return y + PLAN_DY + plan_px_size(form, 0)[1] + LINE2_DY
+
+
+def draw_line2(d, x, w, base2, town, dims, size):
+    """La deuxieme ligne : la ville en `regular` a `size` a gauche (x + PLAN_DX), les dimensions en `regular` LINE_SIZE
+    alignees a droite (x + w - PLAN_DX)."""
+    draw_text(d, (x + PLAN_DX, base2), town, 'regular', size, INK, 'ls')
+    draw_text(d, (x + w - PLAN_DX, base2), dims, 'regular', LINE_SIZE, INK, 'rs')
+
+
 def draw_tile(page, d, site, pos, img, g, stats):
     x, y, w, h = tile_box(site.form, pos)
     d.rectangle([x, y, x + w - 1, y + h - 1], outline=INK, width=3)
@@ -460,11 +500,11 @@ def draw_tile(page, d, site, pos, img, g, stats):
             draw_text(pd, (2 + 15, 2 + 41), lab, 'bold', 40, INK, 'ls')
         page.paste(pim, (ox, py0))
         plan_bottom = py0 + h_px
-    base1, base2 = plan_bottom + 58, plan_bottom + 108
+    base1, base2 = plan_bottom + 58, tile_base2(site.form, y)
     draw_text(d, (x + PLAN_DX, base1), f"{geo.dm(site.lat, 'N', 'S', 2)}  {geo.dm(site.lon, 'E', 'W', 3)}", 'bold', 39, INK, 'ls')
     draw_text(d, (x + w - PLAN_DX, base1), f'ÉLÉV {geo.thin(site.elev_ft)} FT', 'bold', 39, INK, 'rs')
-    draw_text(d, (x + PLAN_DX, base2), site.town, 'regular', 36, INK, 'ls')
-    draw_text(d, (x + w - PLAN_DX, base2), f'AIRES {dims_text(site.aires)} M', 'regular', 36, INK, 'rs')
+    dims = dims_line(site.aires)
+    draw_line2(d, x, w, base2, site.town, dims, town_size(site.town, dims, w))
     if site.form == TWO:
         g1, g2 = site.groups
         e1, e2 = group_extent(site.aires, g1), group_extent(site.aires, g2)
