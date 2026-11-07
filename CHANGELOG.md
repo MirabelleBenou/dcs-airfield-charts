@@ -9,6 +9,15 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - Cold War Germany: the 25 grass strips.
 
+## Unreleased
+
+**Magnetic headings now match the cockpit compass.**
+
+- Runway headings, on the map and in the runway table, are now the DCS grid heading minus the magnetic variation of the chart year: what the magnetic compass reads in the game, where the map grid north is true north. The previous charts added the grid convergence and were off by 5° to 11° in Cold War Germany and by up to 4° in Syria.
+- North arrows: the thin arrow now shows the game's north (the map grid, straight up the page) and the solid arrow magnetic north. The variation value does not change.
+- Runway bearing, navaid and grid labels are placed again around the new headings, by the same rules.
+- `render/republish.py` applies the new headings and north arrows to the charts of a release zip, without the F10 captures.
+
 ## AC-V1.5.1 — 6 November 2026
 
 **ICAO codes and taxiway names in Cold War Germany, scale bars, label corrections, and the parking stands of every DCS theatre.**

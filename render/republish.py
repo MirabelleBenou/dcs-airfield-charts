@@ -5,6 +5,8 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
   0. caps magnetiques et fleches du nord de la page `10-9` (lot caps-cockpit), AVANT toutes les autres : le nord du jeu est la
      grille ; la fleche fine passe a 0, la pleine a la declinaison d = p - t relue sur les deux fleches (t, p : leurs rotations),
      et chaque texte de cap, sur le plan et dans le tableau, devient (ancien + t) % 360 ; une page deja convertie (t = 0) ne change pas ;
+     un cap dont le texte change est replace par la regle du 2.1 d'apres son nouveau texte (la place le long de la piste calculee pour
+     l'ancien texte n'est plus une position de la regle) ; un cap dont le texte ne change pas garde sa place si elle est libre ;
   1. la ligne d'en-tete (textes a y = 21.2) : a cinq champs, elle est verifiee egale a `page.header_row` et laissee telle
      quelle ; a trois champs (AC-V1.4.1), elle est reecrite comme `update_coords.py` ;
   2. la fin de la barre d'echelle : la page `10-9` a exactement une barre (ligne horizontale de 0,35 mm) ; si aucune etiquette
@@ -437,8 +439,9 @@ def _cap_end_parallel(c, runways):
                 continue
             for cx, cy, rot in page.cap_candidates(end):
                 if abs(cx - c['X']) <= CAP_CHECK_MM and abs(cy - c['Y']) <= CAP_CHECK_MM and abs(rot - c['rot']) <= CAP_CHECK_MM:
-                    end.current = (c['X'], c['Y'], c['rot'])
-                    end.label = c['label']                                      # le placement refait voit le nouveau texte
+                    if c['label'] == end.label:                                 # texte inchange : la place publiee est reverifiee
+                        end.current = (c['X'], c['Y'], c['rot'])
+                    end.label = c['label']                                      # texte change : place d'origine ou le long de la piste, selon la regle
                     return end
     return None
 
@@ -516,6 +519,7 @@ def retouch_labels(svg_text, name, old_labels=None):
         ends, placed = [], []
     cap_polys = []
     for c, (cx, cy, rot, poly, moved) in zip(caps, placed):
+        moved = moved or (abs(cx - c['X']) > CAP_CHECK_MM or abs(cy - c['Y']) > CAP_CHECK_MM or abs(rot - c['rot']) > CAP_CHECK_MM)
         if moved:
             edits.append((c['span'][0], c['span'][1], page.cap_element(c['label'], cx, cy, rot)))
             moves.append(('Runway bearings', c['label'], f'{c["X"]},{c["Y"]},{c["rot"]}', f'{f(cx)},{f(cy)},{f(rot, 2)}'))

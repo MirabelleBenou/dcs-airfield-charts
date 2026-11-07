@@ -187,10 +187,10 @@ def test_mag_heading_keeps_the_convergence_for_matching():
 
 
 # ---------- le placement refait voit les nouveaux textes ----------
-def test_a_cap_already_placed_along_the_runway_is_found_with_its_old_text_and_placed_with_the_new_one():
+@pytest.mark.parametrize('top', [60.0, 40.0])      # 40 : la place d'origine du cap du haut sort du cadre, il reste le long de la piste
+def test_a_cap_already_placed_along_the_runway_is_found_with_its_old_text_and_placed_with_the_new_one(top):
     """Un cap pose le long de la piste l'a ete pour la largeur de son ancien texte (les chiffres n'ont pas tous la meme largeur) :
     `retouch_labels` le retrouve avec l'ancien texte (`old_labels`), puis le place avec le nouveau."""
-    top = 60.0
     e_old = end('111.1°', (60.0, top), 180.0)
     cx, cy, rot = next(iter(page.cap_candidates(e_old)))
     doc = svgdoc.Doc()
@@ -217,4 +217,15 @@ def test_a_cap_already_placed_along_the_runway_is_found_with_its_old_text_and_pl
     with pytest.raises(RepublishError, match='aucune piste'):
         republish.retouch_labels(new, 'T_10-9')                 # sans l'ancien texte, la place publiee n'est pas une position du 2.1
     out, moves, _ = republish.retouch_labels(new, 'T_10-9', old)
-    assert 'rotate(' in out and layer_texts(out, 'Runway bearings') == ['107.1°', '287.1°']
+    assert layer_texts(out, 'Runway bearings') == ['107.1°', '287.1°']
+    # le texte a change : le cap est replace par la regle du 2.1 avec le nouveau texte, comme le moteur
+    ends = [end('107.1°', (60.0, top), 180.0), end('287.1°', (60.0, 120.0), 0.0)]
+    want = page.place_caps(ends, S, FRAME, [page.elem_geom(f'<polygon points="60.7,{top} 60.7,120 59.3,120 59.3,{top}" fill="#1A1A1A"/>')], [], [])
+    for lab, w in zip(('107.1°', '287.1°'), want):
+        assert page.cap_element(lab, *w[:3]) in out
+    assert any(m[0] == 'Runway bearings' and m[1] == '107.1°' for m in moves)
+    # une page convertie reste telle quelle : le texte ne change plus, la place est une position du 2.1 pour ce texte
+    again, det = republish.retouch_north_and_caps(out, 'T_10-9')
+    assert again == out
+    out2, moves2, _ = republish.retouch_labels(again, 'T_10-9', [o for lay, o, _ in det['caps'] if lay == 'Runway bearings'])
+    assert out2 == out and moves2 == []
