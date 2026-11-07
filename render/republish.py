@@ -17,9 +17,13 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
      geometrie relue dans le SVG ; pour chaque cap, la place d'origine recalculee depuis le seuil, l'axe et l'echelle du plan
      doit etre la place publiee a 0,01 mm pres (sinon arret) ;
   4. `xlink:href` sur une `<image>` qui ne l'a pas (page dessinee sur le fond F10).
+  5. le repertoire des heliports d'un zip *helicopters* (entrees `<dossier>heliports/<Theatre>_heliports_directory_p<NN>.jpg` et
+     `<dossier><Theatre>_heliports_directory.pdf`), sans les captures : voir `retouch_directory` ; une vignette dont la ligne de la
+     ville, a 36 px, touche les dimensions ou en est a moins de 24 px est reecrite plus petit sur sa page JPEG et dans le PDF.
 Chaque page est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
 recueil `pdf/<stem>_charts.pdf` de chaque chart est refait. Sortie : un nouveau zip, memes entrees dans le meme ordre ; les
-entrees hors charts sont recopiees a l'octet (un zip sans page de chart est recopie tel quel). Un fichier de sortie qui existe
+entrees hors charts sont recopiees a l'octet, sauf, pour 5, les JPEG des pages touchees et le PDF du repertoire (un zip sans page de
+chart ni repertoire des heliports aux noms ci-dessus est recopie tel quel). Un fichier de sortie qui existe
 deja : arret. Au moindre doute, rien n'est ecrit.
 """
 import argparse
@@ -34,11 +38,14 @@ import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))      # python -I n'ajoute pas le dossier du script
 
-from pypdf import PdfReader                                           # noqa: E402
+from PIL import Image, ImageDraw, JpegImagePlugin                     # noqa: E402
+from pypdf import PdfReader, PdfWriter                                # noqa: E402
 
-from render import dcsdata, export, page, update_coords               # noqa: E402
+from render import dcsdata, directory, export, fiches, geo, page, update_coords   # noqa: E402
 from render.svgdoc import INK, INK2, f                                # noqa: E402
 from render.update_coords import ROW_Y, UpdateError, _PAGE_NAME, _PAGE_SVG, _TEXT, _Y   # noqa: E402
 
@@ -619,6 +626,214 @@ def add_xlink_href(svg_text, name):
     return _IMAGE.sub(fix, svg_text), n
 
 
+# ---------- 5. repertoire des heliports (lot ac-repertoire-ville) ----------
+_DIR_JPG = re.compile(r'^(?P<dir>(?:.*/)?)heliports/(?P<theatre>[^/]+)_heliports_directory_p(?P<no>\d+)\.jpg$')
+_DIR_PDF = re.compile(r'^(?P<dir>(?:.*/)?)(?P<theatre>[^/]+)_heliports_directory\.pdf$')
+DIR_PAIR_MAX = 6.0                 # ecart absolu moyen (RGB, 0-255) : au plus 6 = la bande est cette ligne
+
+
+def band_box(x, w, base2):
+    """Bande de controle de la deuxieme ligne d'une vignette (x, w) : (x0, y0, x1, y1), bornes incluses."""
+    return x + directory.PLAN_DX - 4, base2 - 34, x + w - directory.PLAN_DX + 4, base2 + 10
+
+
+def line_band(x, w, base2, town, dims, size):
+    """La bande redessinee sur fond blanc (ville a `size`, dimensions a 36 px, par `directory.draw_line2`) : tableau RGB."""
+    x0, y0, x1, y1 = band_box(x, w, base2)
+    top = 34                                                # la bande commence 34 px au-dessus de la ligne de base
+    canvas = Image.new('RGB', (x + w, top + 11), (255, 255, 255))
+    directory.draw_line2(ImageDraw.Draw(canvas), x, w, top, town, dims, size)
+    return np.asarray(canvas, dtype=np.int16)[:, x0:x1 + 1]
+
+
+def band_gap(arr, x, w, base2, town, dims, size):
+    """Ecart absolu moyen (RGB, 0-255) entre la bande publiee de `arr` (page, hauteur x largeur x 3) et la ligne redessinee."""
+    x0, y0, x1, y1 = band_box(x, w, base2)
+    cur = arr[y0:y1 + 1, x0:x1 + 1].astype(np.int16)
+    return float(np.abs(cur - line_band(x, w, base2, town, dims, size)).mean())
+
+
+def directory_tiles(theatre):
+    """[(numero de page, site, x, w, base2, ville, dimensions, taille)] des vignettes du repertoire, rejouees depuis pydcs seul
+    (`fiches.replay_directory`) ; la ville comme `build_directory.py` : `nearest_town` au point de l'aerodrome pydcs projete en
+    latitude / longitude. Retourne aussi le nombre de pages d'index."""
+    sites, pages, n_index = fiches.replay_directory(theatre)
+    proj = geo.Projection.for_theatre(theatre)
+    towns = directory.load_towns(theatre)
+    out = []
+    for k, pg in enumerate(pages):
+        for site, pos in pg['entries']:
+            x, y, w, _ = directory.tile_box(site.form, pos)
+            lat, lon = proj.to_latlon(site.x, site.z)
+            town = directory.nearest_town(lat, lon, towns)
+            dims = directory.dims_line(site.aires)
+            out.append((n_index + k + 1, site.name, x, w, directory.tile_base2(site.form, y), town, dims,
+                        directory.town_size(town, dims, w)))
+    return out, n_index
+
+
+@dataclass
+class DirectoryResult:
+    tiles: int = 0                                            # vignettes du repertoire
+    controlled: int = 0                                       # celles dont la taille de la ville est sous 36 px
+    retouched: int = 0
+    already: int = 0
+    pages: list = field(default_factory=list)                 # numeros des pages touchees
+    rows: list = field(default_factory=list)                  # [(page, site, ville, taille, ecart a 36 px, ecart a la taille, decision)]
+
+
+def _directory_entries(infos, theatre):
+    """({numero: info} des JPEG, info du PDF) du repertoire, ou (None, None) si le zip n'a aucune de ces entrees ; RepublishError
+    si le zip en a une partie seulement ou si leur theatre n'est pas `theatre`."""
+    key = theatre.replace(' ', '').lower()
+    jpgs, pdfs, folders = {}, [], set()
+    for info in infos:
+        m = _DIR_JPG.match(info.filename)
+        if m:
+            if m['theatre'].lower() != key:
+                raise RepublishError(f"{info.filename} : repertoire d'un autre theatre que {theatre}")
+            n = int(m['no'])
+            if n in jpgs:
+                raise RepublishError(f'{info.filename} : page {n} en double')
+            jpgs[n] = info
+            folders.add(m['dir'])
+            continue
+        m = _DIR_PDF.match(info.filename)
+        if m and m['theatre'].lower() == key:
+            pdfs.append(info)
+            folders.add(m['dir'])
+    if not jpgs and not pdfs:
+        return None, None
+    if not jpgs or len(pdfs) != 1:
+        raise RepublishError(f'repertoire des heliports incomplet : {len(jpgs)} JPEG et {len(pdfs)} PDF')
+    if len(folders) != 1:
+        raise RepublishError(f'repertoire des heliports reparti sur plusieurs dossiers : {sorted(folders)}')
+    return jpgs, pdfs[0]
+
+
+def encode_like(im, original):
+    """Octets JPEG de `im` avec les tables de quantification, le sous-echantillonnage (et la densite) de `original` (image Pillow JPEG)."""
+    buf = io.BytesIO()
+    kw = {}
+    if original.info.get('dpi'):
+        kw['dpi'] = original.info['dpi']
+    im.save(buf, 'JPEG', qtables=original.quantization, subsampling=JpegImagePlugin.get_sampling(original), **kw)
+    return buf.getvalue()
+
+
+def _page_image(pdf_page, name):
+    """(nom, objet) de l'unique image d'une page du PDF ; RepublishError s'il n'y en a pas exactement une."""
+    xo = pdf_page.get('/Resources', {}).get('/XObject', {})
+    imgs = [(k, v.get_object()) for k, v in xo.items() if v.get_object().get('/Subtype') == '/Image']
+    if len(imgs) != 1:
+        raise RepublishError(f'{name} : {len(imgs)} images (attendu : une)')
+    return imgs[0]
+
+
+def check_directory_pdf(pdf_bytes, n_jpegs, name):
+    """Le PDF du repertoire (`PdfReader`) : `n_jpegs` pages, chacune avec exactement une image ; RepublishError sinon."""
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    if len(reader.pages) != n_jpegs:
+        raise RepublishError(f'{name} : {len(reader.pages)} pages, mais {n_jpegs} JPEG')
+    for k, pg in enumerate(reader.pages, 1):
+        _page_image(pg, f'{name} page {k}')
+    return reader
+
+
+def rewrite_directory_pdf(pdf_bytes, new_jpegs, n_jpegs, name, out_path):
+    """Ecrit dans `out_path` le PDF du repertoire dont la page `k` (1 a n) porte l'image du JPEG `p<k>` : les pages de `new_jpegs`
+    ({k: octets}) recoivent ces octets (DCTDecode, memes dimensions, meme MediaBox), les autres gardent leur image a l'octet.
+    RepublishError si le PDF n'a pas `n_jpegs` pages ou si une page n'a pas exactement une image."""
+    reader = check_directory_pdf(pdf_bytes, n_jpegs, name)
+    writer = PdfWriter(clone_from=reader)
+    for k, data in new_jpegs.items():
+        pg = writer.pages[k - 1]
+        _, img = _page_image(pg, f'{name} page {k}')
+        w, h = Image.open(io.BytesIO(data)).size
+        if img.get('/Filter') != '/DCTDecode' or (img.get('/Width'), img.get('/Height')) != (w, h):
+            raise RepublishError(f'{name} page {k} : image {img.get("/Filter")} {img.get("/Width")} x {img.get("/Height")}, '
+                                 f'attendu DCTDecode {w} x {h}')
+        img._data = data
+    with open(out_path, 'xb') as fh:
+        writer.write(fh)
+    check = PdfReader(str(out_path))
+    if len(check.pages) != n_jpegs:
+        raise RepublishError(f'{name} : {len(check.pages)} pages ecrites au lieu de {n_jpegs}')
+    for k, (a, b) in enumerate(zip(reader.pages, check.pages), 1):
+        if list(a.mediabox) != list(b.mediabox):
+            raise RepublishError(f'{name} page {k} : MediaBox changee')
+        want = new_jpegs[k] if k in new_jpegs else _page_image(a, name)[1]._data
+        if _page_image(b, name)[1]._data != want:
+            raise RepublishError(f'{name} page {k} : image ecrite differente de celle attendue')
+
+
+def retouch_directory(theatre, zin, infos, tmp):
+    """Repertoire des heliports d'un zip : (`DirectoryResult`, {entree: fichier ecrit sous `tmp`}). Les pages JPEG et le PDF du
+    repertoire ne sont lus que si une vignette a une ville sous 36 px ; sinon, ou sans ces entrees, aucune entree n'est reecrite.
+
+    Pour chaque vignette dont la taille de la ville (`directory.town_size`) est sous 36 px : la bande de la deuxieme ligne est
+    comparee a la ligne redessinee a 36 px (ecart <= 6 : a retoucher), sinon a la taille retenue (<= 6 : deja retouchee), sinon
+    RepublishError. Retouche : bande en blanc, puis `directory.draw_line2`. Le JPEG se reencode avec les tables et le
+    sous-echantillonnage de l'original ; le PDF recoit les octets du nouveau JPEG."""
+    res = DirectoryResult()
+    jpgs, pdf = _directory_entries(infos, theatre)
+    if jpgs is None:
+        return res, {}
+    tiles, n_index = directory_tiles(theatre)
+    n_plans = max(t[0] for t in tiles)
+    if sorted(jpgs) != list(range(1, len(jpgs) + 1)) or len(jpgs) != n_plans:
+        raise RepublishError(f'repertoire : {len(jpgs)} JPEG (pages {min(jpgs)} a {max(jpgs)}), {n_plans} pages rejouees '
+                             f"({n_index} d'index + {n_plans - n_index} de plans)")
+    res.tiles = len(tiles)
+    by_page = {}
+    for t in tiles:
+        if t[7] < directory.LINE_SIZE:
+            by_page.setdefault(t[0], []).append(t)
+    new, new_jpegs = {}, {}
+    for no in sorted(by_page):
+        info = jpgs[no]
+        original = Image.open(io.BytesIO(zin.read(info)))
+        if original.format != 'JPEG' or original.size != directory.PAGE_PX:
+            raise RepublishError(f'{info.filename} : {original.format} {original.size}, attendu JPEG {directory.PAGE_PX}')
+        im = original.convert('RGB')
+        arr = np.asarray(im)
+        work, d = im.copy(), None
+        for _, site, x, w, base2, town, dims, size in by_page[no]:
+            res.controlled += 1
+            g36 = band_gap(arr, x, w, base2, town, dims, directory.LINE_SIZE)
+            gs = band_gap(arr, x, w, base2, town, dims, size)
+            if g36 <= DIR_PAIR_MAX:
+                decision = 'retouchee'
+                x0, y0, x1, y1 = band_box(x, w, base2)
+                if d is None:
+                    d = ImageDraw.Draw(work)
+                d.rectangle([x0, y0, x1, y1], fill=(255, 255, 255))
+                directory.draw_line2(d, x, w, base2, town, dims, size)
+                res.retouched += 1
+            elif gs <= DIR_PAIR_MAX:
+                decision = 'deja retouchee'
+                res.already += 1
+            else:
+                raise RepublishError(f'repertoire page {no}, {site} : la bande ne correspond ni a la ligne a 36 px '
+                                     f'(ecart {g36:.2f}) ni a celle a {size} px (ecart {gs:.2f}), seuil {DIR_PAIR_MAX}')
+            res.rows.append((no, site, town, size, g36, gs, decision))
+        if d is not None:
+            new_jpegs[no] = encode_like(work, original)
+            res.pages.append(no)
+    pdf_bytes = zin.read(pdf)
+    check_directory_pdf(pdf_bytes, len(jpgs), pdf.filename)          # arret meme si aucune page n'est touchee
+    if not new_jpegs:
+        return res, {}
+    for no, data in new_jpegs.items():
+        p = Path(tmp) / f'dir_p{no:02d}.jpg'
+        p.write_bytes(data)
+        new[jpgs[no].filename] = p
+    pdf_p = Path(tmp) / 'dir.pdf'
+    rewrite_directory_pdf(pdf_bytes, new_jpegs, len(jpgs), pdf.filename, pdf_p)
+    new[pdf.filename] = pdf_p
+    return res, new
+
+
 # ---------- une page ----------
 def retouch_page(svg_text, name, suffix, index):
     """(nouveau SVG, details) : toutes les retouches ; details = {fields, header, bar, image, xlink, moves, unplaced, north}."""
@@ -653,6 +868,7 @@ class Result:
     moves: list = field(default_factory=list)         # [(page, calque, texte, avant, apres)] : etiquettes deplacees ou retirees
     unplaced: list = field(default_factory=list)      # [(page, libelle de balise)] : aucune position libre, reste a droite
     north: dict = field(default_factory=dict)         # {page: details de retouch_north_and_caps} : pages 10-9
+    directory: DirectoryResult = field(default_factory=lambda: DirectoryResult())   # repertoire des heliports (zip *helicopters*)
 
 
 def republish_zip(theatre, zip_in, zip_out):
@@ -717,6 +933,8 @@ def republish_zip(theatre, zip_in, zip_out):
                 raise RepublishError(f'{stem} : recueil de {after} pages, l\'ancien en avait {before}')
             new[entry] = out
         res.charts = len(charts)
+        res.directory, dir_new = retouch_directory(theatre, zin, infos, tmp)
+        new.update(dir_new)
         try:
             with zipfile.ZipFile(zip_out, 'x') as zout:
                 for info in infos:
@@ -783,6 +1001,14 @@ def main(argv):
     print(f"graduations glissees : {len(slid)} ; retirees : {len(grads) - len(slid)} (sur {len({m[0] for m in grads})} pages)")
     print(f"pages a fond F10 : {len(res.f10)}" + ''.join(f'\n  {n}' for n in res.f10))
     print(f'recueils refaits : {res.charts}')
+    dr = res.directory
+    if dr.tiles:
+        print(f"repertoire des heliports : {dr.tiles} vignettes ; controlees (ville sous 36 px) : {dr.controlled} ; retouchees : {dr.retouched} ; "
+              f"deja retouchees : {dr.already} ; pages touchees : {len(dr.pages)}" + ''.join(f' p{n:02d}' for n in dr.pages))
+        for no, site, town, size, g36, gs, decision in dr.rows:
+            print(f'  p{no:02d} {site} : {town} -> {size} px ({decision} ; ecart a 36 px {g36:.2f}, a {size} px {gs:.2f})')
+    else:
+        print('repertoire des heliports : aucun dans ce zip')
     print(f'entrees recopiees telles quelles : {res.copied}')
     if not res.pages:
         print('aucune page de chart dans ce zip : toutes les entrees sont recopiees telles quelles')
