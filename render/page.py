@@ -230,18 +230,25 @@ def edge_ticks(view, frame, proj, data_conv=None):
     return left, right, top, bot
 
 
-def north_block(cx, cy, conv, decl, year):
-    """Bloc nord : nord vrai et nord magnetique (fleches tournees de -convergence et de -convergence + declinaison),
-    `VAR 3°E` et `(1985)`. (cx, cy) : pied des fleches ; hauteur totale ~ 20 mm."""
+def north_arrows(cx, cy, thin_rot, solid_rot):
+    """Les deux fleches du bloc nord, (fine, pleine), tournees de `thin_rot` et `solid_rot` degres (a l'est positif) ;
+    (cx, cy) : pied des fleches. Partagee par `north_block` et `republish.py`."""
     out = []
     L = 12.0
-    for ang, sw, solid in ((-conv, 0.3, False), (-conv + decl, 0.6, True)):
+    for ang, sw, solid in ((thin_rot, 0.3, False), (solid_rot, 0.6, True)):
         g = [f'<g transform="translate({f(cx)} {f(cy)}) rotate({f(ang, 3)})">',
              line(0, 0, 0, -L, INK, sw),
              (f'<polygon points="0,{f(-L - 1.6)} {f(-1.0)},{f(-L + 1.0)} {f(1.0)},{f(-L + 1.0)}" fill="{INK}"/>' if solid else
               f'<polyline points="{f(-0.9)},{f(-L + 0.9)} 0,{f(-L - 0.2)} {f(0.9)},{f(-L + 0.9)}" fill="none" stroke="{INK}" stroke-width="0.3"/>'),
              '</g>']
         out.append(''.join(g))
+    return out
+
+
+def north_block(cx, cy, decl, year):
+    """Bloc nord : le nord du jeu (fleche fine, la grille de la carte, droite sur la page) et le nord magnetique (fleche
+    pleine, tournee de la declinaison), `VAR 3°E` et `(1985)`. (cx, cy) : pied des fleches ; hauteur totale ~ 20 mm."""
+    out = north_arrows(cx, cy, 0.0, decl)
     var, yl = geo.var_text(decl, year)
     out.append(text(cx, cy + 3.4, var, pt(5.9), 'bold', INK, 'middle'))
     out.append(text(cx, cy + 6.0, yl, pt(5.4), 'regular', INK2, 'middle'))

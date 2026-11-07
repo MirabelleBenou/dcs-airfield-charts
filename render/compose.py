@@ -421,7 +421,7 @@ def build_pages(data, log=print):
 
     # ---- cadre, grille, nord, echelle
     nx0 = (rn[0] + rn[2]) / 2
-    north_elems = north_block(nx0, rn[1] + 13.0 if cn[0] == 'B' else rn[1] + 13.0, data.conv, data.decl, data.year)
+    north_elems = north_block(nx0, rn[1] + 13.0 if cn[0] == 'B' else rn[1] + 13.0, data.decl, data.year)
     sb, Lmm = scale_block(rs[0] + 1.0, rs[1] + 5.0, s)
     doc.add('Frame & grid', rect(fx, fy, fw, fh, 'none', INK, 0.35))
     grad_res = graticule(doc, view, frame, data.projection,

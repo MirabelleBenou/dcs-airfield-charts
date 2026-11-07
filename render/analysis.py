@@ -76,7 +76,7 @@ class ChartData:
     tower: dict                # {'vhf': .., 'uhf': .., 'fm': .., 'hf': ..} (MHz, texte 3 decimales)
     beacons: list              # Beacon
     decl: float
-    conv: float
+    conv: float                # convergence de la grille au point de reference (information : n'entre plus dans les caps)
     runways: list              # runways.Runway
     ends: list                 # End, tries
     parkings: list
@@ -289,7 +289,9 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     conv = proj.convergence(facts.x, facts.z)
 
     def mag_heading(ln):
-        """Cap magnetique (modulo 180) d'une droite candidate : azimut grille + convergence - declinaison (cadrage 4.1)."""
+        """Cap magnetique (modulo 180) d'une droite candidate : azimut grille + convergence - declinaison (cadrage 4.1). Pour
+        l'appariement seulement : pydcs nomme ses pistes au monde reel, et avec le cap du cockpit (azimut grille - declinaison)
+        13 extremites de Cold War Germany passeraient au-dela de la tolerance de 13 deg (Dusseldorf : 16,2 deg)."""
         az = math.degrees(math.atan2(ln['d'][1], ln['d'][0]))
         return (az + proj.convergence(*ln['p']) - decl) % 180.0
 
@@ -324,9 +326,7 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
             nm, az = names[i][k]
             pos = r.p0 if k == 0 else r.p1
             clat, clon = proj.to_latlon(*pos)
-            gconv = proj.convergence(*pos)
-            true = az + gconv
-            mag = (true - decl) % 360.0
+            mag = (az - decl) % 360.0            # cap lu au compas du cockpit : le nord de la grille est le nord du jeu (lot caps-cockpit)
             d = np.hypot(pxz[:, 0] - pos[0], pxz[:, 1] - pos[1])
             thr = None
             if d.min() <= THRESHOLD_ELEV_MAX_M:

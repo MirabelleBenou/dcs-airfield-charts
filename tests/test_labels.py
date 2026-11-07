@@ -200,7 +200,7 @@ def synthetic_page(cap_dx=0.0, top_y=40.0):
         doc.add('Frame & grid', ln)
         x = float(re.search(r'x1="([^"]+)"', ln).group(1))
         doc.add('Frame & grid', page.grad_element(lab(x, 166.7, '035-28' if x < 20 else '035-29')))
-    for el in page.north_block(21.0, 156.6, 0.0, 3.0, 1985):
+    for el in page.north_block(21.0, 156.6, 3.0, 1985):
         doc.add('Frame & grid', el)
     sb, _ = page.scale_block(94.0, 158.6, S)
     for el in sb:

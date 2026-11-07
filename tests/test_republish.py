@@ -65,7 +65,7 @@ def test_scale_block_1000_m_and_short_bars_are_unchanged():
 # ---------- la retouche egale a ce que scale_block ecrit ----------
 def doc_svg(*parts):
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
-            'width="148mm" height="210mm" viewBox="0 0 148 210">\n<g>\n' + '\n'.join(parts) + '\n</g>\n</svg>')
+            'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="148mm" height="210mm" viewBox="0 0 148 210">\n<g>\n' + '\n'.join(parts) + '\n</g>\n</svg>')
 
 
 def old_bar_elements(elems, L, y=BAR_Y):
@@ -226,6 +226,18 @@ def five_fields(lat, lon, elev='ÉLÉV. 3392 FT', var='VAR 3°E (1985)'):
 RULE = '<line x1="6" y1="22.8" x2="142" y2="22.8" stroke="#1A1A1A" stroke-width="0.25"/>'
 
 
+def frame_layer(t, p, year=1985, cx=21.0, cy=156.6):
+    """Calque `Frame & grid` d'une page 10-9 minimale : le bloc du nord tel que le moteur l'ecrit pour des fleches a t et p degres
+    (avant le lot caps-cockpit : t = -convergence ; apres : t = 0)."""
+    var, yl = geo.var_text(p - t, year)
+    lines = [*page.north_arrows(cx, cy, t, p), svgdoc.text(cx, cy + 3.4, var, pt(5.9), 'bold', svgdoc.INK, 'middle'),
+             svgdoc.text(cx, cy + 6.0, yl, pt(5.4), 'regular', svgdoc.INK2, 'middle')]
+    return ('<g inkscape:groupmode="layer" id="layer-frame-grid" inkscape:label="Frame &amp; grid">\n' + '\n'.join(lines) + '\n</g>')
+
+
+OLD_NORTH = (7.29, 10.58)               # fleches d'une page publiee avant le lot : t = -convergence, p = t + declinaison (3,29 deg)
+
+
 @pytest.fixture(scope='module')
 def old_zip(tmp_path_factory):
     """Zip synthetique : Konya_10-9 (trois champs, barre de 750 m sans fin), Konya_10-9A (cinq champs, pas de barre),
@@ -236,9 +248,10 @@ def old_zip(tmp_path_factory):
     bar300, _ = page.scale_block(BAR_X, BAR_Y, 38.0 / 300)
     img = f'<image x="10" y="30" width="100" height="120" preserveAspectRatio="none" href="{tiny_png()}"/>'
     pages = {
-        'Konya_10-9': doc_svg('<rect x="1" y="1" width="2" height="2"/>', *three_fields(lat, lon), RULE, *old_bar_elements(bar750, 750)),
+        'Konya_10-9': doc_svg('<rect x="1" y="1" width="2" height="2"/>', *three_fields(lat, lon), RULE, *old_bar_elements(bar750, 750),
+                              frame_layer(*OLD_NORTH)),
         'Konya_10-9A': doc_svg('<circle cx="9" cy="9" r="3"/>', *five_fields(lat, lon), RULE),
-        'KonyaF_10-9': doc_svg(img, *five_fields(lat, lon), RULE, *bar300),
+        'KonyaF_10-9': doc_svg(img, *five_fields(lat, lon), RULE, *bar300, frame_layer(0.0, 3.29)),
     }
     files = {}
     for name, svg in pages.items():
@@ -268,7 +281,7 @@ def test_republish_zip(old_zip, tmp_path, capsys):
     out = tmp_path / 'new.zip'
     assert run(zin, out) == 0
     summary = capsys.readouterr().out
-    assert 'pages reexportees : 3' in summary and 'en-tetes reecrits : 1 ; verifies : 2' in summary
+    assert 'pages reexportees : 3' in summary and 'nord et caps : 2 pages 10-9, dont 1 converties (1 deja a t = 0)' in summary and 'en-tetes reecrits : 1 ; verifies : 2' in summary
     assert 'barres completees : 1' in summary and '  Konya_10-9 : 750 M' in summary
     assert 'pages a fond F10 : 1' in summary and '  KonyaF_10-9' in summary
     assert 'recueils refaits : 2' in summary and 'entrees recopiees telles quelles : 2' in summary
@@ -279,8 +292,8 @@ def test_republish_zip(old_zip, tmp_path, capsys):
             assert a.read(n) == b.read(n)
         # page 10-9 : en-tete reecrit a cinq champs, fin de barre completee
         new = b.read('pack/svg/Konya_10-9.svg').decode()
-        want = doc_svg('<rect x="1" y="1" width="2" height="2"/>', *five_fields(lat, lon), RULE, *block(750)[0])
-        assert new == want
+        want = doc_svg('<rect x="1" y="1" width="2" height="2"/>', *five_fields(lat, lon), RULE, *block(750)[0], frame_layer(0.0, 3.29))
+        assert new == want                                  # fleche fine a 0, pleine a la declinaison relue (d = p - t)
         # page de parkings : en-tete deja a cinq champs, rien ne change
         assert b.read('pack/svg/Konya_10-9A.svg') == a.read('pack/svg/Konya_10-9A.svg')
         # page a fond F10 : xlink:href ajoute, PNG a palette
@@ -351,7 +364,7 @@ def test_republish_stops_on_a_parkings_page_with_a_bar(tmp_path, capsys):
 
 def test_republish_stops_on_a_10_9_page_without_a_bar(tmp_path, capsys):
     lat, lon = konya_latlon()
-    zin = _zip_with(tmp_path, {'Konya_10-9': doc_svg(*five_fields(lat, lon), RULE)})
+    zin = _zip_with(tmp_path, {'Konya_10-9': doc_svg(*five_fields(lat, lon), RULE, frame_layer(0.0, 3.29))})
     assert run(zin, tmp_path / 'o.zip') == 1
     err = capsys.readouterr().err
     assert 'Konya_10-9' in err and '0 barres' in err and not (tmp_path / 'o.zip').exists()

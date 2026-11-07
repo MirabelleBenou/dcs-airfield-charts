@@ -50,8 +50,8 @@ def test_c1_konya_west_runway_length(charts):
 def test_c2_konya_bearings_and_variation_1985(charts):
     data, pages = charts['Konya']
     mags = {e.name: e.mag for e in data.ends}
-    assert mags['01L'] == pytest.approx(13.5, abs=0.2) and mags['01R'] == pytest.approx(13.5, abs=0.2)
-    assert mags['19L'] == pytest.approx(193.5, abs=0.2) and mags['19R'] == pytest.approx(193.5, abs=0.2)
+    assert mags['01L'] == pytest.approx(17.4, abs=0.2) and mags['01R'] == pytest.approx(17.4, abs=0.2)
+    assert mags['19L'] == pytest.approx(197.4, abs=0.2) and mags['19R'] == pytest.approx(197.4, abs=0.2)
     t = texts(pages[0].svg)
     assert 'VAR 3°E (1985)' in t and 'VAR 3°E' in t and '(1985)' in t
 
@@ -60,7 +60,7 @@ def test_c2_konya_2026(work):
     data = analysis.analyze(work, 'Syria', 'Konya', 2026, log=lambda *a: None)
     pages = compose.build_pages(data, log=lambda *a: None)
     mags = {e.name: e.mag for e in data.ends}
-    assert mags['01R'] == pytest.approx(11.0, abs=0.2) and mags['19L'] == pytest.approx(191.0, abs=0.2)
+    assert mags['01R'] == pytest.approx(14.9, abs=0.2) and mags['19L'] == pytest.approx(194.9, abs=0.2)
     assert 'VAR 6°E (2026)' in texts(pages[0].svg)
 
 
@@ -126,7 +126,7 @@ def test_c6_adana(charts):
     assert len(data.runways) == 1 and data.runways[0].length == pytest.approx(2752, abs=20)
     mags = {e.name: e.mag for e in data.ends}
     assert set(mags) == {'05', '23'}
-    assert mags['05'] == pytest.approx(50.1, abs=0.2) and mags['23'] == pytest.approx(230.2, abs=0.2)
+    assert mags['05'] == pytest.approx(52.4, abs=0.2) and mags['23'] == pytest.approx(232.4, abs=0.2)
     assert data.icao == 'LTAF'
     assert len(pages) == 1 and pages[0].info['mode'] == 2
     assert len(data.parkings) == 39 and data.n_shelter == 0
@@ -143,8 +143,8 @@ def test_c7_ramat_david(charts):
     names = sorted(e.name for e in data.ends)
     assert names == ['09', '11', '15', '27', '29', '33']
     mags = {e.name: e.mag for e in data.ends}
-    assert mags['11'] == pytest.approx(105.4, abs=0.3) and mags['15'] == pytest.approx(141.6, abs=0.3)
-    assert mags['09'] == pytest.approx(83.8, abs=0.3)
+    assert mags['11'] == pytest.approx(107.4, abs=0.3) and mags['15'] == pytest.approx(143.7, abs=0.3)
+    assert mags['09'] == pytest.approx(85.9, abs=0.3)
     assert data.icao == 'LLRD'
     assert len(data.parkings) == 86 and abs(data.n_shelter - 33) <= 4
     assert [p.id for p in pages] == ['10-9', '10-9A']                 # 10-9 + 1 page

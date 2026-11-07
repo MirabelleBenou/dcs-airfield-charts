@@ -2,6 +2,9 @@
 
 Usage : python -I render/republish.py <Theatre> --zip <zip de release> --out <nouveau zip>
 Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>.svg` est une page de chart. Retouches :
+  0. caps magnetiques et fleches du nord de la page `10-9` (lot caps-cockpit), AVANT toutes les autres : le nord du jeu est la
+     grille ; la fleche fine passe a 0, la pleine a la declinaison d = p - t relue sur les deux fleches (t, p : leurs rotations),
+     et chaque texte de cap, sur le plan et dans le tableau, devient (ancien + t) % 360 ; une page deja convertie (t = 0) ne change pas ;
   1. la ligne d'en-tete (textes a y = 21.2) : a cinq champs, elle est verifiee egale a `page.header_row` et laissee telle
      quelle ; a trois champs (AC-V1.4.1), elle est reecrite comme `update_coords.py` ;
   2. la fin de la barre d'echelle : la page `10-9` a exactement une barre (ligne horizontale de 0,35 mm) ; si aucune etiquette
@@ -149,6 +152,105 @@ def complete_scale_bar(svg_text, name, suffix):
     end, xm = ticks[0]
     el = page.scale_end_label(xm, y, L)
     return svg_text[:end] + '\n' + el + svg_text[end:], (f'{L} M', xm, y + 4.2)
+
+
+# ---------- 0. caps magnetiques et fleches du nord (lot caps-cockpit) ----------
+_ARROW = re.compile(r'^<g transform="translate\(([-\d.]+) ([-\d.]+)\) rotate\(([-\d.]+)\)">')
+_CAP_TEXT = re.compile(r'^\d{3}\.\d°$')
+_YEAR = re.compile(r'^\(([\d.]+)\)$')
+TABLE_CAP_X = '20'                 # colonne CAP MAG du tableau des pistes (page.runway_table : cols[1] = 20.0)
+
+
+def convert_cap(label, t):
+    """Cap publie -> cap du cockpit : (ancien + t) % 360, `05.1f` + `°` (cadrage 2.3, point 3). t = 0 : le cap est rendu tel quel
+    (une page deja convertie ne change pas, meme un `360.0°` que le moteur peut ecrire)."""
+    if not _CAP_TEXT.match(label):
+        raise RepublishError(f'texte de cap illisible : {label!r}')
+    if t == 0:
+        return label
+    return f'{(float(label[:-1]) + t) % 360.0:05.1f}°'
+
+
+def read_north(svg_text, name):
+    """(t, p, cx, cy, arrows) du bloc du nord publie : t, p = rotations des fleches fine et pleine (deg), (cx, cy) leur pied,
+    arrows = [(debut, fin, ligne)] fine puis pleine. RepublishError si le bloc n'a pas exactement deux fleches (une fine, une
+    pleine) de la forme du moteur, ou si le texte `VAR …` / `(annee)` n'est pas celui que le moteur ecrit pour d = p - t."""
+    fg = _layer_lines(svg_text, 'Frame & grid')
+    found = [(st, en, ln) for st, en, ln in fg if ln.startswith('<g transform="translate(')]
+    if len(found) != 2:
+        raise RepublishError(f'{name} : {len(found)} fleches du nord (attendu : 2)')
+    thin = [a for a in found if '<polyline' in a[2] and '<polygon' not in a[2]]
+    solid = [a for a in found if '<polygon' in a[2] and '<polyline' not in a[2]]
+    if len(thin) != 1 or len(solid) != 1:
+        raise RepublishError(f'{name} : les fleches du nord ne sont pas une fine et une pleine')
+    ms = [_ARROW.match(a[2]) for a in (thin[0], solid[0])]
+    if not all(ms):
+        raise RepublishError(f'{name} : fleche du nord illisible : {found[0][2]!r}')
+    if (ms[0].group(1), ms[0].group(2)) != (ms[1].group(1), ms[1].group(2)):
+        raise RepublishError(f'{name} : les deux fleches du nord n\'ont pas le meme pied')
+    cx, cy = float(ms[0].group(1)), float(ms[0].group(2))
+    t, p = float(ms[0].group(3)), float(ms[1].group(3))
+    for (_, _, ln), want in zip((thin[0], solid[0]), page.north_arrows(cx, cy, t, p)):
+        if ln != want:
+            raise RepublishError(f'{name} : fleche du nord differente de celle du moteur : {ln!r}')
+    var_lines, year_lines = [], []
+    for _, _, ln in fg:
+        m = _TEXT.match(ln)
+        if not m or not ln.startswith('<text '):
+            continue
+        a = _attrs(m.group(1))
+        if abs(float(a['x']) - cx) >= EPS or a.get('text-anchor') != 'middle':
+            continue
+        txt = html.unescape(m.group(2))
+        if abs(float(a['y']) - (cy + 3.4)) < EPS and txt.startswith('VAR'):
+            var_lines.append(ln)
+        elif abs(float(a['y']) - (cy + 6.0)) < EPS and txt.startswith('('):
+            year_lines.append((ln, txt))
+    if len(var_lines) != 1 or len(year_lines) != 1:
+        raise RepublishError(f'{name} : {len(var_lines)} texte(s) VAR et {len(year_lines)} annee(s) sous les fleches (attendu : 1 et 1)')
+    ym = _YEAR.match(year_lines[0][1])
+    if not ym:
+        raise RepublishError(f'{name} : annee du bloc du nord illisible : {year_lines[0][1]!r}')
+    want = page.north_block(cx, cy, p - t, float(ym.group(1)))
+    if not (_same_text(var_lines[0], want[2]) and _same_text(year_lines[0][0], want[3])):
+        raise RepublishError(f'{name} : le texte VAR publie {var_lines[0]!r} n\'est pas celui que le moteur ecrit pour '
+                             f'd = p - t = {p - t:.3f} et l\'annee {ym.group(1)}')
+    return t, p, cx, cy, [thin[0], solid[0]]
+
+
+def retouch_north_and_caps(svg_text, name):
+    """(nouveau SVG, details) : cadrage 2.3, points 1 a 3, sur une page `10-9`. details = {'t', 'p', 'thin', 'solid', 'caps'} :
+    'thin' et 'solid' = rotations ecrites (texte), 'caps' = [(calque, ancien, nouveau)] dans l'ordre des calques (plan, puis tableau).
+    RepublishError : nombre de fleches, texte VAR, caps du plan et du tableau en nombre different."""
+    t, p, cx, cy, arrows = read_north(svg_text, name)
+    d = p - t
+    new_arrows = page.north_arrows(cx, cy, 0.0, d)
+    edits = [(st, en, new) for (st, en, _), new in zip(arrows, new_arrows)]
+    caps_plan = [(st, en, ln, _CAP_G.match(ln)) for st, en, ln in _layer_lines(svg_text, 'Runway bearings')]
+    for _, _, ln, m in caps_plan:
+        if not m:
+            raise RepublishError(f'{name} : element inattendu dans le calque Runway bearings : {ln}')
+    caps_table = []
+    for st, en, ln in _layer_lines(svg_text, 'Runway table'):
+        m = _TEXT.match(ln)
+        if m and ln.startswith('<text ') and _attrs(m.group(1)).get('x') == TABLE_CAP_X and _CAP_TEXT.match(html.unescape(m.group(2))):
+            caps_table.append((st, en, ln, m))
+    if len(caps_plan) != len(caps_table):
+        raise RepublishError(f'{name} : {len(caps_plan)} caps sur le plan et {len(caps_table)} dans le tableau (attendu : autant)')
+    changes = []
+    for layer, items in (('Runway bearings', caps_plan), ('Runway table', caps_table)):
+        for st, en, ln, m in items:
+            old = html.unescape(m.group(4) if layer == 'Runway bearings' else m.group(2))
+            new = convert_cap(old, t)
+            changes.append((layer, old, new))
+            if new != old:
+                tail = '>' + html.escape(old, quote=False) + '</text>'
+                a = ln.rindex(tail)
+                edits.append((st, en, ln[:a] + '>' + html.escape(new, quote=False) + '</text>' + ln[a + len(tail):]))
+    for st, en, rep in sorted(edits, reverse=True):
+        svg_text = svg_text[:st] + rep + svg_text[en:]
+    return svg_text, {'t': t, 'p': p, 'thin': _ARROW.match(new_arrows[0]).group(3), 'solid': _ARROW.match(new_arrows[1]).group(3),
+                      'caps': changes}
 
 
 # ---------- 3. etiquettes : caps, balises, graduations ----------
@@ -330,12 +432,13 @@ def _cap_end_parallel(c, runways):
             d = math.hypot(far[0] - thr[0], far[1] - thr[1])
             u = ((far[0] - thr[0]) / d, (far[1] - thr[1]) / d)
             az = math.degrees(math.atan2(u[0], -u[1])) % 360.0
-            end = page.CapEnd(c['label'], thr, u, w / 2, az)
+            end = page.CapEnd(c.get('old', c['label']), thr, u, w / 2, az)      # la place publiee a ete calculee pour l'ancien texte
             if abs(page.cap_norm(az - 90.0) - c['rot']) > CAP_CHECK_MM:
                 continue
             for cx, cy, rot in page.cap_candidates(end):
                 if abs(cx - c['X']) <= CAP_CHECK_MM and abs(cy - c['Y']) <= CAP_CHECK_MM and abs(rot - c['rot']) <= CAP_CHECK_MM:
                     end.current = (c['X'], c['Y'], c['rot'])
+                    end.label = c['label']                                      # le placement refait voit le nouveau texte
                     return end
     return None
 
@@ -363,8 +466,9 @@ def _cap_ends(caps, runways, s, name):
     return ends
 
 
-def retouch_labels(svg_text, name):
-    """(nouveau SVG, deplacements) : cadrage 2.4. deplacements : [(calque, texte, avant, apres)]."""
+def retouch_labels(svg_text, name, old_labels=None):
+    """(nouveau SVG, deplacements, sans place) : cadrage 2.4. deplacements : [(calque, texte, avant, apres)]. old_labels : les textes
+    de cap du plan avant `retouch_north_and_caps` (meme ordre), pour retrouver la place publiee d'un cap deja pose le long d'une piste."""
     runways = []
     for _, _, ln in _layer_lines(svg_text, 'Runways'):
         m = re.match(r'^<polygon points="([^"]+)" fill="#1A1A1A"/>$', ln)
@@ -374,6 +478,11 @@ def retouch_labels(svg_text, name):
     runway_geoms = [page.elem_geom(f'<polygon points="{" ".join(f"{x},{y}" for x, y in p)}" fill="#1A1A1A"/>') for p in runways]
     cap_lines = _layer_lines(svg_text, 'Runway bearings')
     caps = _read_caps(cap_lines, name)
+    if old_labels is not None:
+        if len(old_labels) != len(caps):
+            raise RepublishError(f'{name} : {len(caps)} caps sur le plan, {len(old_labels)} avant la conversion')
+        for c, o in zip(caps, old_labels):
+            c['old'] = o
     nav_lines = _layer_lines(svg_text, 'Navaids')
     syms, groups = _read_navaids(nav_lines, name)
     fg = _layer_lines(svg_text, 'Frame & grid')
@@ -508,18 +617,23 @@ def add_xlink_href(svg_text, name):
 
 # ---------- une page ----------
 def retouch_page(svg_text, name, suffix, index):
-    """(nouveau SVG, details) : toutes les retouches ; details = {fields, header, bar, image, xlink, moves, unplaced}."""
-    svg, fields, header = check_or_rewrite_header(svg_text, name, index)
+    """(nouveau SVG, details) : toutes les retouches ; details = {fields, header, bar, image, xlink, moves, unplaced, north}."""
+    svg, north = svg_text, None
+    if suffix == '10-9':                                     # lot caps-cockpit : avant toutes les autres retouches
+        svg, north = retouch_north_and_caps(svg, name)
+    svg, fields, header = check_or_rewrite_header(svg, name, index)
     svg, bar = complete_scale_bar(svg, name, suffix)
     moves, unplaced = [], []
     if suffix == '10-9':
         try:
-            svg, moves, unplaced = retouch_labels(svg, name)
+            old_caps = [old for layer, old, _ in north['caps'] if layer == 'Runway bearings']
+            svg, moves, unplaced = retouch_labels(svg, name, old_caps)
         except page.PlacementError as e:
             raise RepublishError(f'{name} : {e}') from None
     has_image = '<image' in svg
     svg, n_xlink = add_xlink_href(svg, name)
-    return svg, {'fields': fields, 'header': header, 'bar': bar, 'image': has_image, 'xlink': n_xlink, 'moves': moves, 'unplaced': unplaced}
+    return svg, {'fields': fields, 'header': header, 'bar': bar, 'image': has_image, 'xlink': n_xlink, 'moves': moves, 'unplaced': unplaced,
+                'north': north}
 
 
 @dataclass
@@ -534,6 +648,7 @@ class Result:
     lines: dict = field(default_factory=dict)         # {page: [champs]}
     moves: list = field(default_factory=list)         # [(page, calque, texte, avant, apres)] : etiquettes deplacees ou retirees
     unplaced: list = field(default_factory=list)      # [(page, libelle de balise)] : aucune position libre, reste a droite
+    north: dict = field(default_factory=dict)         # {page: details de retouch_north_and_caps} : pages 10-9
 
 
 def republish_zip(theatre, zip_in, zip_out):
@@ -578,6 +693,8 @@ def republish_zip(theatre, zip_in, zip_out):
             if det['image']:
                 res.f10.append(name)
             res.moves.extend((name, *m) for m in det['moves'])
+            if det['north']:
+                res.north[name] = det['north']
             res.unplaced.extend((name, u) for u in det['unplaced'])
         res.pages = len(pages)
         charts = {}
@@ -645,6 +762,10 @@ def main(argv):
     print(f"barres completees : {len(res.bars)}")
     for name, text, _, _ in res.bars:
         print(f'  {name} : {text}')
+    conv = [n for n in res.north.values() if n['t'] != 0]
+    ncaps = sum(1 for n in res.north.values() for _, o, w in n['caps'] if o != w)
+    print(f"nord et caps : {len(res.north)} pages 10-9, dont {len(conv)} converties ({len(res.north) - len(conv)} deja a t = 0) ; "
+          f"textes de cap reecrits : {ncaps} sur {sum(len(n['caps']) for n in res.north.values())}")
     kinds = {k: [m for m in res.moves if m[1] == k] for k in ('Runway bearings', 'Navaids', 'Frame & grid')}
     caps = kinds['Runway bearings']
     print(f"caps deplaces : {len(caps)} sur {len({m[0] for m in caps})} pages")
