@@ -128,20 +128,20 @@ def test_eligible_end_localizer_band(six, mhz, kept):
     pages, msgs = logged(data)
     assert bool(pages) is kept
     if not kept:
-        assert msgs == [f'approche 05 : écartée, frequence du localizer {mhz:.2f} MHz hors de 108,10 a 111,95 MHz']
+        assert msgs == [f'approche 05 : écartée, fréquence du localizer {mhz:.2f} MHz hors de 108,10 à 111,95 MHz']
 
 
-def test_eligible_end_glide_antenna_must_be_on_the_runway(six):
+def test_eligible_end_glide_antenna_must_be_in_the_first_half_of_the_runway(six):
     data = six['Adana'][0]
     e = next(e for e in data.ends if e.name == '05')
     az = math.radians(e.az_grid)
     L = page.rw_axes(data.runways[e.rw])[2]
-    for s, kept in ((0.0, True), (L, True), (-5.0, False), (L + 5.0, False), (330.0, True)):
+    for s, kept in ((0.0, True), (L / 2, True), (-5.0, False), (L / 2 + 5.0, False), (L, False), (L + 5.0, False), (330.0, True)):
         gs = (e.pos[0] + math.cos(az) * s, e.pos[1] + math.sin(az) * s)
         pages, msgs = logged(with_glide(data, '05', gs))
         assert bool(pages) is kept, s
         if not kept:
-            assert msgs[0].startswith('approche 05 : écartée, antenne de glide hors de la piste')
+            assert msgs[0].startswith('approche 05 : écartée, antenne de glide hors de la première moitié de la piste')
         else:
             assert pages[0][2] == pytest.approx(s, abs=1e-6)
 
@@ -173,9 +173,10 @@ def test_glide_choice_keeps_the_candidates_on_the_runway_then_the_closest_to_the
     L = page.rw_axes(data.runways[e.rw])[2]
     f = data.ils_antennas['05']['freq_hz']
     out_closest = (*offset_point(e, L + 300.0, 0.0), f)             # apres la piste, sur l'axe : jamais retenu
+    far_half = (*offset_point(e, L - 300.0, 0.0), f)                # seconde moitie (glide de l'extremite opposee), sur l'axe : jamais retenu
     near = (*offset_point(e, 300.0, 40.0), f)
     wide = (*offset_point(e, 250.0, -120.0), f)
-    for cands in ([out_closest, wide, near], [wide, near, out_closest], [near, wide]):
+    for cands in ([out_closest, wide, near], [wide, near, out_closest], [far_half, near, wide], [near, wide]):
         pages, msgs = logged(with_antennas(data, '05', gs_candidates=cands))
         assert msgs == [] and len(pages) == 1
         assert pages[0][1]['gs'] == pytest.approx(near[:2]) and pages[0][1]['gs_freq_hz'] == f
@@ -184,9 +185,37 @@ def test_glide_choice_keeps_the_candidates_on_the_runway_then_the_closest_to_the
     deep = (*offset_point(e, 900.0, 10.0), f)
     pages, _ = logged(with_antennas(data, '05', gs_candidates=[near, deep]))
     assert pages[0][1]['gs'] == pytest.approx(deep[:2]) and pages[0][2] == pytest.approx(900.0, abs=1e-6)
-    # aucun candidat dans la piste : ecartee, avec la distance du plus pres de l'axe
+    # aucun candidat dans la premiere moitie de la piste : ecartee, avec la distance du plus pres de l'axe
     pages, msgs = logged(with_antennas(data, '05', gs_candidates=[(*offset_point(e, -80.0, 0.0), f), (*offset_point(e, L + 90.0, 30.0), f)]))
-    assert pages == [] and msgs[0].startswith('approche 05 : écartée, antenne de glide hors de la piste (-80 m')
+    assert pages == [] and msgs[0].startswith('approche 05 : écartée, antenne de glide hors de la première moitié de la piste (-80 m après le seuil')
+
+
+def test_glide_choice_opposite_ends_of_the_same_runway_with_the_same_frequency(six):
+    """Deux extremites opposees d'une meme piste, deux ILS a la meme frequence : chacune recoit son glide (celui de sa moitie)."""
+    data = six['Adana'][0]
+    e05 = next(e for e in data.ends if e.name == '05')
+    e23 = next(e for e in data.ends if e.name == '23')
+    L = page.rw_axes(data.runways[e05.rw])[2]
+    f = data.ils_antennas['05']['freq_hz']
+    g05 = (*offset_point(e05, 300.0, 120.0), f)                     # 300 m apres le seuil 05, a 120 m de l'axe
+    g23 = (*offset_point(e23, 300.0, 150.0), f)                     # 300 m apres le seuil 23, a 150 m de l'axe (plus loin que g05)
+    assert glide_s(e05, g23) > L / 2 and glide_s(e23, g05) > L / 2
+    ends = [dataclasses.replace(e, ils='IAD2 109.00') if e is e23 else e for e in data.ends]
+    ant = dict(data.ils_antennas)
+    ant['05'] = dict(ant['05'], gs_candidates=[g05, g23])
+    ant['23'] = dict(ant['05'], callsign='IAD2', loc=offset_point(e23, L - 100.0, 0.0), gs_candidates=[g23, g05])   # meme frequence
+    for order in (1, -1):                                           # l'ordre des candidats ne change rien
+        ant['05']['gs_candidates'] = ant['05']['gs_candidates'][::order]
+        ant['23']['gs_candidates'] = ant['23']['gs_candidates'][::order]
+        pages, msgs = logged(dataclasses.replace(data, ends=ends, ils_antennas=ant))
+        got = {p[0].name: (p[1]['gs'], p[2]) for p in pages}
+        assert msgs == [] and set(got) == {'05', '23'}
+        assert got['05'][0] == pytest.approx(g05[:2]) and got['05'][1] == pytest.approx(300.0, abs=1e-6)
+        assert got['23'][0] == pytest.approx(g23[:2]) and got['23'][1] == pytest.approx(300.0, abs=1e-6)
+
+
+def glide_s(e, g):
+    return approach.glide_offset_m(e, g)
 
 
 def test_glide_choice_two_ends_of_the_same_frequency_on_two_runways(six):

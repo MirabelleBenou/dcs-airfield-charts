@@ -62,8 +62,9 @@ def glide_offset_m(e, gs):
 
 def pick_glide(e, candidates, L):
     """2.1 : parmi les antennes de glide `(x, z, freq_hz)` a la frequence du localizer, celle de l'extremite `e` (piste de `L` m) :
-    celles dont l'abscisse `s_gs` est dans [0 ; L], puis la plus proche de l'axe de la piste (distance perpendiculaire).
-    Retourne (antenne choisie ou None, s_gs, distance a l'axe) ; s'il n'y en a pas dans la piste, l'antenne la plus proche de
+    celles dont l'abscisse `s_gs` est dans [0 ; L / 2] (un glide est a l'extremite de sa piste : les deux extremites opposees ne
+    se prennent pas le glide l'une de l'autre), puis la plus proche de l'axe de la piste (distance perpendiculaire).
+    Retourne (antenne choisie ou None, s_gs, distance a l'axe) ; s'il n'y en a pas dans la premiere moitie de la piste, l'antenne la plus proche de
     l'axe parmi toutes (pour le journal), None si aucun candidat."""
     az = math.radians(e.az_grid)
     scored = []
@@ -73,7 +74,7 @@ def pick_glide(e, candidates, L):
         scored.append((perp, s_gs, c))
     if not scored:
         return None, None, None
-    inside = [t for t in scored if 0.0 <= t[1] <= L]
+    inside = [t for t in scored if 0.0 <= t[1] <= L / 2.0]
     perp, s_gs, c = min(inside or scored, key=lambda t: t[0])
     return (c if inside else None), s_gs, perp
 
@@ -90,12 +91,12 @@ def eligible_ends(data, log=print):
             continue
         mhz = ant['freq_hz'] / 1e6
         if not (LOC_MIN_MHZ - 1e-6 <= mhz <= LOC_MAX_MHZ + 1e-6):
-            log(f'approche {e.name} : écartée, frequence du localizer {mhz:.2f} MHz hors de 108,10 a 111,95 MHz')
+            log(f'approche {e.name} : écartée, fréquence du localizer {mhz:.2f} MHz hors de 108,10 à 111,95 MHz')
             continue
         L = page.rw_axes(data.runways[e.rw])[2]
         gs, s_gs, _ = pick_glide(e, ant['gs_candidates'], L)
         if gs is None:
-            log(f'approche {e.name} : écartée, antenne de glide hors de la piste ({s_gs:.0f} m apres le seuil, piste de {L:.0f} m)')
+            log(f'approche {e.name} : écartée, antenne de glide hors de la première moitié de la piste ({s_gs:.0f} m après le seuil, piste de {L:.0f} m)')
             continue
         if e.thr_elev_ft is None:
             log(f'approche {e.name} : écartée, altitude du seuil inconnue')

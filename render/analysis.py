@@ -194,7 +194,7 @@ def ils_antenna_info(attachments, blist):
     brutes de l'aerodrome). {nom de l'extremite : {'callsign', 'freq_hz', 'loc': (x, z), 'gs_candidates': [(x, z, freq_hz)]}} ; un
     doublon (deuxieme localizer d'une extremite) n'y est pas. Les candidats sont toutes les balises `ILS_GLIDESLOPE` (pas
     `PRMG_GLIDESLOPE`) de l'aerodrome a la meme frequence a 1 Hz pres, dans l'ordre du fichier ; le choix de celui d'une extremite
-    (dans la piste, le plus pres de l'axe) est fait par `approach.eligible_ends`."""
+    (dans la premiere moitie de la piste, puis le plus pres de l'axe) est fait par `approach.eligible_ends`."""
     gss = [b for b in blist if b.type == 'ILS_GLIDESLOPE']
     out = {}
     for r in attachments:
