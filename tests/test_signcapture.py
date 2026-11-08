@@ -255,8 +255,9 @@ class FakeHook:
     `release` -> `ok released`. Garde la camera courante."""
     GROUND = 100.0
 
-    def __init__(self, no_altitude_x=()):
+    def __init__(self, no_altitude_x=(), old=False):
         self.no_altitude_x = set(no_altitude_x)
+        self.old = old                      # crochet ancien : ne connait pas `cam`
         self.cam = None
         self.lines = []
         self.srv = socket.socket()
@@ -282,7 +283,9 @@ class FakeHook:
                 line = data.decode().strip()
                 self.lines.append(line)
                 p = line.split()
-                if p[0] == 'cam':
+                if p[0] == 'cam' and self.old:
+                    reply = 'err unknown_command'
+                elif p[0] == 'cam':
                     x, z, h = float(p[1]), float(p[2]), float(p[3])
                     if x in self.no_altitude_x:
                         reply = 'err no_altitude'
@@ -312,7 +315,7 @@ class Clock:
         return self.t
 
 
-def _make_env(server, clock, unstable_x=(), crash_x=None, size=(100, 200), log=None):
+def _make_env(server, clock, unstable_x=(), crash_x=None, size=(100, 200), log=None, op_s=0.0, in_front=None):
     from render import f10import
     f10 = f10import.load()          # fonctions pures de capture/f10capture.py : diff_frac, save_png, STAB_FRAC
     rng = np.random.default_rng(1)
@@ -326,7 +329,13 @@ def _make_env(server, clock, unstable_x=(), crash_x=None, size=(100, 200), log=N
                 buf += s.recv(256)
         return buf.decode().strip()
 
+    def ensure_front(ctx=''):
+        log.append((clock.now(), 'FRONT'))
+        clock.sleep(op_s)
+
     def grab():
+        log.append((clock.now(), 'GRAB'))
+        clock.sleep(op_s)
         cam = server.cam
         if cam is not None and crash_x is not None and cam[0] == crash_x:
             raise KeyboardInterrupt
@@ -337,9 +346,8 @@ def _make_env(server, clock, unstable_x=(), crash_x=None, size=(100, 200), log=N
         base[:, :, 0] = int(abs(cam[0]) % 200) if cam else 0
         return base
 
-    env = sc.Env(hook, grab, lambda ctx='': None, f10.diff_frac, f10.save_png, f10.STAB_FRAC,
-                 sleep=clock.sleep, now=clock.now, release=lambda: hook('release'))
-    return env
+    return sc.Env(hook, grab, ensure_front, f10.diff_frac, f10.save_png, f10.STAB_FRAC,
+                  sleep=clock.sleep, now=clock.now, release=lambda: hook('release'), in_front=in_front)
 
 
 def _views(n):
@@ -422,7 +430,10 @@ def test_capture_no_altitude_is_an_echec_and_continues(capture_setup):
         server.close()
     idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
     assert [e['statut'] for e in idx['vues']] == ['faite', 'faite', 'echec', 'faite', 'faite', 'faite']
-    assert idx['vues'][2]['img'] is None and not (base_dir / 'img' / '003.png').exists()
+    e = idx['vues'][2]
+    assert e['img'] is None and not (base_dir / 'img' / '003.png').exists()
+    assert e['position'] is None and e['erreur'] == 'err no_altitude'
+    assert idx['vues'][0]['erreur'] is None
 
 
 def test_capture_resume_after_an_interruption(capture_setup):
@@ -497,6 +508,156 @@ def test_capture_writes_only_under_panneaux(capture_setup):
         server.close()
     assert {p.name for p in cfg.work_dir.iterdir()} == {'panneaux'}
     assert {p.name for p in base_dir.iterdir()} == {'vues.json', 'index.json', 'img', 'vignettes'}
+
+
+def test_capture_old_hook_stops_at_once_with_the_message(capture_setup):
+    cfg, base_dir = capture_setup
+    server, clock, log = FakeHook(old=True), Clock(), []
+    try:
+        with pytest.raises(sc.CaptureStop, match=r'crochet ancien : recopier capture/hook/ChartsCaptureHook.lua dans '
+                                                  r'Saved Games\\\.\.\.\\Scripts\\ChartsCapture\\'):
+            sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lambda *a: None)
+    finally:
+        server.close()
+    assert [l for _, l in log if l.startswith('cam')] == ['cam 1001.000 -2001.000 3.0 91.0 -1.40']    # aucune autre vue
+    assert log[-1][1] == 'release'
+    idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
+    assert idx['vues'] == []                                                                          # index ecrit
+
+
+def test_capture_three_first_failures_stop(capture_setup):
+    cfg, base_dir = capture_setup
+    server, clock, log = FakeHook(no_altitude_x={1001.0, 1002.0, 1003.0}), Clock(), []
+    try:
+        with pytest.raises(sc.CaptureStop, match='3 premieres vues'):
+            sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lambda *a: None)
+    finally:
+        server.close()
+    assert {l.split()[1] for _, l in log if l.startswith('cam')} == {'1001.000', '1002.000', '1003.000'}
+    idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
+    assert [e['statut'] for e in idx['vues']] == ['echec'] * 3
+
+
+def test_capture_two_failures_then_a_view_do_not_stop(capture_setup):
+    cfg, base_dir = capture_setup
+    server, clock, log = FakeHook(no_altitude_x={1001.0, 1002.0, 1004.0}), Clock(), []
+    try:
+        sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lambda *a: None)
+    finally:
+        server.close()
+    idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
+    assert [e['statut'] for e in idx['vues']] == ['echec', 'echec', 'faite', 'echec', 'faite', 'faite']
+
+
+def test_capture_index_carries_the_vues_json_digest_and_changed_vues_redo_everything(capture_setup):
+    import hashlib
+    cfg, base_dir = capture_setup
+    server, clock, log = FakeHook(), Clock(), []
+    try:
+        sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lambda *a: None)
+        idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
+        assert idx['vues_sha256'] == hashlib.sha256((base_dir / 'vues.json').read_bytes()).hexdigest()
+        # meme vues.json : rien n'est refait
+        log.clear()
+        sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lambda *a: None)
+        assert not [l for _, l in log if l.startswith('cam')]
+        # vues.json change : tout est refait, l'ancien index est garde
+        doc = json.loads((base_dir / 'vues.json').read_text(encoding='utf-8'))
+        doc['vues'][0]['cap'] += 1.0
+        (base_dir / 'vues.json').write_text(json.dumps(doc), encoding='utf-8')
+        log.clear()
+        lines = []
+        sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lines.append)
+    finally:
+        server.close()
+    assert {l.split()[1] for _, l in log if l.startswith('cam')} == {f'{1000 + n}.000' for n in range(1, 7)}
+    assert not any('deja faite' in l for l in lines)
+    old = list(base_dir.glob('index.*.json'))
+    assert len(old) == 1 and json.loads(old[0].read_text(encoding='utf-8'))['vues_sha256'] == idx['vues_sha256']
+    new = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
+    assert new['vues_sha256'] != idx['vues_sha256'] and len(new['vues']) == 6
+
+
+def test_capture_old_index_without_digest_redoes_everything(capture_setup):
+    cfg, base_dir = capture_setup
+    server, clock, log = FakeHook(), Clock(), []
+    try:
+        sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lambda *a: None)
+        idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
+        del idx['vues_sha256']
+        (base_dir / 'index.json').write_text(json.dumps(idx), encoding='utf-8')
+        log.clear()
+        sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lambda *a: None)
+    finally:
+        server.close()
+    assert len({l.split()[1] for _, l in log if l.startswith('cam')}) == 6
+
+
+def test_capture_hold_is_renewed_before_every_foreground_and_screen_grab(capture_setup):
+    cfg, base_dir = capture_setup
+    server, clock, log = FakeHook(), Clock(), []
+    try:
+        # mise au premier plan : 1,2 s ; capture d'ecran : 0,8 s (virtuelles)
+        env = _make_env(server, clock, log=log, op_s=1.2)
+        sc.capture_base(cfg, env, 'Syria', 'Test_Base', log=lambda *a: None)
+    finally:
+        server.close()
+    # par vue : les requetes `cam` d'une meme vue, de la premiere a la derniere, sans trou de plus de 2 s ;
+    # et chaque FRONT / GRAB est precede d'une requete vieille de moins de 1,2 s + celle qui est due
+    for n in range(1, 7):
+        start = next(i for i, (_, l) in enumerate(log) if l.startswith(f'cam {1000 + n}.000 '))
+        end = max(i for i, (_, l) in enumerate(log) if l.startswith(f'cam {1000 + n}.000 '))
+        last = None
+        for t, l in log[start:end + 1]:
+            if l.startswith('cam'):
+                assert last is None or t - last <= 2.0, (n, t - last)
+                last = t
+            else:
+                assert t - last <= 2.0, (n, l, t - last)       # a l'entree de chaque operation, une requete recente
+    # chaque operation commence moins d'une seconde apres une requete (la tenue due est partie juste avant)
+    for i, (t, l) in enumerate(log):
+        if l in ('FRONT', 'GRAB') and i > 0:
+            prev = next(tt for tt, ll in reversed(log[:i]) if ll.startswith('cam'))
+            assert t - prev <= 1.2 + 1e-9, (l, t - prev)       # au plus la duree de l'operation precedente
+
+
+def test_capture_pair_is_redone_when_dcs_left_the_foreground(capture_setup):
+    cfg, base_dir = capture_setup
+    server, clock, log = FakeHook(), Clock(), []
+    calls = {'n': 0}
+
+    def in_front():
+        calls['n'] += 1
+        return calls['n'] > 1                                   # la premiere paire : DCS n'est plus devant
+    try:
+        env = _make_env(server, clock, log=log, in_front=in_front)
+        sc.capture_base(cfg, env, 'Syria', 'Test_Base', log=lambda *a: None)
+    finally:
+        server.close()
+    n_grab_view1 = 0
+    for _, l in log:
+        if l.startswith('cam 1002'):
+            break
+        if l == 'GRAB':
+            n_grab_view1 += 1
+    assert n_grab_view1 == 4                                    # deux paires pour la vue 1, une pour les autres
+    idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
+    assert [e['statut'] for e in idx['vues']] == ['faite'] * 6
+
+
+def test_capture_never_in_front_is_unstable_after_10_s(capture_setup):
+    cfg, base_dir = capture_setup
+    server, clock, log = FakeHook(), Clock(), []
+    try:
+        env = _make_env(server, clock, log=log, in_front=lambda: False)
+        sc.capture_base(cfg, env, 'Syria', 'Test_Base', log=lambda *a: None)
+    finally:
+        server.close()
+    idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
+    assert [e['statut'] for e in idx['vues']] == ['instable'] * 6
+    t2 = [t for t, l in log if l.startswith('cam 1002.000')][0]
+    t1 = [t for t, l in log if l.startswith('cam 1001.000')][0]
+    assert 12.9 <= t2 - t1 <= 13.6                              # 3 s puis 10 s au plus
 
 
 # ---------- le crochet : commande `cam` (P6) ----------
@@ -599,3 +760,16 @@ def test_hook_camera_released_after_5_s(lua):
     lua.execute('now = 6')
     lua.execute('LuaExportBeforeNextFrame()')
     assert len(lua.eval('camcalls')) == n
+
+
+def test_hook_cam_needs_exactly_five_plain_numbers(lua):
+    for bad in ('cam 1 2 3 4 5 6', 'cam 1 2 3 4', 'cam 1 2 3 4 0x10', 'cam 1 2 3 4 nan', 'cam 1 2 3 4 inf', 'cam 1 2 3 4 x',
+                'cam 1 2 3 4 5x', 'cam 1,2 3 4 5 6', 'cam'):
+        lua.eval('frame')(bad)
+    assert _replies(lua) == ['err bad_request'] * 9 and len(lua.eval('camcalls')) == 0
+    lua.eval('frame')('cam  1   2 3 4 -5.5e0   ')
+    assert _replies(lua)[-1].startswith('ok 1.000 ')
+
+
+def test_hook_header_mentions_the_free_camera():
+    assert _hook_src().splitlines()[0].endswith('or the free camera (cam).')

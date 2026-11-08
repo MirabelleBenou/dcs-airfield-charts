@@ -10,6 +10,7 @@ piste (bretelles) et intersections de taxiways. La prise de vues les realise dan
 plan, avec le crochet de ce depot (commande `cam`). Aucune lecture des panneaux ; rien n'est ecrit hors de
 <work_dir>/panneaux/.
 """
+import hashlib
 import json
 import math
 import sys
@@ -54,13 +55,21 @@ INTERSECTION_TYPES = ('taxiway_t', 'taxiway_cross', 'taxiway_x')
 WAIT_S = 3.0                  # attente apres la pose de la vue
 PAIR_GAP_S = 0.5              # delai entre les deux captures
 STABLE_TIMEOUT_S = 10.0       # au plus, apres l'attente, pour obtenir une vue stable
-KEEPALIVE_S = 2.0             # une requete au moins toutes les 2 s (le crochet relache apres 5 s)
+KEEPALIVE_S = 2.0             # jamais plus de 2 s entre deux requetes (le crochet relache apres 5 s)
+KEEP_DUE_S = 1.0              # la requete de tenue est renvoyee des qu'une seconde s'est ecoulee
+FIRST_TRIES_ECHEC = 3         # trois premieres vues tentees d'une base toutes en echec : arret
+OLD_HOOK_MESSAGE = ('crochet ancien : recopier capture/hook/ChartsCaptureHook.lua dans '
+                    'Saved Games\\...\\Scripts\\ChartsCapture\\')
 SLICE_S = 0.5                 # pas des attentes (entretien de la vue entre deux)
 VIGNETTE_X, VIGNETTE_Y = 0.10, 0.30   # bande centrale : 10 % retires a gauche et a droite, 30 % en haut et en bas
 
 
 class Stop(Exception):
     """Arret necessitant une decision (dossier ou base introuvable...)."""
+
+
+class CaptureStop(RuntimeError):
+    """Arret de la prise de vues (crochet ancien, vues toutes en echec) : l'index est ecrit avant de sortir."""
 
 
 # ---------- geometrie ----------
@@ -524,8 +533,9 @@ class Env:
     diff_frac, save_png), reutilisees. Les tests en fournissent de fausses."""
 
     def __init__(self, hook, grab, ensure_front, diff_frac, save_png, stab_frac, sleep=time.sleep, now=time.monotonic,
-                 release=None):
+                 release=None, in_front=None):
         self.hook, self.grab, self.ensure_front = hook, grab, ensure_front
+        self.in_front = in_front or (lambda: True)
         self.diff_frac, self.save_png, self.stab_frac = diff_frac, save_png, stab_frac
         self.sleep, self.now = sleep, now
         self.release = release or (lambda: None)
@@ -536,7 +546,8 @@ def real_env(cfg):
     import f10capture
     f10capture.CFG = cfg
     return Env(f10capture.hook, f10capture.grab, f10capture.ensure_dcs_front, f10capture.diff_frac,
-               f10capture.save_png, f10capture.STAB_FRAC, release=f10capture.hook_release)
+               f10capture.save_png, f10capture.STAB_FRAC, release=f10capture.hook_release,
+               in_front=f10capture.dcs_in_front)
 
 
 def vignette(img):
@@ -551,7 +562,7 @@ def cam_line(v):
 
 
 class _Hold:
-    """Entretien de la vue : une requete `cam` au moins toutes les 2 s."""
+    """Tenue de la vue : la requete `cam` est renvoyee des qu'elle est due, jamais plus de 2 s entre deux requetes."""
 
     def __init__(self, env, line):
         self.env, self.line, self.last = env, line, None
@@ -561,6 +572,11 @@ class _Hold:
         self.last = self.env.now()
         return reply
 
+    def keep(self):
+        """A appeler avant chaque mise au premier plan et chaque capture d'ecran."""
+        if self.last is None or self.env.now() - self.last >= KEEP_DUE_S:
+            self.send()
+
     def wait(self, seconds):
         end = self.env.now() + seconds
         while True:
@@ -568,32 +584,39 @@ class _Hold:
             if rem <= 0:
                 return
             self.env.sleep(min(rem, SLICE_S))
-            if self.env.now() - self.last >= KEEPALIVE_S - SLICE_S:
-                self.send()
+            self.keep()
 
 
 def take_view(env, v):
-    """Prend une vue. Retourne (statut, image, position) ; statut `faite`, `instable` ou `echec` (image None)."""
-    env.ensure_front(f'vue {v["numero"]}')
+    """Prend une vue. Retourne (statut, image, position, erreur) ; statut `faite`, `instable` ou `echec` (image et position
+    None, erreur = reponse du crochet). Un crochet qui ne connait pas `cam` : CaptureStop."""
     hold = _Hold(env, cam_line(v))
     reply = hold.send()
+    if reply[:2] == ['err', 'unknown_command']:
+        raise CaptureStop(OLD_HOOK_MESSAGE)
     if not reply or reply[0] != 'ok' or len(reply) < 4:
-        return 'echec', None, ' '.join(reply)
+        return 'echec', None, None, ' '.join(reply)
     pos = [float(reply[1]), float(reply[2]), float(reply[3])]
+    hold.keep()
+    env.ensure_front(f'vue {v["numero"]}')
     hold.wait(WAIT_S)
     t0 = env.now()
     while True:
+        hold.keep()
         env.ensure_front(f'vue {v["numero"]}')
+        hold.keep()
         a = env.grab()
         hold.wait(PAIR_GAP_S)
+        hold.keep()
         b = env.grab()
-        if env.diff_frac(a, b) < env.stab_frac:
-            return 'faite', b, pos
+        if env.diff_frac(a, b) < env.stab_frac and env.in_front():
+            return 'faite', b, pos, None
         if env.now() - t0 >= STABLE_TIMEOUT_S:
-            return 'instable', b, pos
+            return 'instable', b, pos, None
 
 
-def _load_index(path, theatre, base):
+def _load_index(path):
+    """L'index d'une passe precedente, ou None (absent ou illisible)."""
     if path.is_file():
         try:
             idx = json.loads(path.read_text(encoding='utf-8'))
@@ -601,7 +624,17 @@ def _load_index(path, theatre, base):
                 return idx
         except ValueError:
             pass
-    return {'base': base, 'theatre': theatre, 'vues': []}
+    return None
+
+
+def _archive_index(path):
+    """Garde l'ancien index sous index.<horodatage>.json."""
+    stamp = datetime.now().strftime('%Y%m%dT%H%M%S')
+    dst, k = path.with_name(f'index.{stamp}.json'), 1
+    while dst.exists():
+        k += 1
+        dst = path.with_name(f'index.{stamp}-{k}.json')
+    path.replace(dst)
 
 
 def capture_base(cfg, env, theatre, base, log=print):
@@ -612,12 +645,19 @@ def capture_base(cfg, env, theatre, base, log=print):
         name, path = find_base(cfg, theatre, base)
         doc, _ = build_vues_json(theatre, name, path.name, rn5mod.read(path))
         _write(vpath, _dump(doc))
-    doc = json.loads(vpath.read_text(encoding='utf-8'))
-    views = doc['vues']
+    raw = vpath.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    views = json.loads(raw.decode('utf-8'))['vues']
     ipath = out / 'index.json'
-    idx = _load_index(ipath, theatre, base)
+    old = _load_index(ipath)
+    if old is not None and old.get('vues_sha256') != digest:
+        log(f'{base} : vues.json a change depuis la passe precedente, toutes les vues sont refaites')
+        _archive_index(ipath)
+        old = None
+    idx = old or {'base': base, 'theatre': theatre, 'vues_sha256': digest, 'vues': []}
+    idx['vues_sha256'] = digest
     done = {e['numero']: e for e in idx['vues']}
-    complete = True
+    tried = []
     try:
         for v in views:
             n = v['numero']
@@ -626,9 +666,9 @@ def capture_base(cfg, env, theatre, base, log=print):
             if e and e['statut'] == 'faite' and (out / e['img']).is_file() and (out / e['vignette']).is_file():
                 log(f'{base} {n}/{len(views)} deja faite')
                 continue
-            statut, img, pos = take_view(env, v)
+            statut, img, pos, erreur = take_view(env, v)
             entry = {'numero': n, 'statut': statut, 'img': None, 'vignette': None,
-                     'heure': datetime.now().isoformat(timespec='seconds'), 'position': pos}
+                     'heure': datetime.now().isoformat(timespec='seconds'), 'position': pos, 'erreur': erreur}
             if img is not None:
                 entry['img'], entry['vignette'] = f'img/{name}', f'vignettes/{name}'
                 env.save_png(img, out / 'img' / name)
@@ -637,8 +677,11 @@ def capture_base(cfg, env, theatre, base, log=print):
             idx['vues'] = [done[k] for k in sorted(done)]
             _write(ipath, _dump(idx))
             log(f'{base} {n}/{len(views)} {statut}')
+            tried.append(statut)
+            if len(tried) == FIRST_TRIES_ECHEC and all(t == 'echec' for t in tried):
+                raise CaptureStop(f'{base} : les {FIRST_TRIES_ECHEC} premieres vues tentees sont en echec '
+                                  f'(derniere reponse du crochet : {erreur})')
     except BaseException:
-        complete = False
         idx['vues'] = [done[k] for k in sorted(done)]
         _write(ipath, _dump(idx))
         raise
@@ -647,7 +690,7 @@ def capture_base(cfg, env, theatre, base, log=print):
             env.release()
         except Exception:
             pass
-    return complete
+    return True
 
 
 def cmd_capture(cfg, theatre, bases, env=None, log=print):

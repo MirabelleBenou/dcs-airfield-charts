@@ -1,4 +1,4 @@
--- ChartsCapture hook: TCP server on 127.0.0.1:47123, places the F10 camera top-down.
+-- ChartsCapture hook: TCP server on 127.0.0.1:47123, places the F10 camera top-down, or the free camera (cam).
 -- Protocol (one text line per request, one text line per reply):
 --   "xz <x> <z> <alt>"      -> reply "ok <x> <z> <alt>"
 --   "ll <lat> <lon> <alt>"  -> reply "ok <x> <z> <alt>"  (x North, z East, metres)
@@ -23,10 +23,16 @@ local function ccLog(msg)
 end
 
 local function ccHandleCam(line)
+    -- exactly five numbers, each one a plain decimal (no hex, no inf/nan), nothing else on the line
+    local t = {line:match('^cam%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s*$')}
+    if #t ~= 5 then return 'err bad_request' end
     local v = {}
-    for n in line:gmatch('[%-%d%.eE]+') do v[#v + 1] = tonumber(n) end
+    for i = 1, 5 do
+        if not t[i]:match('^[%-%+]?%d*%.?%d*[eE]?[%-%+]?%d*$') then return 'err bad_request' end
+        v[i] = tonumber(t[i])
+        if not v[i] or v[i] ~= v[i] or v[i] == math.huge or v[i] == -math.huge then return 'err bad_request' end
+    end
     local x, z, h, cap, pitch = v[1], v[2], v[3], v[4], v[5]
-    if not (x and z and h and cap and pitch) then return 'err bad_request' end
     local ok, ground = pcall(LoGetAltitude, x, z)
     if not ok or type(ground) ~= 'number' then return 'err no_altitude' end
     local y = ground + h
