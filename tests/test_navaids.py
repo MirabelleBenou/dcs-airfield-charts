@@ -36,10 +36,11 @@ def test_code_icao_then_gps_then_ident(tmp_path):
         '3,"LFCC","small_airport","c",2.0,0.0,,\n',                # puis ident
         '4,"LF1C","small_airport","d",3.0,0.0,,"lfdd"\n',          # ni l'un ni l'autre (pas 4 majuscules)
         '5,"LFEE","small_airport","e",4.0,0.0,,"G1"\n',            # gps_code invalide : ident
+        '6,"LFGG","small_airport","f",5.0,0.0,,"LFHH"\n',          # gps_code et ident valides et differents : gps_code
     ])
-    assert [r[3] for r in rows] == ['LFAA', 'LFBB', 'LFCC', None, 'LFEE']
-    codes = en.match_icao([(i, float(i - 1), 0.0) for i in range(1, 6)], rows)
-    assert codes == {1: 'LFAA', 2: 'LFBB', 3: 'LFCC', 4: None, 5: 'LFEE'}
+    assert [r[3] for r in rows] == ['LFAA', 'LFBB', 'LFCC', None, 'LFEE', 'LFHH']
+    codes = en.match_icao([(i, float(i - 1), 0.0) for i in range(1, 7)], rows)
+    assert codes == {1: 'LFAA', 2: 'LFBB', 3: 'LFCC', 4: None, 5: 'LFEE', 6: 'LFHH'}
 
 
 def test_nearest_row_without_code_leaves_null(tmp_path):
@@ -58,6 +59,14 @@ def test_three_km_kept_beyond_not(tmp_path):
     assert d < 3.0 < en.great_circle_km(0, 0, 0, 0.0271)
     assert en.match_icao([(1, 0.0, 0.0269)], rows) == {1: 'LFAA'}
     assert en.match_icao([(1, 0.0, 0.0271)], rows) == {1: None}
+
+
+def test_exactly_three_km_kept(tmp_path, monkeypatch):
+    rows = _rows(tmp_path, ['1,"LFAA","small_airport","a",0.0,0.0,"LFAA","LFAA"\n'])
+    monkeypatch.setattr(en, 'great_circle_km', lambda *a: 3.0)
+    assert en.match_icao([(1, 0.0, 0.0)], rows) == {1: 'LFAA'}
+    monkeypatch.setattr(en, 'great_circle_km', lambda *a: 3.0000001)
+    assert en.match_icao([(1, 0.0, 0.0)], rows) == {1: None}
 
 
 def test_great_circle_radius():
@@ -159,6 +168,17 @@ def test_unknown_airfield_stops(tmp_path, caucasus):
         en.beacons_data('Caucasus', caucasus, f)
 
 
+def test_beacon_cited_by_two_ends_stops_even_with_same_name(tmp_path):
+    from types import SimpleNamespace as NS
+    rb = NS(id='airfield1_0')
+    rw = NS(main=NS(name='22', beacons=[rb]), opposite=NS(name='22', beacons=[rb]))
+    terrain = NS(airports={1: NS(id=1, name='A', runways=[rw])})
+    f = tmp_path / 'beacons.lua'
+    f.write_text('beacons = {\n' + _block('airfield1_0', 'HOMER', 'ZZ', 300000.0, (0, 0)) + '}\n', encoding='utf-8')
+    with pytest.raises(ep.ExportError, match='deux bouts'):
+        en.beacons_data('Fake', terrain, f)
+
+
 # ------------------------------------------------------ fichiers commites
 
 def _load(path):
@@ -180,7 +200,9 @@ def test_committed_theatre(module, key):
     assert raw.endswith(b'\n') and not raw.endswith(b'\n\n')
     d = json.loads(raw.decode('utf-8'))
     assert d['format'] == 'dcs-navaids-v1' and d['theatre'] == key
+    assert set(d) == {'format', 'theatre', 'source', 'airdromes', 'enroute'}
     src = d['source']
+    assert set(src) == {'airfields', 'icao', 'beacons'}
     assert src['airfields'] == f'pydcs {_commit()[:7]} (LGPL-3.0): airfield names and positions'
     assert src['icao'] == "OurAirports 64af129 (public domain): today's ICAO codes, matched by position within 3 km"
     terrain = ep.load_terrain(module)
@@ -198,6 +220,8 @@ def test_committed_theatre(module, key):
         assert src['beacons'] == f'DCS game files: Mods/terrains/{folder}/beacons.lua'
         assert all(isinstance(a['beacons'], list) for a in aps)
         assert isinstance(d['enroute'], list) and d['enroute']
+        for b in d['enroute']:
+            assert set(b) == {'type', 'callsign', 'frequency', 'channel', 'lat', 'lon'}
         for a in aps:
             for b in a['beacons']:
                 assert set(b) == {'type', 'callsign', 'frequency', 'channel', 'runway'}

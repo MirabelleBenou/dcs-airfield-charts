@@ -150,7 +150,7 @@ def beacons_data(key, terrain, beacons_file):
         for rw in ap.runways:
             for app in (rw.main, rw.opposite):
                 for rb in app.beacons:
-                    if rb.id in ends and ends[rb.id][1] != app.name:
+                    if rb.id in ends:
                         raise ExportError(f'{key} : la balise {rb.id} est citee a deux bouts de piste '
                                           f'({ends[rb.id][1]} et {app.name})')
                     ends[rb.id] = (ap.id, app.name)
