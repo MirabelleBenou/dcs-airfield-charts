@@ -181,3 +181,20 @@ def test_table_says_grass_strip_on_each_row_right_aligned_on_x1():
 
 def test_table_hard_runway_has_no_grass_text():
     assert 'PISTE EN HERBE' not in _table('dur')
+
+
+# ---------- 2.4 le repli : seulement pour une base qui a une entree declaree ----------
+def test_helicopter_base_without_declared_entry_keeps_the_error(work, monkeypatch):
+    """Der_Salman (Syria, aucun fichier de pistes declarees) : la detection sans seconde passe ne trouve rien -> l'erreur d'origine."""
+    monkeypatch.setattr(runways, 'HELI_SPARE_SEGMENT_MIN_M', None)
+    with pytest.raises(analysis.ChartError, match='aucune piste detectee'):
+        analysis.analyze(work, 'Syria', 'Der_Salman', 1985, log=lambda *a: None)
+
+
+def test_helicopter_base_with_declared_entry_but_no_runway_is_a_helicopter_base(work, monkeypatch):
+    """Meme base, avec une entree declaree de 10 m : base d'helicopteres sans piste (cas Landstuhl)."""
+    monkeypatch.setattr(runways, 'HELI_SPARE_SEGMENT_MIN_M', None)
+    monkeypatch.setattr(dcsdata, 'declared_runways', lambda theatre, base, name=None: [decl_rw(0.5, 10.0)])
+    data = analysis.analyze(work, 'Syria', 'Der_Salman', 1985, log=lambda *a: None)
+    assert data.runways == [] and data.heli_mode and data.f10_img is not None
+
