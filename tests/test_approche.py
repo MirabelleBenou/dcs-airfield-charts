@@ -58,8 +58,10 @@ def test_ils_antennas_of_the_samples(six):
     adana = six['Adana'][0].ils_antennas
     assert set(adana) == {'05'}
     a = adana['05']
-    assert (a['callsign'], a['freq_hz'], a['gs_freq_hz']) == ('IADA', 108700000.0, 108700000.0)
-    assert a['loc'] == pytest.approx((220391.796875, -46974.203125)) and a['gs'] == pytest.approx((218806.6875, -49094.089844))
+    assert (a['callsign'], a['freq_hz']) == ('IADA', 108700000.0)
+    assert a['loc'] == pytest.approx((220391.796875, -46974.203125))
+    (gs,) = a['gs_candidates']
+    assert gs[:2] == pytest.approx((218806.6875, -49094.089844)) and gs[2] == 108700000.0
     for b in ('Abu_al-Duhur', 'Gulechoba'):
         assert six[b][0].ils_antennas == {}
 
@@ -75,13 +77,18 @@ def test_ils_antenna_info_pairs_a_glide_at_the_same_frequency_to_1_hz():
     loc = lb(callsign='IAB', x=2000.0 * math.cos(math.radians(50)), z=2000.0 * math.sin(math.radians(50)), direction=230.0)   # sur l'axe de 05
     gs_ok = lb(type='ILS_GLIDESLOPE', callsign='IAB', frequency=109.5e6 + 0.5, x=300.0, z=100.0)
     gs_far = lb(type='ILS_GLIDESLOPE', callsign='IAB', frequency=109.5e6 + 2.0, x=1.0, z=1.0)
-    blist = [loc, gs_far, gs_ok]
+    gs_ok2 = lb(type='ILS_GLIDESLOPE', callsign='IAC', frequency=109.5e6, x=900.0, z=-50.0)
+    gs_prmg = lb(type='PRMG_GLIDESLOPE', callsign='IAB', frequency=109.5e6, x=2.0, z=2.0)
+    blist = [loc, gs_far, gs_prmg, gs_ok]
     att = analysis.attach_ils(ends, blist)
     info = analysis.ils_antenna_info(att, blist)
     assert set(info) == {'05'}
-    assert info['05'] == {'callsign': 'IAB', 'freq_hz': 109.5e6, 'loc': (loc.x, loc.z), 'gs': (300.0, 100.0), 'gs_freq_hz': 109.5e6 + 0.5}
-    only_far = analysis.ils_antenna_info(analysis.attach_ils(ends, [loc, gs_far]), [loc, gs_far])
-    assert only_far['05']['gs'] is None and only_far['05']['gs_freq_hz'] is None
+    # seulement les ILS_GLIDESLOPE a 1 Hz pres (ni PRMG_GLIDESLOPE, ni une autre frequence)
+    assert info['05'] == {'callsign': 'IAB', 'freq_hz': 109.5e6, 'loc': (loc.x, loc.z), 'gs_candidates': [(300.0, 100.0, 109.5e6 + 0.5)]}
+    two = analysis.ils_antenna_info(analysis.attach_ils(ends, [loc, gs_ok, gs_ok2]), [loc, gs_ok, gs_ok2])
+    assert two['05']['gs_candidates'] == [(300.0, 100.0, 109.5e6 + 0.5), (900.0, -50.0, 109.5e6)]      # tous les candidats, dans l'ordre du fichier
+    only_far = analysis.ils_antenna_info(analysis.attach_ils(ends, [loc, gs_far, gs_prmg]), [loc, gs_far, gs_prmg])
+    assert only_far['05']['gs_candidates'] == []
     dup = lb(callsign='ZZZ', x=loc.x + 50.0, z=loc.z + 50.0, direction=230.0)
     info2 = analysis.ils_antenna_info(analysis.attach_ils(ends, [loc, dup, gs_ok]), [loc, dup, gs_ok])
     assert info2['05']['callsign'] == 'IAB'                                  # le deuxieme localizer d'une extremite n'est pas retenu
@@ -93,6 +100,12 @@ def with_antennas(data, name, **changes):
     return dataclasses.replace(data, ils_antennas=ant)
 
 
+def with_glide(data, name, gs, freq=None):
+    """`data` avec, pour l'extremite `name`, un seul candidat de glide en `gs` (None : aucun)."""
+    f = data.ils_antennas[name]['freq_hz'] if freq is None else freq
+    return with_antennas(data, name, gs_candidates=[] if gs is None else [(gs[0], gs[1], f)])
+
+
 def logged(data):
     msgs = []
     pages = approach.eligible_ends(data, log=msgs.append)
@@ -100,13 +113,13 @@ def logged(data):
 
 
 def test_eligible_end_without_glide_is_dropped_with_a_log_line(six):
-    data = with_antennas(six['Adana'][0], '05', gs=None, gs_freq_hz=None)
+    data = with_glide(six['Adana'][0], '05', None)
     pages, msgs = logged(data)
-    assert pages == [] and len(msgs) == 1 and msgs[0].startswith('approche 05 : ecartee, pas de glide')
+    assert pages == [] and len(msgs) == 1 and msgs[0].startswith('approche 05 : écartée, pas de glide')
     ends = [dataclasses.replace(e) for e in data.ends]
     ends[0].ils = 'IADA 108.70 (LOC)'                                          # texte `(LOC)` : pas de glide, meme si une antenne est donnee
     pages, msgs = logged(dataclasses.replace(six['Adana'][0], ends=ends))
-    assert pages == [] and msgs[0].startswith('approche 05 : ecartee, pas de glide')
+    assert pages == [] and msgs[0].startswith('approche 05 : écartée, pas de glide')
 
 
 @pytest.mark.parametrize('mhz, kept', [(108.10, True), (111.95, True), (108.05, False), (112.00, False), (118.0, False)])
@@ -115,7 +128,7 @@ def test_eligible_end_localizer_band(six, mhz, kept):
     pages, msgs = logged(data)
     assert bool(pages) is kept
     if not kept:
-        assert msgs == [f'approche 05 : ecartee, frequence du localizer {mhz:.2f} MHz hors de 108,10 a 111,95 MHz']
+        assert msgs == [f'approche 05 : écartée, frequence du localizer {mhz:.2f} MHz hors de 108,10 a 111,95 MHz']
 
 
 def test_eligible_end_glide_antenna_must_be_on_the_runway(six):
@@ -125,10 +138,10 @@ def test_eligible_end_glide_antenna_must_be_on_the_runway(six):
     L = page.rw_axes(data.runways[e.rw])[2]
     for s, kept in ((0.0, True), (L, True), (-5.0, False), (L + 5.0, False), (330.0, True)):
         gs = (e.pos[0] + math.cos(az) * s, e.pos[1] + math.sin(az) * s)
-        pages, msgs = logged(with_antennas(data, '05', gs=gs))
+        pages, msgs = logged(with_glide(data, '05', gs))
         assert bool(pages) is kept, s
         if not kept:
-            assert msgs[0].startswith('approche 05 : ecartee, antenne de glide hors de la piste')
+            assert msgs[0].startswith('approche 05 : écartée, antenne de glide hors de la piste')
         else:
             assert pages[0][2] == pytest.approx(s, abs=1e-6)
 
@@ -141,11 +154,77 @@ def test_two_ils_ends_are_numbered_in_natural_order_of_the_end_names(six):
     az = math.radians(e23.az_grid)
     ant = {k: dict(v) for k, v in data.ils_antennas.items()}
     ant['23'] = {'callsign': 'IAD2', 'freq_hz': 110.1e6, 'loc': (e23.pos[0] + math.cos(az) * 2700, e23.pos[1] + math.sin(az) * 2700),
-                 'gs': (e23.pos[0] + math.cos(az) * 300, e23.pos[1] + math.sin(az) * 300), 'gs_freq_hz': 110.1e6}
+                 'gs_candidates': [(e23.pos[0] + math.cos(az) * 300, e23.pos[1] + math.sin(az) * 300, 110.1e6)]}
     d2 = dataclasses.replace(data, ends=ends[::-1], ils_antennas=ant)               # extremites dans le desordre
     pages = approach.build_approach_pages(d2, log=lambda *a: None)
     assert [(p.id, p.info['end']) for p in pages] == [('11-1', '05'), ('11-2', '23')]
     assert ['ILS 05' in pages[0].svg, 'ILS 23' in pages[1].svg] == [True, True]
+
+
+def offset_point(e, s, lat):
+    """Point a `s` m du seuil de `e` le long de l'axe d'atterrissage, decale de `lat` m (a droite si positif)."""
+    az = math.radians(e.az_grid)
+    return (e.pos[0] + math.cos(az) * s - math.sin(az) * lat, e.pos[1] + math.sin(az) * s + math.cos(az) * lat)
+
+
+def test_glide_choice_keeps_the_candidates_on_the_runway_then_the_closest_to_the_axis(six):
+    data = six['Adana'][0]
+    e = next(e for e in data.ends if e.name == '05')
+    L = page.rw_axes(data.runways[e.rw])[2]
+    f = data.ils_antennas['05']['freq_hz']
+    out_closest = (*offset_point(e, L + 300.0, 0.0), f)             # apres la piste, sur l'axe : jamais retenu
+    near = (*offset_point(e, 300.0, 40.0), f)
+    wide = (*offset_point(e, 250.0, -120.0), f)
+    for cands in ([out_closest, wide, near], [wide, near, out_closest], [near, wide]):
+        pages, msgs = logged(with_antennas(data, '05', gs_candidates=cands))
+        assert msgs == [] and len(pages) == 1
+        assert pages[0][1]['gs'] == pytest.approx(near[:2]) and pages[0][1]['gs_freq_hz'] == f
+        assert pages[0][2] == pytest.approx(300.0, abs=1e-6)
+    # le plus pres de l'axe, meme s'il est apres l'autre le long de la piste
+    deep = (*offset_point(e, 900.0, 10.0), f)
+    pages, _ = logged(with_antennas(data, '05', gs_candidates=[near, deep]))
+    assert pages[0][1]['gs'] == pytest.approx(deep[:2]) and pages[0][2] == pytest.approx(900.0, abs=1e-6)
+    # aucun candidat dans la piste : ecartee, avec la distance du plus pres de l'axe
+    pages, msgs = logged(with_antennas(data, '05', gs_candidates=[(*offset_point(e, -80.0, 0.0), f), (*offset_point(e, L + 90.0, 30.0), f)]))
+    assert pages == [] and msgs[0].startswith('approche 05 : écartée, antenne de glide hors de la piste (-80 m')
+
+
+def test_glide_choice_two_ends_of_the_same_frequency_on_two_runways(six):
+    """Deux ILS de meme frequence (deux pistes de Konya, paralleles) : chaque extremite a le glide de son axe."""
+    data = six['Konya'][0]
+    ends = [e for e in data.ends if e.ils]
+    assert len(ends) == 1                                             # un seul ILS sur l'echantillon : on en donne un deuxieme
+    e1 = ends[0]
+    other = next(e for e in data.ends if e is not e1 and e.rw != e1.rw and e.az_grid == pytest.approx(e1.az_grid, abs=1.0))
+    f = data.ils_antennas[e1.name]['freq_hz']
+    L1 = page.rw_axes(data.runways[e1.rw])[2]
+    L2 = page.rw_axes(data.runways[other.rw])[2]
+    g1 = (*offset_point(e1, 300.0, 40.0), f)
+    g2 = (*offset_point(other, 280.0, 40.0), f)
+    ends2 = [dataclasses.replace(e, ils='IAB 109.00') if e is other else e for e in data.ends]
+    ant = dict(data.ils_antennas)
+    ant[e1.name] = dict(ant[e1.name], gs_candidates=[g1, g2])
+    ant[other.name] = dict(ant[e1.name], callsign='IAB', loc=offset_point(other, L2 + 200.0, 0.0), gs_candidates=[g1, g2])
+    pages, msgs = logged(dataclasses.replace(data, ends=ends2, ils_antennas=ant))
+    got = {p[0].name: p[1]['gs'] for p in pages}
+    assert got[e1.name] == pytest.approx(g1[:2]) and got[other.name] == pytest.approx(g2[:2]) and msgs == []
+    assert L1 > 0
+
+
+def test_end_with_unknown_threshold_elevation_is_dropped(six):
+    data = six['Adana'][0]
+    ends = [dataclasses.replace(e) for e in data.ends]
+    next(e for e in ends if e.name == '05').thr_elev_ft = None
+    pages, msgs = logged(dataclasses.replace(data, ends=ends))
+    assert pages == [] and msgs == ['approche 05 : écartée, altitude du seuil inconnue']
+    out = approach.build_approach_pages(dataclasses.replace(data, ends=ends), log=lambda *a: None)
+    assert out == []
+
+
+def test_mentions_carry_the_whole_year(six):
+    data = six['Adana'][0]
+    (p,) = approach.build_approach_pages(dataclasses.replace(data, year=1985.5), log=lambda *a: None)
+    assert 'déclinaison 1985).' in html.unescape(p.svg) and p.info['mentions'][0].endswith('déclinaison 1985).')
 
 
 # ---------- 2.3 : la geometrie ----------
@@ -389,11 +468,40 @@ def test_republish_ajouter_stops(zips, tmp_path):
     stops(zips, tmp_path, copy_flat(zips, tmp_path, 'exists'), 'la page existe deja dans le zip', zin=zips.with11)
     for ext in ('svg', 'pdf', 'png'):
         stops(zips, tmp_path, copy_flat(zips, tmp_path, f'no_{ext}', drop=(ext,)), f'fichier {ext} manquant')
-    stops(zips, tmp_path, copy_flat(zips, tmp_path, 'bad', rename='Konya_10-9'), "pas une page d'approche")
+    stops(zips, tmp_path, copy_flat(zips, tmp_path, 'bad', rename='Konya_10-9'), "aucune page d'approche 11-x")      # une 10-9 est ignoree
     stops(zips, tmp_path, tmp_path / 'absent', 'dossier introuvable')
     empty = tmp_path / 'empty'
     empty.mkdir()
     stops(zips, tmp_path, empty, "aucune page d'approche")
+
+
+def test_republish_ajouter_ignores_the_files_that_are_not_11_x_pages(zips, tmp_path, capsys):
+    mixed = copy_flat(zips, tmp_path, 'mixed')
+    for extra in ('Konya_10-9.svg', 'Konya_10-9.pdf', 'Konya_charts.pdf', 'Konya_11-1.txt', 'notes.txt', 'Konya_11-x.png'):
+        (mixed / extra).write_bytes(b'not a page')
+    (mixed / 'svg').mkdir()                                              # un sous-dossier est ignore aussi
+    (mixed / 'svg' / 'Konya_11-1.svg').write_bytes(b'not a page')
+    ignored = []
+    pages = republish.find_added_pages(mixed, ignored)
+    assert list(pages) == ['Konya_11-1'] and sorted(ignored) == sorted(['Konya_10-9.svg', 'Konya_10-9.pdf', 'Konya_charts.pdf', 'Konya_11-1.txt', 'notes.txt', 'Konya_11-x.png', 'svg'])
+    out, ref = tmp_path / 'm.zip', tmp_path / 'r.zip'
+    assert republish.main(['Syria', '--zip', str(zips.without), '--out', str(out), '--ajouter', str(mixed)]) == 0
+    summary = capsys.readouterr().out
+    assert 'fichiers du dossier --ajouter ignores (pas des pages 11-x) : 7' in summary
+    assert republish.main(['Syria', '--zip', str(zips.without), '--out', str(ref), '--ajouter', str(zips.flat)]) == 0
+    assert 'fichiers du dossier --ajouter ignores' not in capsys.readouterr().out
+    with zipfile.ZipFile(out) as a, zipfile.ZipFile(ref) as b:
+        assert [i.filename for i in a.infolist()] == [i.filename for i in b.infolist()]
+        assert all(a.read(i.filename) == b.read(i.filename) for i in a.infolist() if not i.filename.endswith('.pdf'))
+
+
+def test_republish_unexpected_page_name_in_the_zip_names_both_expected_forms(zips, tmp_path):
+    bad = tmp_path / 'bad.zip'
+    with zipfile.ZipFile(bad, 'w') as z:
+        z.writestr('pack/svg/Konya_12-1.svg', b'x')
+    with pytest.raises(republish.RepublishError) as exc:
+        republish.republish_zip('Syria', bad, tmp_path / 'o.zip')
+    assert str(exc.value).endswith('(attendu <stem>_10-9[A-Z]* ou <stem>_11-<n>)')
 
 
 def test_republish_without_approach_pages_is_unchanged_by_the_option_code(zips, tmp_path, capsys):

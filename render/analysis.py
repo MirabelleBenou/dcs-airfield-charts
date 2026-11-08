@@ -191,18 +191,18 @@ def attach_ils(ends, blist, log=None):
 
 def ils_antenna_info(attachments, blist):
     """Lot ac-approche-ils : antennes de chaque ILS rattache par `attach_ils` (`attachments` : son retour ; `blist` : les balises
-    brutes de l'aerodrome). {nom de l'extremite : {'callsign', 'freq_hz', 'loc': (x, z), 'gs': (x, z) ou None, 'gs_freq_hz'}} ; un
-    doublon (deuxieme localizer d'une extremite) n'y est pas. Le glide est celui de l'aerodrome a la meme frequence a 1 Hz pres
-    (le premier du fichier), None s'il n'y en a pas."""
-    gss = [b for b in blist if b.type in GLIDESLOPE_TYPES]
+    brutes de l'aerodrome). {nom de l'extremite : {'callsign', 'freq_hz', 'loc': (x, z), 'gs_candidates': [(x, z, freq_hz)]}} ; un
+    doublon (deuxieme localizer d'une extremite) n'y est pas. Les candidats sont toutes les balises `ILS_GLIDESLOPE` (pas
+    `PRMG_GLIDESLOPE`) de l'aerodrome a la meme frequence a 1 Hz pres, dans l'ordre du fichier ; le choix de celui d'une extremite
+    (dans la piste, le plus pres de l'axe) est fait par `approach.eligible_ends`."""
+    gss = [b for b in blist if b.type == 'ILS_GLIDESLOPE']
     out = {}
     for r in attachments:
         if r['end'] is None or r['duplicate']:
             continue
         b = r['beacon']
-        gs = next((g for g in gss if abs(g.frequency - b.frequency) < 1.0), None)
         out[r['end'].name] = {'callsign': b.callsign, 'freq_hz': b.frequency, 'loc': (b.x, b.z),
-                              'gs': (gs.x, gs.z) if gs else None, 'gs_freq_hz': gs.frequency if gs else None}
+                              'gs_candidates': [(g.x, g.z, g.frequency) for g in gss if abs(g.frequency - b.frequency) < 1.0]}
     return out
 
 

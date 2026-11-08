@@ -22,7 +22,8 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
      ville, a 36 px, touche les dimensions ou en est a moins de 24 px est reecrite plus petit sur sa page JPEG et dans le PDF.
   6. les pages d'approche `<stem>_11-<n>` (lot ac-approche-ils) : acceptees et recopiees telles quelles, aucune retouche ; leur PDF
      entre dans le recueil de la chart, apres les pages 10-9* (ordre naturel des suffixes). `--ajouter <dossier>` ajoute au zip les
-     pages 11-x d'un dossier (la sortie, a plat, de `build_chart.py --approches-seulement`) : voir `find_added_pages`.
+     pages 11-x d'un dossier (la sortie, a plat, de `build_chart.py --approches-seulement` ; les autres fichiers du dossier sont ignores et
+     comptes au resume) : voir `find_added_pages`.
 Chaque page 10-9* est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
 recueil `pdf/<stem>_charts.pdf` de chaque chart est refait. Sortie : un nouveau zip, memes entrees dans le meme ordre ; les
 entrees hors charts sont recopiees a l'octet, sauf, pour 5, les JPEG des pages touchees et le PDF du repertoire (un zip sans page de
@@ -876,23 +877,24 @@ class Result:
     directory: DirectoryResult = field(default_factory=lambda: DirectoryResult())   # repertoire des heliports (zip *helicopters*)
     approach: list = field(default_factory=list)     # noms des pages 11-x du zip, recopiees telles quelles
     added: dict = field(default_factory=dict)        # {stem: [pages 11-x ajoutees]} (`--ajouter`)
+    ignored: list = field(default_factory=list)      # noms des fichiers du dossier `--ajouter` qui ne sont pas des pages 11-x
 
 
-def find_added_pages(folder):
+def find_added_pages(folder, ignored=None):
     """Pages 11-x d'un dossier (`--ajouter`) : {page: {'svg', 'pdf', 'png': chemin}}, dans l'ordre naturel des noms. Le dossier est
-    la sortie de `build_chart.py --approches-seulement` : les trois fichiers `<stem>_11-<n>.{svg,pdf,png}` de chaque page, a plat.
-    RepublishError : dossier absent, fichier svg, pdf ou png qui n'est pas une page `<stem>_11-<n>`, un des trois fichiers manquant,
-    aucune page."""
+    la sortie de `build_chart.py --approches-seulement` (a plat) ; il peut porter d'autres fichiers (pages 10-9, recueil...) : tout
+    ce qui n'est pas un fichier `<stem>_11-<n>.{svg,pdf,png}` est ignore et ajoute a la liste `ignored` si elle est donnee.
+    RepublishError : dossier absent, un des trois fichiers d'une page manquant, aucune page."""
     folder = Path(folder)
     if not folder.is_dir():
         raise RepublishError(f'{folder} : dossier introuvable')
     found = {}
     for p in sorted(folder.iterdir()):
-        if not p.is_file() or p.suffix not in ('.svg', '.pdf', '.png'):
-            continue
-        m = _PAGE_NAME_ANY.match(p.stem)
+        m = _PAGE_NAME_ANY.match(p.stem) if p.is_file() and p.suffix in ('.svg', '.pdf', '.png') else None
         if not m or not _APPROACH.match(m['suffix']):
-            raise RepublishError(f"{p} : pas une page d'approche (attendu <stem>_11-<n>{p.suffix})")
+            if ignored is not None:
+                ignored.append(p.name)
+            continue
         found.setdefault(p.stem, {})[p.suffix[1:]] = p
     for name, files in found.items():
         for ext in ('svg', 'pdf', 'png'):
@@ -909,9 +911,9 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
     zip_in, zip_out = Path(zip_in), Path(zip_out)
     if zip_out.exists():
         raise RepublishError(f'{zip_out} existe deja (pas d\'ecrasement)')
-    added = find_added_pages(add_dir) if add_dir is not None else {}
-    index = update_coords.arp_index(theatre)
     res = Result()
+    added = find_added_pages(add_dir, res.ignored) if add_dir is not None else {}
+    index = update_coords.arp_index(theatre)
     with zipfile.ZipFile(zip_in) as zin, tempfile.TemporaryDirectory(prefix='republish_') as tmp:
         tmp = Path(tmp)
         infos = zin.infolist()
@@ -923,7 +925,7 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
                 continue
             pm = _PAGE_NAME_ANY.match(m['page'])
             if not pm:
-                raise RepublishError(f'{info.filename} : nom de page inattendu (attendu <stem>_10-9[A-Z]*)')
+                raise RepublishError(f'{info.filename} : nom de page inattendu (attendu <stem>_10-9[A-Z]* ou <stem>_11-<n>)')
             pages.append((m['dir'], m['page'], pm['stem'], pm['suffix']))
         new = {}                                   # nom d'entree -> fichier temporaire
         for n, (d, name, _, suffix) in enumerate(pages):
@@ -1077,10 +1079,12 @@ def main(argv):
     print(f"graduations glissees : {len(slid)} ; retirees : {len(grads) - len(slid)} (sur {len({m[0] for m in grads})} pages)")
     print(f"pages a fond F10 : {len(res.f10)}" + ''.join(f'\n  {n}' for n in res.f10))
     print(f'recueils refaits : {res.charts}')
-    if res.approach or res.added:
+    if res.approach or res.added or res.ignored:
         print(f"pages d'approche 11-x : {len(res.approach)} recopiees telles quelles ; {sum(len(v) for v in res.added.values())} ajoutees")
         for stem, names in res.added.items():
             print(f'  {stem} : {len(names)} ajoutee(s) ({", ".join(n[len(stem) + 1:] for n in names)})')
+        if res.ignored:
+            print(f'  fichiers du dossier --ajouter ignores (pas des pages 11-x) : {len(res.ignored)}')
     dr = res.directory
     if dr.tiles:
         print(f"repertoire des heliports : {dr.tiles} vignettes ; controlees (ville sous 36 px) : {dr.controlled} ; retouchees : {dr.retouched} ; "

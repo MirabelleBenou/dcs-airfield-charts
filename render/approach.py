@@ -60,25 +60,47 @@ def glide_offset_m(e, gs):
     return (gs[0] - e.pos[0]) * math.cos(az) + (gs[1] - e.pos[1]) * math.sin(az)
 
 
+def pick_glide(e, candidates, L):
+    """2.1 : parmi les antennes de glide `(x, z, freq_hz)` a la frequence du localizer, celle de l'extremite `e` (piste de `L` m) :
+    celles dont l'abscisse `s_gs` est dans [0 ; L], puis la plus proche de l'axe de la piste (distance perpendiculaire).
+    Retourne (antenne choisie ou None, s_gs, distance a l'axe) ; s'il n'y en a pas dans la piste, l'antenne la plus proche de
+    l'axe parmi toutes (pour le journal), None si aucun candidat."""
+    az = math.radians(e.az_grid)
+    scored = []
+    for c in candidates:
+        s_gs = glide_offset_m(e, c)
+        perp = abs(-(c[0] - e.pos[0]) * math.sin(az) + (c[1] - e.pos[1]) * math.cos(az))
+        scored.append((perp, s_gs, c))
+    if not scored:
+        return None, None, None
+    inside = [t for t in scored if 0.0 <= t[1] <= L]
+    perp, s_gs, c = min(inside or scored, key=lambda t: t[0])
+    return (c if inside else None), s_gs, perp
+
+
 def eligible_ends(data, log=print):
     """2.1 : [(extremite, antennes, s_gs)] des extremites qui ont une page, dans l'ordre naturel des noms ; les ILS ecartes ont
-    une ligne au journal `approche <extremite> : ecartee, <raison>`."""
+    une ligne au journal `approche <extremite> : écartée, <raison>`. Les antennes rendues portent le glide choisi
+    (`gs`, `gs_freq_hz`)."""
     out = []
     for e in sorted((e for e in data.ends if e.ils), key=lambda e: dcsdata.natural_key(e.name)):
         ant = data.ils_antennas.get(e.name)
-        if e.ils.endswith(' (LOC)') or ant is None or ant.get('gs') is None:
-            log(f'approche {e.name} : ecartee, pas de glide (ILS {e.ils})')
+        if e.ils.endswith(' (LOC)') or ant is None or not ant.get('gs_candidates'):
+            log(f'approche {e.name} : écartée, pas de glide (ILS {e.ils})')
             continue
         mhz = ant['freq_hz'] / 1e6
         if not (LOC_MIN_MHZ - 1e-6 <= mhz <= LOC_MAX_MHZ + 1e-6):
-            log(f'approche {e.name} : ecartee, frequence du localizer {mhz:.2f} MHz hors de 108,10 a 111,95 MHz')
+            log(f'approche {e.name} : écartée, frequence du localizer {mhz:.2f} MHz hors de 108,10 a 111,95 MHz')
             continue
-        s_gs = glide_offset_m(e, ant['gs'])
         L = page.rw_axes(data.runways[e.rw])[2]
-        if not (0.0 <= s_gs <= L):
-            log(f'approche {e.name} : ecartee, antenne de glide hors de la piste ({s_gs:.0f} m apres le seuil, piste de {L:.0f} m)')
+        gs, s_gs, _ = pick_glide(e, ant['gs_candidates'], L)
+        if gs is None:
+            log(f'approche {e.name} : écartée, antenne de glide hors de la piste ({s_gs:.0f} m apres le seuil, piste de {L:.0f} m)')
             continue
-        out.append((e, ant, s_gs))
+        if e.thr_elev_ft is None:
+            log(f'approche {e.name} : écartée, altitude du seuil inconnue')
+            continue
+        out.append((e, dict(ant, gs=(gs[0], gs[1]), gs_freq_hz=gs[2]), s_gs))
     return out
 
 
@@ -301,7 +323,7 @@ def build_page(data, e, ant, s_gs, n, log=print):
             doc.add(R, text(x, ROW_Y[1], dme_dists[nm], pt(7.6), 'regular', INK, 'middle'))
         rule_y = ROW_Y[1] + 2.2
     doc.add(R, line(X0, rule_y, X1, rule_y, INK, 0.35))
-    year = f'{int(data.year)}' if float(data.year) == int(data.year) else f'{data.year:g}'
+    year = f'{int(data.year)}'
     m1 = f"Pas une carte d'approche r\u00e9elle : DCS ne donne ni proc\u00e9dure ni minima. Axe : cap au compas du cockpit (grille \u2212 d\u00e9clinaison {year})."
     m2 = f"Plan de 3\u00b0 suppos\u00e9, depuis l'antenne de glide ({int(round(s_gs))} m apr\u00e8s le seuil) ; relief non repr\u00e9sent\u00e9. Donn\u00e9es : beacons.lua, pydcs."
     doc.add(R, text(X0, rule_y + 3.8, m1, pt(5.4), 'regular', INK2))
