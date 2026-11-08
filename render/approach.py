@@ -60,6 +60,9 @@ def glide_offset_m(e, gs):
     return (gs[0] - e.pos[0]) * math.cos(az) + (gs[1] - e.pos[1]) * math.sin(az)
 
 
+LOC_CLEAR, LOC_STEP, LOC_SHIFT_MAX = 0.6, 0.5, 12.0       # addendum 5 : carre LOC decale (distance libre, pas, decalage maximal, mm)
+
+
 def pick_glide(e, candidates, L):
     """2.1 : parmi les antennes de glide `(x, z, freq_hz)` a la frequence du localizer, celle de l'extremite `e` (piste de `L` m) :
     celles dont l'abscisse `s_gs` est dans [0 ; L / 2] (un glide est a l'extremite de sa piste : les deux extremites opposees ne
@@ -77,6 +80,26 @@ def pick_glide(e, candidates, L):
     inside = [t for t in scored if 0.0 <= t[1] <= L / 2.0]
     perp, s_gs, c = min(inside or scored, key=lambda t: t[0])
     return (c if inside else None), s_gs, perp
+
+
+def shift_loc(lp, d, symbols, labels, frame):
+    """Position du carre LOC (2 mm) : sa vraie position `lp` (x, y de la page) s'il est a 0,6 mm ou plus de tout symbole de balise ;
+    sinon, le premier point de l'axe prolonge, par pas de 0,5 mm dans le sens `d` (unitaire, sur la page, en s'eloignant du seuil),
+    a 0,6 mm ou plus de tout symbole, de tout libelle de balise et du cadre. Retourne (centre, decalage en mm) ; (lp, None) si rien
+    n'est libre a LOC_SHIFT_MAX mm au plus."""
+    fx, fy, fw, fh = frame
+    inner = box(fx + LOC_CLEAR, fy + LOC_CLEAR, fx + fw - LOC_CLEAR, fy + fh - LOC_CLEAR)
+    sq = lambda c: page.elem_geom(rect(c[0] - 1.0, c[1] - 1.0, 2.0, 2.0, '#FFFFFF', INK, 0.35))      # avec son trait, comme `elem_geom`
+    if not any(sq(lp).distance(g) < LOC_CLEAR for g in symbols):
+        return lp, 0.0
+    k = 1
+    while k * LOC_STEP <= LOC_SHIFT_MAX + 1e-9:
+        c = (lp[0] + d[0] * k * LOC_STEP, lp[1] + d[1] * k * LOC_STEP)
+        b = sq(c)
+        if inner.contains(b) and all(b.distance(g) >= LOC_CLEAR for g in list(symbols) + list(labels)):
+            return c, k * LOC_STEP
+        k += 1
+    return lp, None
 
 
 def eligible_ends(data, log=print):
@@ -245,8 +268,12 @@ def build_page(data, e, ant, s_gs, n, log=print):
     add('Frame & grid', text(fx + fw - 2.9, bar_y + sc_size * CAP_HEIGHT / 2, 'NORD GRILLE (NORD DU JEU) EN HAUT', pt(5.2), 'regular', INK2, 'end'))
     # antennes : localizer (carre blanc de 2 mm) et glide (cercle blanc de 0,8 mm de rayon)
     lp, gp = P(ant['loc']), P(ant['gs'])
-    add('Runway bearings', rect(lp[0] - 1.0, lp[1] - 1.0, 2.0, 2.0, '#FFFFFF', INK, 0.35))        # au-dessus des symboles de balise (calque Navaids)
-    add('Runway bearings', circle(gp[0], gp[1], 0.8, '#FFFFFF', INK, 0.3))
+    # Les deux antennes sont dessinees (calque Runway bearings, au-dessus des symboles de balise) apres les libelles de balise, qui
+    # les evitent a leur vraie position ; le carre LOC peut alors etre decale (`shift_loc`).
+    loc_el = rect(lp[0] - 1.0, lp[1] - 1.0, 2.0, 2.0, '#FFFFFF', INK, 0.35)
+    gs_el = circle(gp[0], gp[1], 0.8, '#FFFFFF', INK, 0.3)
+    obstacles.append(page.elem_geom(loc_el))
+    obstacles.append(page.elem_geom(gs_el))
     # balises du bandeau : symboles, puis libelles un a un (chacun evite tout ce qui est deja pose) ; les libelles LOC et GS, qui ont
     # huit places possibles, viennent apres eux
     shown, groups = compose.navaid_plan(view, frame, data)
@@ -264,8 +291,24 @@ def build_page(data, e, ant, s_gs, n, log=print):
         nav_free.append((grp['lines'][0], pos, free))
         if not free:
             log(f'approche {e.name} : libelle de balise {grp["lines"][0]} sans place libre')
+    # antennes ; carre LOC decale le long de l'axe prolonge s'il touche un symbole de balise
+    sym_geoms = [page.elem_geom(el) for bcn, X, Y in shown for el in compose.navaid_symbol_elems(bcn.kind, X, Y)]
+    lc, shift_mm = shift_loc(lp, (dX, dY), sym_geoms, nav_labels, frame)
+    if shift_mm is None:
+        log(f'approche {e.name} : carre LOC sans place libre a {LOC_SHIFT_MAX} mm au plus de sa position')
+        shift_mm = 0.0
+    if shift_mm > 0.0:
+        half = 1.0 / max(abs(dX), abs(dY))                  # du centre au bord du carre, le long de l'axe
+        tx, ty = lc[0] - dX * half, lc[1] - dY * half
+        doc.add('Runway bearings', line(lp[0], lp[1], tx, ty, INK2, 0.2))
+        doc.add('Runway bearings', circle(lp[0], lp[1], 0.35, INK))
+        loc_el = rect(lc[0] - 1.0, lc[1] - 1.0, 2.0, 2.0, '#FFFFFF', INK, 0.35)
+        obstacles.append(page.elem_geom(loc_el))
+        log(f'approche {e.name} : carre LOC decale de {shift_mm:.1f} mm le long de l\'axe prolonge')
+    doc.add('Runway bearings', loc_el)
+    doc.add('Runway bearings', gs_el)
     # libelles LOC et GS
-    el, g, ok = place_small_label('LOC', pt(5.2), lp[0], lp[1], 1.0, obstacles, frame)
+    el, g, ok = place_small_label('LOC', pt(5.2), lc[0], lc[1], 1.0, obstacles, frame)
     doc.add('Runway markings', el)
     obstacles.append(g)
     if not ok:

@@ -393,6 +393,57 @@ def test_plan_scale_fits_the_required_points_with_a_6_mm_margin(six):
         assert any(a == pytest.approx(b, abs=0.01) for a, b in spans) and all(a <= b + 1e-6 for a, b in spans)
 
 
+# ---------- addendum 5 : carre LOC decale ----------
+def loc_parts(svg):
+    from render.republish import _layer_lines
+    br = [ln for _, _, ln in _layer_lines(svg, 'Runway bearings')]
+    rect = next(ln for ln in br if ln.startswith('<rect'))
+    num = lambda ln, k: float(re.search(rf'\b{k}="([-\d.]+)"', ln).group(1))
+    c = (num(rect, 'x') + 1.0, num(rect, 'y') + 1.0)
+    dots = [ln for ln in br if ln.startswith('<circle') and 'r="0.35"' in ln]
+    rapp = [ln for ln in br if ln.startswith('<line') and 'stroke-width="0.2"' in ln]
+    return c, dots, rapp, num
+
+
+def test_loc_square_on_a_beacon_symbol_is_shifted_along_the_axis_with_a_leader_line_and_a_dot(six):
+    (p,) = six['Konya'][1]
+    c, dots, rapp, num = loc_parts(p.svg)
+    assert len(dots) == 1 and len(rapp) == 1 and 'stroke="#5A5A5A"' in rapp[0]
+    dx, dy = num(dots[0], 'cx'), num(dots[0], 'cy')                                # position vraie
+    d = math.hypot(c[0] - dx, c[1] - dy)
+    assert 0.0 < d <= 12.0 and (d / 0.5) == pytest.approx(round(d / 0.5), abs=1e-3)         # par pas de 0,5 mm
+    # sur l'axe prolonge, dans le sens de l'atterrissage (le cap de la page : `arrow`), en s'eloignant du seuil
+    v = ((c[0] - dx) / d, (c[1] - dy) / d)
+    az = math.radians(next(e for e in six['Konya'][0].ends if e.name == '01L').az_grid)
+    assert v == pytest.approx((math.sin(az), -math.cos(az)), abs=1e-3)
+    # trait de rappel : de la vraie position au bord du carre
+    assert (num(rapp[0], 'x1'), num(rapp[0], 'y1')) == pytest.approx((dx, dy), abs=1e-2)
+    assert max(abs(num(rapp[0], 'x2') - c[0]), abs(num(rapp[0], 'y2') - c[1])) == pytest.approx(1.0, abs=1e-2)
+    # a 0,6 mm au moins de tout symbole et de tout libelle de balise
+    from render.republish import _layer_lines
+    nav = [ln for _, _, ln in _layer_lines(p.svg, 'Navaids')]
+    sq = page.elem_geom(f'<rect x="{c[0] - 1.0}" y="{c[1] - 1.0}" width="2" height="2" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.35"/>')
+    texts = [ln for ln in nav if ln.startswith('<text')]
+    assert all(sq.distance(page.elem_geom(ln)) >= 0.6 - 1e-6 for ln in nav if not ln.startswith('<text'))
+    assert sq.distance(page.elem_geom('\n'.join(texts))) >= 0.6 - 1e-6
+
+
+def test_free_loc_square_does_not_move(six):
+    for base in ('Adana', 'Paphos', 'Ramat_David'):
+        (p,) = six[base][1]
+        _, dots, rapp, _ = loc_parts(p.svg)
+        assert dots == [] and rapp == []
+
+
+def test_shift_loc_unit():
+    fr = (0.0, 0.0, 100.0, 100.0)
+    sym = box(48.0, 48.0, 52.0, 52.0)
+    c, mm = approach.shift_loc((50.0, 50.0), (0.0, -1.0), [sym], [], fr)
+    assert mm is not None and mm > 0 and c == pytest.approx((50.0, 50.0 - mm))
+    assert approach.shift_loc((10.0, 10.0), (0.0, -1.0), [sym], [], fr) == ((10.0, 10.0), 0.0)             # libre : ne bouge pas
+    assert approach.shift_loc((50.0, 50.0), (0.0, -1.0), [sym, box(0.0, 0.0, 100.0, 47.0)], [], fr)[1] is None   # rien de libre a 12 mm
+
+
 # ---------- build_chart --approches-seulement (A5) ----------
 def test_build_chart_approaches_only_writes_just_the_approach_page(work, tmp_path, capsys):
     rc = build_chart.main(['build_chart.py', 'Syria', 'Paphos', '--config', str(work.source), '--out', str(tmp_path), '--approches-seulement'])
