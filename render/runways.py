@@ -54,6 +54,7 @@ class Runway:
     ends_mode: str = 'barres'   # 'barres' (barres de seuil) ou 'revetement' (bout du revetement)
     bars_len: float = None      # longueur entre barres de seuil (m), None si pas de barres
     pave_len: float = None      # longueur de revetement (m, marche a 70 %)
+    surface: str = 'dur'        # 'dur', ou 'herbe' : piste declaree par le jeu, sans revetement detecte
 
     @property
     def length(self):
@@ -62,6 +63,36 @@ class Runway:
     @property
     def center(self):
         return ((self.p0[0] + self.p1[0]) / 2, (self.p0[1] + self.p1[1]) / 2)
+
+
+DECLARED_MIN_LENGTH_M = 100.0       # une piste declaree plus courte ne compte pas (base sans piste)
+
+
+def runways_from_declared(declared, refs=None, heading_fn=None):
+    """Pistes declarees par le jeu (dcsdata.declared_runways) -> liste de Runway 'herbe' : cap grille = -course, axe
+    d = (cos course, -sin course) en (x, z), extremites = centre -/+ d * longueur / 2, largeur declaree, sans marquage.
+    Une piste de moins de 100 m ne donne rien. `ref` : indice de la piste pydcs (`refs` : liste de (nom, cap pydcs)) dont
+    le cap est le plus proche de celui de la piste, a MATCH_MAX_DEG au plus (`heading_fn({'d': d, 'p': (x, z)})` : le calcul
+    de cap de l'appariement de analysis.py), une piste pydcs ne servant qu'une fois ; None sinon. Pure : ni image, ni fichier."""
+    out, used = [], set()
+    for gr in declared:
+        if gr['length'] < DECLARED_MIN_LENGTH_M:
+            continue
+        c = gr['course']
+        d = (math.cos(c), -math.sin(c))
+        cx, cz = gr['x'], gr['z']
+        h = gr['length'] / 2
+        ref = None
+        if refs and heading_fn is not None:
+            hd = heading_fn({'d': d, 'p': (cx, cz)})
+            cand = [(heading_diff(rh, hd), i) for i, (_, rh) in enumerate(refs) if i not in used]
+            cand = [t for t in cand if t[0] <= MATCH_MAX_DEG]
+            if cand:
+                ref = min(cand)[1]
+                used.add(ref)
+        out.append(Runway((cx - d[0] * h, cz - d[1] * h), (cx + d[0] * h, cz + d[1] * h), float(gr['width']), 0, d, ref,
+                          False, 'revetement', None, float(gr['length']), 'herbe'))
+    return out
 
 
 # ---------- echantillonnage ----------

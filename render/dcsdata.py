@@ -3,9 +3,11 @@
 pydcs est importe (licence LGPL : import d'une bibliotheque, aucun code recopie).
 """
 import importlib
+import json
 import math
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 from . import geo
@@ -150,6 +152,31 @@ def airport_facts(ap):
         slots.append(Slot(str(s.slot_name), s.position.x, s.position.y, bool(s.helicopter and not s.airplanes),
                           bool(s.airplanes), s.length, s.width))
     return AirportFacts(ap.id, ap.name, ap.position.x, ap.position.y, atc_d, aps, slots, rw_refs)
+
+
+DECLARED_DIR = Path(__file__).resolve().parent / 'data' / 'runways_declared'
+
+
+@lru_cache(maxsize=None)
+def _declared_file(theatre):
+    path = DECLARED_DIR / f'{theatre}.json'
+    if not path.is_file():
+        return None
+    return json.loads(path.read_text(encoding='utf-8'))
+
+
+def declared_runways(theatre, base, airport_name=None):
+    """Pistes declarees par le jeu (`Airbase:getRunways()`) d'une base d'un theatre : liste de dicts {Name, course, length,
+    width, x, z} (radians, metres). Le nom se cherche sans tenir compte de la casse, par le nom du dossier de la base
+    (`base`) puis par le nom pydcs (`airport_name`). Liste vide si le theatre n'a pas de fichier ou la base pas d'entree."""
+    doc = _declared_file(theatre)
+    if not doc:
+        return []
+    by_name = {b['name'].lower(): b for b in doc['airbases']}
+    for key in (base, airport_name):
+        if key and key.lower() in by_name:
+            return [dict(r) for r in by_name[key.lower()]['runways']]
+    return []
 
 
 def natural_key(name):

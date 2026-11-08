@@ -317,8 +317,14 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     if refs:
         rws = runways.detect_runways(img, pav, g, clear, refs=refs, heading_fn=mag_heading, log=log,
                                      second_pass_min=runways.HELI_SPARE_SEGMENT_MIN_M if heli_mode else None)
-        if not rws:
-            raise ChartError('aucune piste detectee')
+        if not rws:                                       # lot terrains-herbe : la piste en herbe que declare le jeu
+            declared = [gr for gr in dcsdata.declared_runways(theatre, base, facts.name)
+                        if gr['length'] >= runways.DECLARED_MIN_LENGTH_M]
+            rws = runways.runways_from_declared(declared, refs, mag_heading)
+            for r, gr in zip(rws, declared):
+                log(f'piste declaree par le jeu {gr["Name"]} : {r.length:.0f} m (aucune piste detectee sur la F10)')
+            if not rws and not heli_mode:
+                raise ChartError('aucune piste detectee')
     else:
         rws = []                                          # lot heliports (4.2) : aucune piste pydcs, la detection ne tourne pas
         log('aucune piste dans pydcs : detection des pistes non lancee')

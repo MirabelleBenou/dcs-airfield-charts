@@ -96,6 +96,12 @@ def draw_scene(view, data, rings_pav, rings_bld, parkings, layers, sym_r=SYM_PLA
     runs, marks = [], []
     for i, rw in enumerate(data.runways):
         poly = [view.pt(*p) for p in runway_polygon(rw)]
+        if rw.surface == 'herbe':                         # piste en herbe : contour seul, aucun marquage
+            runs.append('<polygon points="' + ' '.join(f'{f(a)},{f(b)}' for a, b in poly)
+                        + f'" fill="#FFFFFF" stroke="{INK}" stroke-width="{f(mark_w * 1.6)}"/>')
+            if boxes is not None:
+                boxes.append(('runway', poly))
+            continue
         runs.append('<polygon points="' + ' '.join(f'{f(a)},{f(b)}' for a, b in poly) + f'" fill="{INK}"/>')
         if boxes is not None:
             boxes.append(('runway', poly))
@@ -133,7 +139,7 @@ def draw_scene(view, data, rings_pav, rings_bld, parkings, layers, sym_r=SYM_PLA
             if fs < pt(3.0):
                 continue
             marks.append(f'<g transform="translate({f(X)} {f(Y)}) rotate({f(e.az_grid, 2)})">'
-                         + text(0, fs * CAP_HEIGHT / 2, e.name, fs, 'bold', '#FFFFFF', 'middle') + '</g>')
+                         + text(0, fs * CAP_HEIGHT / 2, e.name, fs, 'bold', INK if rw.surface == 'herbe' else '#FFFFFF', 'middle') + '</g>')
             if boxes is not None:
                 boxes.append(('designator', rot_box(X, Y, text_width(e.name, 'bold', fs), fs * CAP_HEIGHT, e.az_grid)))
     layers['Runways'].extend(runs)
@@ -458,6 +464,8 @@ def runway_table(doc, data, frame_bottom_unused, head_y, rows_y):
         doc.add(L, text(cols[0], y, e.name, pt(7.2), 'bold'))
         doc.add(L, text(cols[1], y, f'{e.mag:05.1f}°', pt(7.2), 'bold'))
         doc.add(L, text(cols[2], y, dims, pt(6.9), 'regular'))
+        if rw.surface == 'herbe':
+            doc.add(L, text(X1, y, 'PISTE EN HERBE', pt(6.9), 'bold', INK, 'end'))
         thr = f'{e.thr_elev_ft} FT' if e.thr_elev_ft is not None else '—'
         doc.add(L, text(cols[3], y, thr, pt(6.9), 'regular'))
         doc.add(L, text(cols[4], y, e.ils if e.ils else '—', pt(7.2), 'bold' if e.ils else 'regular'))
