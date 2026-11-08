@@ -1,0 +1,19 @@
+{"format":"dcs-navaids-v1","theatre":"Nevada","source":{"airfields":"pydcs 84f6335 (LGPL-3.0): airfield names and positions","icao":"OurAirports 64af129 (public domain): today's ICAO codes, matched by position within 3 km","beacons":null},"airdromes":[
+{"airdromeId":1,"name":"Creech","icao":"KINS","beacons":null},
+{"airdromeId":2,"name":"Groom Lake","icao":"KXTA","beacons":null},
+{"airdromeId":3,"name":"McCarran International","icao":"KLAS","beacons":null},
+{"airdromeId":4,"name":"Nellis","icao":"KLSV","beacons":null},
+{"airdromeId":5,"name":"Beatty","icao":"KBTY","beacons":null},
+{"airdromeId":6,"name":"Boulder City","icao":"KBVU","beacons":null},
+{"airdromeId":7,"name":"Echo Bay","icao":null,"beacons":null},
+{"airdromeId":8,"name":"Henderson Executive","icao":"KHND","beacons":null},
+{"airdromeId":9,"name":"Jean","icao":null,"beacons":null},
+{"airdromeId":10,"name":"Laughlin","icao":"KIFP","beacons":null},
+{"airdromeId":11,"name":"Lincoln County","icao":null,"beacons":null},
+{"airdromeId":13,"name":"Mesquite","icao":null,"beacons":null},
+{"airdromeId":14,"name":"Mina","icao":null,"beacons":null},
+{"airdromeId":15,"name":"North Las Vegas","icao":"KVGT","beacons":null},
+{"airdromeId":16,"name":"Pahute Mesa","icao":null,"beacons":null},
+{"airdromeId":17,"name":"Tonopah","icao":"KTPH","beacons":null},
+{"airdromeId":18,"name":"Tonopah Test Range","icao":"KTNX","beacons":null}
+],"enroute":null}

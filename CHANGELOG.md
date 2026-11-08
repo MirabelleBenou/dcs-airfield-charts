@@ -17,6 +17,10 @@ What changed in the published charts, version by version. Each version is a GitH
 - 24 grass strips that had no chart (the F10 map draws no runway there) now have one. Their runway is the one DCS declares for the airfield: centre, heading, length and width as the game gives them. It is drawn as an outline, without markings, and the runway table says « PISTE EN HERBE ».
 - Landstuhl, whose declared runway is 10 m long, is charted as a helicopter base, on the F10 map background.
 
+**ICAO codes and radio beacons, airfield by airfield.**
+
+- New files in `downloads/navaids/`, one per DCS theatre, give every airfield of the mission editor its ICAO code when it has one (today's codes, from OurAirports, matched by position) and, for Caucasus, Cold War Germany and Syria, the radio beacons DCS ties to it: type, callsign, frequency or channel, and the runway end an ILS serves; the en-route beacons are listed apart. New tool `render/export_navaids.py` writes them.
+
 ## AC-V1.6.0 — 7 November 2026
 
 **Magnetic headings now match the cockpit compass.**

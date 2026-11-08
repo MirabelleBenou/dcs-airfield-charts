@@ -1,0 +1,10 @@
+{"format":"dcs-navaids-v1","theatre":"MarianaIslands","source":{"airfields":"pydcs 84f6335 (LGPL-3.0): airfield names and positions","icao":"OurAirports 64af129 (public domain): today's ICAO codes, matched by position within 3 km","beacons":null},"airdromes":[
+{"airdromeId":1,"name":"Rota Intl","icao":"PGRO","beacons":null},
+{"airdromeId":2,"name":"Saipan Intl","icao":"PGSN","beacons":null},
+{"airdromeId":3,"name":"Tinian Intl","icao":"PGWT","beacons":null},
+{"airdromeId":4,"name":"Antonio B. Won Pat Intl","icao":"PGUM","beacons":null},
+{"airdromeId":5,"name":"Olf Orote","icao":null,"beacons":null},
+{"airdromeId":6,"name":"Andersen AFB","icao":"PGUA","beacons":null},
+{"airdromeId":7,"name":"Pagan Airstrip","icao":null,"beacons":null},
+{"airdromeId":8,"name":"North West Field","icao":null,"beacons":null}
+],"enroute":null}

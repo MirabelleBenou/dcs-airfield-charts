@@ -70,6 +70,7 @@ What a chart shows: pavement, runways and their markings, buildings and hardened
 | `tests/` | `python -m pytest`; the tests that need captured samples or DCS files run when `DCS_CHARTS_SAMPLES` points to a folder holding them, and are skipped otherwise |
 | `downloads/` | the published charts: one PDF per airfield in `downloads/<theatre>/` (with its index), and a zip per theatre holding every page as PDF, PNG and SVG |
 | `downloads/parkings/` | every parking stand of every DCS theatre, with the identifiers a mission file uses, its position and the aircraft it takes (JSON, from pydcs; see its README) |
+| `downloads/navaids/` | the ICAO code of every DCS airfield that has one, and the radio beacons of Caucasus, Cold War Germany and Syria (JSON; see its README) |
 
 ## Installation (Windows)
 
@@ -136,9 +137,17 @@ python -I render/export_parkings.py --out downloads/parkings
 
 It writes one `<theatre>.json` per theatre and `aircraft.json` (the size of every aircraft type) to the folder, and prints a line per file; run it again after a pydcs update to refresh the published files.
 
+The ICAO code and the radio beacons of every airfield come from `render/export_navaids.py`, which needs two inputs: OurAirports' `airports.csv` at the commit the tool pins (it refuses any other file) and the `Mods/terrains` folder of a DCS install, for the `beacons.lua` of Caucasus, Cold War Germany and Syria:
+
+```
+python -I render/export_navaids.py --ourairports airports.csv --beacons "<DCS>/Mods/terrains" --out downloads/navaids
+```
+
+It writes one `<theatre>.json` per theatre (eleven files) to the folder and prints a line per file; the other eight theatres have the ICAO code only.
+
 Tests: `python -m pytest` (see the table above for the tests that need samples).
 
-Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports.
+Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [OurAirports](https://github.com/davidmegginson/ourairports-data) (public domain) for the ICAO codes in `downloads/navaids/`; [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports.
 
 ## What we measured
 
