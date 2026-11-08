@@ -3,6 +3,9 @@
 --   "xz <x> <z> <alt>"      -> reply "ok <x> <z> <alt>"
 --   "ll <lat> <lon> <alt>"  -> reply "ok <x> <z> <alt>"  (x North, z East, metres)
 --   "release"               -> stops commanding the camera, reply "ok released"
+--   "cam <x> <z> <h> <heading> <pitch>" -> free camera at ground height + h metres (ground height from LoGetAltitude(x, z)),
+--                              heading in degrees (0 = +x north, 90 = +z east), pitch in degrees (negative = down);
+--                              reply "ok <x> <y> <z>" (the y placed) or "err no_altitude" (nothing placed)
 -- Camera is commanded only after a request, and released on "release", mission stop,
 -- or automatically after 5 s without any request.
 
@@ -19,8 +22,21 @@ local function ccLog(msg)
     log.write('ChartsCapture', log.INFO, msg)
 end
 
+local function ccHandleCam(line)
+    local v = {}
+    for n in line:gmatch('[%-%d%.eE]+') do v[#v + 1] = tonumber(n) end
+    local x, z, h, cap, pitch = v[1], v[2], v[3], v[4], v[5]
+    if not (x and z and h and cap and pitch) then return 'err bad_request' end
+    local ok, ground = pcall(LoGetAltitude, x, z)
+    if not ok or type(ground) ~= 'number' then return 'err no_altitude' end
+    local y = ground + h
+    cc.target = { cam = true, x = x, y = y, z = z, cap = cap, pitch = pitch }
+    return string.format('ok %.3f %.3f %.3f', x, y, z)
+end
+
 local function ccHandle(line)
     cc.lastReq = ccSocket.gettime()
+    if line:match('^cam[%s]') then return ccHandleCam(line) end
     local cmd, a, b, c = line:match('^(%a+)%s*([%-%d%.eE]*)%s*([%-%d%.eE]*)%s*([%-%d%.eE]*)')
     if cmd == 'release' then
         cc.target = nil
@@ -75,6 +91,17 @@ local function ccApplyCamera()
     if ccSocket.gettime() - cc.lastReq > CC_IDLE_RELEASE_S then
         cc.target = nil
         ccLog('camera released: no request for ' .. CC_IDLE_RELEASE_S .. ' s')
+        return
+    end
+    if t.cam then
+        local hd, pt = math.rad(t.cap), math.rad(t.pitch)
+        local ch, sh, cp, sp = math.cos(hd), math.sin(hd), math.cos(pt), math.sin(pt)
+        LoSetCameraPosition({
+            x = { x = cp * ch, y = sp, z = cp * sh },       -- forward
+            y = { x = -sp * ch, y = cp, z = -sp * sh },     -- up
+            z = { x = -sh, y = 0, z = ch },                 -- right
+            p = { x = t.x, y = t.y, z = t.z },
+        })
         return
     end
     LoSetCameraPosition({

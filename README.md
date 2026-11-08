@@ -65,6 +65,7 @@ What a chart shows: pavement, runways and their markings, buildings and hardened
 | `capture/hook/ChartsCaptureHook.lua` | DCS export hook: a small local server (`127.0.0.1:47123`) that places the F10 camera directly above a point, with its axes aligned to the DCS grid; releases the camera after 5 s without a command |
 | `capture/f10capture.py` | captures a whole base: extent read from its `.rn4`, camera altitude adapted to the terrain, scale calibration (falls back to the predicted scale if calibration fails), image grid, mosaic; `index <Theatre>` lists every airbase and heliport of a theatre; `theatre <Theatre>` captures them all in one resumable pass (about 45 min for Syria) |
 | `capture/f10probe.py` | the original probe (link, stabilisation, scale, alignment) |
+| `capture/signcapture.py`, `capture/rn5.py` | taxiway signs, first half (work in progress): `rn5.py` reads the taxiway graph of an airfield from its `.rn5` file; `signcapture.py` plans where to look for the signs (`visee`) and takes those views in DCS with the free camera (`capture`) |
 | `render/` | the renderer: vectorises a captured base (pavement, buildings, runways), reads the game facts through pydcs, lays out the A5 pages and exports SVG, PDF and PNG; `build_chart.py` renders a base, `fetch_osm.py` downloads real taxiway names from OpenStreetMap; fonts in `render/fonts/` |
 | `tests/` | `python -m pytest`; the tests that need captured samples or DCS files run when `DCS_CHARTS_SAMPLES` points to a folder holding them, and are skipped otherwise |
 | `downloads/` | the published charts: one PDF per airfield in `downloads/<theatre>/` (with its index), and a zip per theatre holding every page as PDF, PNG and SVG |
@@ -92,6 +93,8 @@ Copy `capture/config.example.json` to `capture/config.json` (ignored by git) and
 | `osm_dir` | rendering only (optional, default `<work_dir>/osm`): where the OpenStreetMap taxiway names are read and written |
 
 The file is looked up in this order: the `--config <path>` command-line option, otherwise the `DCS_CHARTS_CONFIG` environment variable, otherwise `capture/config.json`. `~` is expanded. If the file is missing or incomplete, the script stops with a message saying so.
+
+**Taxiway signs (work in progress).** `python -I capture/signcapture.py visee <Theatre> [<Base>…]` reads the taxiway network of each airfield from its `.rn5` file and plans where to look for the taxiway signs (runway exits and holding points, taxiway intersections); `capture <Theatre> <Base>…` then takes these views in DCS with the free camera (F11 view, DCS in the foreground; the hook must be the version of this repository). Images go to `<work_dir>/panneaux/<theatre>/<Base>/`. Reading the signs is not done yet.
 
 ## Rendering charts
 
