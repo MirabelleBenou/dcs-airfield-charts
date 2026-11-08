@@ -279,3 +279,9 @@ def test_analyze_entry_whose_number_does_not_follow_the_heading_raises(work, mon
     with pytest.raises(analysis.ChartError, match='aucune piste detectee'):
         analysis.analyze(work, 'Syria', 'Der_Salman', 1985, log=log.append)
     assert any('ecartee : numero sans rapport avec le cap' in l for l in log)
+
+
+def test_declared_runways_underscore_folder_falls_back_on_the_pydcs_name():
+    assert dcsdata.declared_runways(THEATRE, 'Dossier_Inconnu', 'Grosse Wiese')[0]['Name'] == 26
+    assert dcsdata.declared_runways(THEATRE, 'Dossier_Inconnu', 'Grosse_Wiese')[0]['Name'] == 26
+    assert dcsdata.declared_runways(THEATRE, 'Dossier_Inconnu', 'Autre_Inconnue') == []
