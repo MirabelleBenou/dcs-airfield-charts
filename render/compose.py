@@ -1,4 +1,4 @@
-"""Assemblage des pages d'un chart : 10-9, puis 10-9A, 10-9B... selon la regle du cadrage 4.5."""
+"""Assemblage des pages d'un chart : 10-9, puis 10-9A, 10-9B... selon la regle du cadrage 4.5, puis les pages d'approche 11-x."""
 import base64
 import io
 import math
@@ -466,4 +466,7 @@ def build_pages(data, log=print):
             footer(d2, data, False)
             pages.append(PageOut(f'10-9{letter}', d2.render(), {'insets': [b.zone.label for b in pg], 'n_numbers': n,
                                                               'k': {b.zone.label: b.k for b in pg}}))
+    # ---- pages d'approche 11-x (lot ac-approche-ils) : une par extremite ILS avec glide
+    from . import approach
+    pages.extend(approach.build_approach_pages(data, log))
     return pages

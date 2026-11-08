@@ -92,6 +92,7 @@ class ChartData:
     heli_mode: bool = False    # lot heliports (4.1) : toutes les aires pydcs sont reservees aux helicopteres
     icao_known: bool = True    # un OACI a ete donne (option --icao ou fichier OSM) ; sinon `icao` porte le nom de la capture
     f10_img: object = None     # lot heliports-fond (4.3) : mosaique (RGB, icone et nom de l'heliport effaces), seulement sur fond F10
+    ils_antennas: dict = field(default_factory=dict)   # lot ac-approche-ils : par nom d'extremite ILS, antennes du localizer et du glide (`ils_antenna_info`)
 
     @property
     def on_f10(self):
@@ -186,6 +187,23 @@ def attach_ils(ends, blist, log=None):
             tgt = f"{r['end'].name} ({r['lateral_m']:.0f} m de l'axe)" if r['end'] else 'aucune extremite'
             log(f"ILS {text} -> {tgt}" + (' [doublon ecarte]' if r['duplicate'] else ''))
     return res
+
+
+def ils_antenna_info(attachments, blist):
+    """Lot ac-approche-ils : antennes de chaque ILS rattache par `attach_ils` (`attachments` : son retour ; `blist` : les balises
+    brutes de l'aerodrome). {nom de l'extremite : {'callsign', 'freq_hz', 'loc': (x, z), 'gs': (x, z) ou None, 'gs_freq_hz'}} ; un
+    doublon (deuxieme localizer d'une extremite) n'y est pas. Le glide est celui de l'aerodrome a la meme frequence a 1 Hz pres
+    (le premier du fichier), None s'il n'y en a pas."""
+    gss = [b for b in blist if b.type in GLIDESLOPE_TYPES]
+    out = {}
+    for r in attachments:
+        if r['end'] is None or r['duplicate']:
+            continue
+        b = r['beacon']
+        gs = next((g for g in gss if abs(g.frequency - b.frequency) < 1.0), None)
+        out[r['end'].name] = {'callsign': b.callsign, 'freq_hz': b.frequency, 'loc': (b.x, b.z),
+                              'gs': (gs.x, gs.z) if gs else None, 'gs_freq_hz': gs.frequency if gs else None}
+    return out
 
 
 def shelter_flags(parkings_xz, bld, g):
@@ -332,7 +350,8 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
             if d.min() <= THRESHOLD_ELEV_MAX_M:
                 thr = int(round(float(np.median(pts[np.argsort(d)[:THRESHOLD_ELEV_N], 1])) * FT))
             ends.append(End(nm, az, mag, pos, i, thr))
-    attach_ils(ends, blist, log=log)                        # ILS rattaches par la geometrie (lot balises, 4.2)
+    attachments = attach_ils(ends, blist, log=log)          # ILS rattaches par la geometrie (lot balises, 4.2)
+    ils_antennas = ils_antenna_info(attachments, blist)     # lot ac-approche-ils : antennes de chaque ILS rattache
     ends.sort(key=lambda e: naming.sort_key(e.name))
 
     parkings = []
@@ -361,4 +380,5 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
                      beacons=with_world_beacons(blist, [b for b, _ in world]), decl=decl, conv=conv, runways=rws, ends=ends, parkings=parkings,
                      georef=g, pav_rings=pav_rings, bld_rings=bld_rings, masks={'pav': pav, 'bld': bld, 'clear': None},
                      osm_ways=osm_ways, osm_kept=sorted({w['ref'] for w in osm_ways}, key=dcsdata.natural_key),
-                     osm_icao=osm_icao, projection=proj, n_shelter=n_shelter, heli_mode=heli_mode, icao_known=icao_known, f10_img=f10_img)
+                     osm_icao=osm_icao, projection=proj, n_shelter=n_shelter, heli_mode=heli_mode, icao_known=icao_known, f10_img=f10_img,
+                     ils_antennas=ils_antennas)

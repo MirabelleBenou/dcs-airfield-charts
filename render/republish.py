@@ -1,6 +1,6 @@
 """Republication des charts deja publiees, sans les captures F10 : toutes les retouches que le moteur sait faire sur un SVG publie.
 
-Usage : python -I render/republish.py <Theatre> --zip <zip de release> --out <nouveau zip>
+Usage : python -I render/republish.py <Theatre> --zip <zip de release> --out <nouveau zip> [--ajouter <dossier de pages 11-x>]
 Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>.svg` est une page de chart. Retouches :
   0. caps magnetiques et fleches du nord de la page `10-9` (lot caps-cockpit), AVANT toutes les autres : le nord du jeu est la
      grille ; la fleche fine passe a 0, la pleine a la declinaison d = p - t relue sur les deux fleches (t, p : leurs rotations),
@@ -20,7 +20,10 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
   5. le repertoire des heliports d'un zip *helicopters* (entrees `<dossier>heliports/<Theatre>_heliports_directory_p<NN>.jpg` et
      `<dossier><Theatre>_heliports_directory.pdf`), sans les captures : voir `retouch_directory` ; une vignette dont la ligne de la
      ville, a 36 px, touche les dimensions ou en est a moins de 24 px est reecrite plus petit sur sa page JPEG et dans le PDF.
-Chaque page est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
+  6. les pages d'approche `<stem>_11-<n>` (lot ac-approche-ils) : acceptees et recopiees telles quelles, aucune retouche ; leur PDF
+     entre dans le recueil de la chart, apres les pages 10-9* (ordre naturel des suffixes). `--ajouter <dossier>` ajoute au zip les
+     pages 11-x d'un dossier (la sortie de `build_chart.py --approches-seulement`) : voir `find_added_pages`.
+Chaque page 10-9* est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
 recueil `pdf/<stem>_charts.pdf` de chaque chart est refait. Sortie : un nouveau zip, memes entrees dans le meme ordre ; les
 entrees hors charts sont recopiees a l'octet, sauf, pour 5, les JPEG des pages touchees et le PDF du repertoire (un zip sans page de
 chart ni repertoire des heliports aux noms ci-dessus est recopie tel quel). Un fichier de sortie qui existe
@@ -50,6 +53,8 @@ from render.svgdoc import INK, INK2, f                                # noqa: E4
 from render.update_coords import ROW_Y, UpdateError, _PAGE_NAME, _PAGE_SVG, _TEXT, _Y   # noqa: E402
 
 RepublishError = UpdateError
+_PAGE_NAME_ANY = re.compile(r'^(?P<stem>.+)_(?P<suffix>10-9[A-Z]*|11-\d+)$')       # lot ac-approche-ils : `update_coords._PAGE_NAME` + les pages 11-x
+_APPROACH = re.compile(r'^11-\d+$')
 BAR_WIDTH = '0.35'
 _LINE = re.compile(r'<line\b([^>]*?)/>')
 _ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
@@ -869,13 +874,48 @@ class Result:
     unplaced: list = field(default_factory=list)      # [(page, libelle de balise)] : aucune position libre, reste a droite
     north: dict = field(default_factory=dict)         # {page: details de retouch_north_and_caps} : pages 10-9
     directory: DirectoryResult = field(default_factory=lambda: DirectoryResult())   # repertoire des heliports (zip *helicopters*)
+    approach: list = field(default_factory=list)     # noms des pages 11-x du zip, recopiees telles quelles
+    added: dict = field(default_factory=dict)        # {stem: [pages 11-x ajoutees]} (`--ajouter`)
 
 
-def republish_zip(theatre, zip_in, zip_out):
-    """Calcule les nouvelles pages et les recueils, puis ecrit `zip_out`. Retourne un `Result`."""
+def find_added_pages(folder):
+    """Pages 11-x d'un dossier (`--ajouter`) : {page: {'svg', 'pdf', 'png': chemin}}, dans l'ordre des noms. Le dossier contient les
+    sous-dossiers `svg/`, `pdf/`, `png/` ; a defaut (la sortie de `build_chart.py --approches-seulement` ecrit ses trois fichiers
+    cote a cote), les trois fichiers de chaque page y sont directement. RepublishError : dossier absent, fichier qui n'est pas une
+    page `<stem>_11-<n>`, un des trois fichiers manquant, aucune page."""
+    folder = Path(folder)
+    if not folder.is_dir():
+        raise RepublishError(f'{folder} : dossier introuvable')
+    sub = {k: folder / k for k in ('svg', 'pdf', 'png')}
+    layered = any(p.is_dir() for p in sub.values())
+    found = {}
+    for ext in ('svg', 'pdf', 'png'):
+        d = sub[ext] if layered else folder
+        if not d.is_dir():
+            continue
+        for p in sorted(d.iterdir()):
+            if not p.is_file() or p.suffix != '.' + ext:
+                continue
+            m = _PAGE_NAME_ANY.match(p.stem)
+            if not m or not _APPROACH.match(m['suffix']):
+                raise RepublishError(f'{p} : pas une page d\'approche (attendu <stem>_11-<n>.{ext})')
+            found.setdefault(p.stem, {})[ext] = p
+    for name, files in found.items():
+        for ext in ('svg', 'pdf', 'png'):
+            if ext not in files:
+                raise RepublishError(f'{name} : fichier {ext} manquant dans {folder}')
+    if not found:
+        raise RepublishError(f'{folder} : aucune page d\'approche 11-x')
+    return dict(sorted(found.items(), key=lambda kv: dcsdata.natural_key(kv[0])))
+
+
+def republish_zip(theatre, zip_in, zip_out, add_dir=None):
+    """Calcule les nouvelles pages et les recueils, puis ecrit `zip_out`. Retourne un `Result`. `add_dir` : dossier de pages 11-x a
+    ajouter (`find_added_pages`) ; chaque page entre dans le zip juste avant le recueil de sa chart (pdf, png, svg)."""
     zip_in, zip_out = Path(zip_in), Path(zip_out)
     if zip_out.exists():
         raise RepublishError(f'{zip_out} existe deja (pas d\'ecrasement)')
+    added = find_added_pages(add_dir) if add_dir is not None else {}
     index = update_coords.arp_index(theatre)
     res = Result()
     with zipfile.ZipFile(zip_in) as zin, tempfile.TemporaryDirectory(prefix='republish_') as tmp:
@@ -887,12 +927,18 @@ def republish_zip(theatre, zip_in, zip_out):
             m = _PAGE_SVG.match(info.filename)
             if not m:
                 continue
-            pm = _PAGE_NAME.match(m['page'])
+            pm = _PAGE_NAME_ANY.match(m['page'])
             if not pm:
                 raise RepublishError(f'{info.filename} : nom de page inattendu (attendu <stem>_10-9[A-Z]*)')
             pages.append((m['dir'], m['page'], pm['stem'], pm['suffix']))
         new = {}                                   # nom d'entree -> fichier temporaire
         for n, (d, name, _, suffix) in enumerate(pages):
+            if _APPROACH.match(suffix):                  # page d'approche : recopiee telle quelle
+                for sub, ext in (('png', 'png'), ('pdf', 'pdf')):
+                    if f'{d}{sub}/{name}.{ext}' not in names:
+                        raise RepublishError(f'{name} : entree {d}{sub}/{name}.{ext} absente du zip')
+                res.approach.append(name)
+                continue
             svg_old = zin.read(f'{d}svg/{name}.svg').decode('utf-8')
             svg_new, det = retouch_page(svg_old, name, suffix, index)
             for sub, ext in (('png', 'png'), ('pdf', 'pdf')):
@@ -916,21 +962,51 @@ def republish_zip(theatre, zip_in, zip_out):
             if det['north']:
                 res.north[name] = det['north']
             res.unplaced.extend((name, u) for u in det['unplaced'])
-        res.pages = len(pages)
+        res.pages = len(pages) - len(res.approach)
         charts = {}
         for n, (d, name, stem, suffix) in enumerate(pages):
             charts.setdefault((d, stem), []).append((suffix, n))
+        zip_names = {(d, name) for d, name, _, _ in pages}
+        inserts = {}                                   # entree du recueil -> [(nom d'entree, fichier)] a ecrire juste avant
+        by_stem = {}
+        for (d, stem) in charts:
+            by_stem.setdefault(stem, []).append(d)
+        for name, files in added.items():
+            stem = _PAGE_NAME_ANY.match(name)['stem']
+            if stem not in by_stem:
+                raise RepublishError(f'{name} : la chart {stem} n\'est pas dans le zip')
+            if len(by_stem[stem]) != 1:
+                raise RepublishError(f'{name} : la chart {stem} est dans plusieurs dossiers du zip : {sorted(by_stem[stem])}')
+            d = by_stem[stem][0]
+            if (d, name) in zip_names:
+                raise RepublishError(f'{name} : la page existe deja dans le zip')
+            entry = f'{d}pdf/{stem}_charts.pdf'
+            for sub in ('pdf', 'png', 'svg'):
+                inserts.setdefault(entry, []).append((f'{d}{sub}/{name}.{sub}', files[sub]))
+            res.added.setdefault(stem, []).append(name)
         for k, ((d, stem), members) in enumerate(charts.items()):
+            members = members + [(_PAGE_NAME_ANY.match(a)['suffix'], a) for a in res.added.get(stem, [])]
             members.sort(key=lambda t: dcsdata.natural_key(t[0]))
             entry = f'{d}pdf/{stem}_charts.pdf'
             if entry not in names:
                 raise RepublishError(f'{stem} : recueil {entry} absent du zip')
+            sources = []
+            for _, n in members:
+                if isinstance(n, str):                 # page ajoutee : son PDF du dossier
+                    sources.append(added[n]['pdf'])
+                elif _APPROACH.match(pages[n][3]):     # page 11-x du zip : son PDF, tel quel
+                    pdf_p = tmp / f'approach{n}.pdf'
+                    pdf_p.write_bytes(zin.read(f'{d}pdf/{pages[n][1]}.pdf'))
+                    sources.append(pdf_p)
+                else:
+                    sources.append(new[f'{d}pdf/{pages[n][1]}.pdf'])
             out = tmp / f'recueil{k}.pdf'
-            export.merge_pdfs([new[f'{d}pdf/{pages[n][1]}.pdf'] for _, n in members], out)
+            export.merge_pdfs(sources, out)
             before = len(PdfReader(io.BytesIO(zin.read(entry))).pages)
             after = len(PdfReader(str(out)).pages)
-            if before != after:
-                raise RepublishError(f'{stem} : recueil de {after} pages, l\'ancien en avait {before}')
+            if before + len(res.added.get(stem, [])) != after:
+                raise RepublishError(f'{stem} : recueil de {after} pages, l\'ancien en avait {before}'
+                                     + (f' et {len(res.added[stem])} pages ajoutees' if res.added.get(stem) else ''))
             new[entry] = out
         res.charts = len(charts)
         res.directory, dir_new = retouch_directory(theatre, zin, infos, tmp)
@@ -938,6 +1014,11 @@ def republish_zip(theatre, zip_in, zip_out):
         try:
             with zipfile.ZipFile(zip_out, 'x') as zout:
                 for info in infos:
+                    for extra_name, extra_path in inserts.get(info.filename, []):       # pages ajoutees : juste avant le recueil
+                        ez = zipfile.ZipInfo(extra_name, info.date_time)
+                        ez.compress_type, ez.external_attr, ez.create_system = info.compress_type, info.external_attr, info.create_system
+                        with open(extra_path, 'rb') as src, zout.open(ez, 'w') as dst:
+                            shutil.copyfileobj(src, dst, 1 << 20)
                     zi = zipfile.ZipInfo(info.filename, info.date_time)
                     zi.compress_type, zi.external_attr, zi.create_system = info.compress_type, info.external_attr, info.create_system
                     zi.comment = info.comment
@@ -959,6 +1040,7 @@ def parse_args(argv):
     ap.add_argument('theatre', help='GermanyColdWar ou Syria')
     ap.add_argument('--zip', required=True, help='zip de release (airfields ou helicopters)')
     ap.add_argument('--out', required=True, help='nouveau zip (ne doit pas exister)')
+    ap.add_argument('--ajouter', metavar='DOSSIER', help="dossier de pages d'approche 11-x (svg/, pdf/, png/, ou la sortie de build_chart.py --approches-seulement) a ajouter aux charts du zip")
     ap.add_argument('--moves', help='fichier TSV (nouveau) : une ligne par etiquette deplacee ou retiree (page, calque, texte, avant, apres)')
     return ap.parse_args(argv)
 
@@ -969,7 +1051,7 @@ def main(argv):
         print(f'ARRET : {args.moves} existe deja (pas d\'ecrasement)', file=sys.stderr)
         return 1
     try:
-        res = republish_zip(args.theatre, args.zip, args.out)
+        res = republish_zip(args.theatre, args.zip, args.out, args.ajouter)
     except (RepublishError, dcsdata.DataError, FileNotFoundError, zipfile.BadZipFile) as e:
         print(f'ARRET : {e}', file=sys.stderr)
         return 1
@@ -1001,6 +1083,10 @@ def main(argv):
     print(f"graduations glissees : {len(slid)} ; retirees : {len(grads) - len(slid)} (sur {len({m[0] for m in grads})} pages)")
     print(f"pages a fond F10 : {len(res.f10)}" + ''.join(f'\n  {n}' for n in res.f10))
     print(f'recueils refaits : {res.charts}')
+    if res.approach or res.added:
+        print(f"pages d'approche 11-x : {len(res.approach)} recopiees telles quelles ; {sum(len(v) for v in res.added.values())} ajoutees")
+        for stem, names in res.added.items():
+            print(f'  {stem} : {len(names)} ajoutee(s) ({", ".join(n[len(stem) + 1:] for n in names)})')
     dr = res.directory
     if dr.tiles:
         print(f"repertoire des heliports : {dr.tiles} vignettes ; controlees (ville sous 36 px) : {dr.controlled} ; retouchees : {dr.retouched} ; "
@@ -1010,7 +1096,7 @@ def main(argv):
     else:
         print('repertoire des heliports : aucun dans ce zip')
     print(f'entrees recopiees telles quelles : {res.copied}')
-    if not res.pages:
+    if not res.pages and not res.approach:
         print('aucune page de chart dans ce zip : toutes les entrees sont recopiees telles quelles')
     return 0
 

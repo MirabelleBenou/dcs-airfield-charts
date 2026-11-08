@@ -89,7 +89,7 @@ def test_c4_konya_parkings_and_pages(charts):
     data, pages = charts['Konya']
     assert len(data.parkings) == 152 and abs(data.n_shelter - 48) <= 4
     assert pages[0].info['zones'] == 7 and pages[0].info['mode'] == 3
-    assert [p.id for p in pages] == ['10-9', '10-9A', '10-9B']
+    assert [p.id for p in pages] == ['10-9', '10-9A', '10-9B', '11-1']
 
 
 # ---------- C5 ----------
@@ -128,7 +128,7 @@ def test_c6_adana(charts):
     assert set(mags) == {'05', '23'}
     assert mags['05'] == pytest.approx(52.4, abs=0.2) and mags['23'] == pytest.approx(232.4, abs=0.2)
     assert data.icao == 'LTAF'
-    assert len(pages) == 1 and pages[0].info['mode'] == 2
+    assert len(pages) == 2 and pages[0].info['mode'] == 2           # 10-9 + 11-1 (ILS 05)
     assert len(data.parkings) == 39 and data.n_shelter == 0
     assert data.osm_kept == ['A', 'A1', 'B', 'B1', 'C', 'D', 'D1', 'D2', 'E']
     assert [(b.kind, b.callsign, b.text) for b in data.beacons] == [('VOR/DME', 'ADA', '112.70'), ('NDB', 'ADN', '395')]
@@ -147,7 +147,7 @@ def test_c7_ramat_david(charts):
     assert mags['09'] == pytest.approx(85.9, abs=0.3)
     assert data.icao == 'LLRD'
     assert len(data.parkings) == 86 and abs(data.n_shelter - 33) <= 4
-    assert [p.id for p in pages] == ['10-9', '10-9A']                 # 10-9 + 1 page
+    assert [p.id for p in pages] == ['10-9', '10-9A', '11-1']          # 10-9 + 1 page + 11-1 (ILS 33)
     assert pages[0].info['reduced'] and all(0.70 <= k < 1.0 for k in pages[0].info['reduced'].values())
     assert data.osm_kept == [] and pages[0].info['labels'] == {}
     assert [(b.kind, b.callsign, b.text) for b in data.beacons] == [('VORTAC', 'RMD', '113.70 CH84X'), ('NDB', 'RMD', '368')]
@@ -255,7 +255,7 @@ def test_c15_pngs_identical_without_layers(charts):
 def test_c8_files(charts, tmp_path):
     from pypdf import PdfReader
     from PIL import Image
-    expected = {'Konya': 3, 'Adana': 1, 'Ramat_David': 2}
+    expected = {'Konya': 4, 'Adana': 2, 'Ramat_David': 3}
     for base, (data, pages) in charts.items():
         pdfs = []
         for p in pages:

@@ -340,6 +340,28 @@ def header_row(elev_text, lat, lon, var_text):
     return out
 
 
+def pair_row(doc, layer, items, x, y, avail, gap_it=6.0):
+    """Une ligne de paires libelle (`regular`, 5,6 pt, INK2) / valeur (`bold`, 7,6 pt) a partir de `x`, ligne de base `y`, dans `avail`
+    mm : si la ligne ne tient pas, l'ecart entre paires est reduit (2 mm au moins), puis les deux polices le sont. Partagee par le
+    bandeau des balises de `header` et les bandeaux des pages d'approche (`approach.py`). items : [(libelle, valeur)]."""
+    gap_lv = 1.4
+    size_l, size_v = pt(5.6), pt(7.6)
+    total = sum(text_width(k, 'regular', size_l) + gap_lv + text_width(v, 'bold', size_v) for k, v in items) \
+        + gap_it * (len(items) - 1)
+    if total > avail:
+        gap_it = max(2.0, gap_it - (total - avail) / max(1, len(items) - 1))
+        total = sum(text_width(k_, 'regular', size_l) + gap_lv + text_width(v, 'bold', size_v) for k_, v in items) \
+            + gap_it * (len(items) - 1)
+        if total > avail:
+            k = avail / total
+            size_l, size_v = size_l * k, size_v * k
+    for kind_, val in items:
+        doc.add(layer, text(x, y, kind_, size_l, 'regular', INK2))
+        x += text_width(kind_, 'regular', size_l) + gap_lv
+        doc.add(layer, text(x, y, val, size_v, 'bold'))
+        x += text_width(val, 'bold', size_v) + gap_it
+
+
 def header(doc, data, index, kind, bands=True):
     L = 'Header'
     name = data.airport_name.upper()
@@ -368,26 +390,7 @@ def header(doc, data, index, kind, bands=True):
     if data.beacons:
         doc.add(L, rect(X0, 30.0, X1 - X0, 5.2, BAND))
         doc.add(L, text(7.5, 33.6, 'BALISES', pt(7.6), 'bold'))
-        gap_lv, gap_it = 1.4, 6.0
-        items = [(b.kind, f'{b.callsign} {b.text}') for b in data.beacons]
-        size_l, size_v = pt(5.6), pt(7.6)
-        total = sum(text_width(k, 'regular', size_l) + gap_lv + text_width(v, 'bold', size_v) for k, v in items) \
-            + gap_it * (len(items) - 1)
-        avail = X1 - 44.0 - 1.5
-        k = 1.0
-        if total > avail:
-            gap_it = max(2.0, gap_it - (total - avail) / max(1, len(items) - 1))
-            total = sum(text_width(k_, 'regular', size_l) + gap_lv + text_width(v, 'bold', size_v) for k_, v in items) \
-                + gap_it * (len(items) - 1)
-            if total > avail:
-                k = avail / total
-                size_l, size_v = size_l * k, size_v * k
-        x = 44.0
-        for kind_, val in items:
-            doc.add(L, text(x, 33.6, kind_, size_l, 'regular', INK2))
-            x += text_width(kind_, 'regular', size_l) + gap_lv
-            doc.add(L, text(x, 33.6, val, size_v, 'bold'))
-            x += text_width(val, 'bold', size_v) + gap_it
+        pair_row(doc, L, [(b.kind, f'{b.callsign} {b.text}') for b in data.beacons], 44.0, 33.6, X1 - 44.0 - 1.5)
         bottom = 35.2
     return bottom
 
