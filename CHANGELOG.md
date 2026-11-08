@@ -9,6 +9,13 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - Cold War Germany: the 25 grass strips.
 
+## Unreleased
+
+**An approach page for every ILS runway in DCS.**
+
+- New page `11-1`, `11-2`… after the airfield pages, one per runway end with an ILS in DCS: localizer frequency and course as read on the cockpit compass, threshold elevation, a plan view of the final approach over 10 NM (game north up), a 3° profile and a distance and altitude table, with the distances read on the nearest DME. It is not a real approach chart: DCS gives no procedure and no minima.
+- `render/build_chart.py --approches-seulement` renders only these pages; `render/republish.py --ajouter <folder>` adds them to the charts of a release zip, without the F10 captures.
+
 ## AC-V1.6.0 — 7 November 2026
 
 **Magnetic headings now match the cockpit compass.**

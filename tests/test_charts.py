@@ -205,7 +205,7 @@ def test_c15_layer_structure(charts, base):
             if k.get(INK_LABEL) in ('Pavement', 'Runways', 'Runway markings', 'Buildings', 'Navaids', 'Parking',
                                     'Parking numbers', 'Runway bearings', 'Taxiway labels') and p.id == '10-9':
                 assert k.get('clip-path'), (p.id, k.get(INK_LABEL))
-        if p.id != '10-9' or p.info.get('mode') == 2:
+        if p.id.startswith('10-9') and (p.id != '10-9' or p.info.get('mode') == 2):          # lot ac-approche-ils : pas d'encarts sur une page 11-x
             ins = [k for k in kids if k.get(INK_LABEL) == 'Insets'][0]
             subs = [g.get(INK_LABEL) for g in ins if g.tag == SVG + 'g' and g.get(INK_GROUPMODE) == 'layer']
             assert subs and all(re.fullmatch(r'P\d+', s) for s in subs), subs

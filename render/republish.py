@@ -22,7 +22,7 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
      ville, a 36 px, touche les dimensions ou en est a moins de 24 px est reecrite plus petit sur sa page JPEG et dans le PDF.
   6. les pages d'approche `<stem>_11-<n>` (lot ac-approche-ils) : acceptees et recopiees telles quelles, aucune retouche ; leur PDF
      entre dans le recueil de la chart, apres les pages 10-9* (ordre naturel des suffixes). `--ajouter <dossier>` ajoute au zip les
-     pages 11-x d'un dossier (la sortie de `build_chart.py --approches-seulement`) : voir `find_added_pages`.
+     pages 11-x d'un dossier (la sortie, a plat, de `build_chart.py --approches-seulement`) : voir `find_added_pages`.
 Chaque page 10-9* est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
 recueil `pdf/<stem>_charts.pdf` de chaque chart est refait. Sortie : un nouveau zip, memes entrees dans le meme ordre ; les
 entrees hors charts sont recopiees a l'octet, sauf, pour 5, les JPEG des pages touchees et le PDF du repertoire (un zip sans page de
@@ -879,33 +879,27 @@ class Result:
 
 
 def find_added_pages(folder):
-    """Pages 11-x d'un dossier (`--ajouter`) : {page: {'svg', 'pdf', 'png': chemin}}, dans l'ordre des noms. Le dossier contient les
-    sous-dossiers `svg/`, `pdf/`, `png/` ; a defaut (la sortie de `build_chart.py --approches-seulement` ecrit ses trois fichiers
-    cote a cote), les trois fichiers de chaque page y sont directement. RepublishError : dossier absent, fichier qui n'est pas une
-    page `<stem>_11-<n>`, un des trois fichiers manquant, aucune page."""
+    """Pages 11-x d'un dossier (`--ajouter`) : {page: {'svg', 'pdf', 'png': chemin}}, dans l'ordre naturel des noms. Le dossier est
+    la sortie de `build_chart.py --approches-seulement` : les trois fichiers `<stem>_11-<n>.{svg,pdf,png}` de chaque page, a plat.
+    RepublishError : dossier absent, fichier svg, pdf ou png qui n'est pas une page `<stem>_11-<n>`, un des trois fichiers manquant,
+    aucune page."""
     folder = Path(folder)
     if not folder.is_dir():
         raise RepublishError(f'{folder} : dossier introuvable')
-    sub = {k: folder / k for k in ('svg', 'pdf', 'png')}
-    layered = any(p.is_dir() for p in sub.values())
     found = {}
-    for ext in ('svg', 'pdf', 'png'):
-        d = sub[ext] if layered else folder
-        if not d.is_dir():
+    for p in sorted(folder.iterdir()):
+        if not p.is_file() or p.suffix not in ('.svg', '.pdf', '.png'):
             continue
-        for p in sorted(d.iterdir()):
-            if not p.is_file() or p.suffix != '.' + ext:
-                continue
-            m = _PAGE_NAME_ANY.match(p.stem)
-            if not m or not _APPROACH.match(m['suffix']):
-                raise RepublishError(f'{p} : pas une page d\'approche (attendu <stem>_11-<n>.{ext})')
-            found.setdefault(p.stem, {})[ext] = p
+        m = _PAGE_NAME_ANY.match(p.stem)
+        if not m or not _APPROACH.match(m['suffix']):
+            raise RepublishError(f"{p} : pas une page d'approche (attendu <stem>_11-<n>{p.suffix})")
+        found.setdefault(p.stem, {})[p.suffix[1:]] = p
     for name, files in found.items():
         for ext in ('svg', 'pdf', 'png'):
             if ext not in files:
                 raise RepublishError(f'{name} : fichier {ext} manquant dans {folder}')
     if not found:
-        raise RepublishError(f'{folder} : aucune page d\'approche 11-x')
+        raise RepublishError(f"{folder} : aucune page d'approche 11-x")
     return dict(sorted(found.items(), key=lambda kv: dcsdata.natural_key(kv[0])))
 
 
@@ -1040,7 +1034,7 @@ def parse_args(argv):
     ap.add_argument('theatre', help='GermanyColdWar ou Syria')
     ap.add_argument('--zip', required=True, help='zip de release (airfields ou helicopters)')
     ap.add_argument('--out', required=True, help='nouveau zip (ne doit pas exister)')
-    ap.add_argument('--ajouter', metavar='DOSSIER', help="dossier de pages d'approche 11-x (svg/, pdf/, png/, ou la sortie de build_chart.py --approches-seulement) a ajouter aux charts du zip")
+    ap.add_argument('--ajouter', metavar='DOSSIER', help="dossier de pages d'approche 11-x (la sortie de build_chart.py --approches-seulement) a ajouter aux charts du zip")
     ap.add_argument('--moves', help='fichier TSV (nouveau) : une ligne par etiquette deplacee ou retiree (page, calque, texte, avant, apres)')
     return ap.parse_args(argv)
 
