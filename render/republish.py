@@ -487,7 +487,8 @@ def retouch_labels(svg_text, name, old_labels=None):
     de cap du plan avant `retouch_north_and_caps` (meme ordre), pour retrouver la place publiee d'un cap deja pose le long d'une piste."""
     runways = []
     for _, _, ln in _layer_lines(svg_text, 'Runways'):
-        m = re.match(r'^<polygon points="([^"]+)" fill="#1A1A1A"/>$', ln)
+        m = re.match(r'^<polygon points="([^"]+)" fill="#1A1A1A"/>$', ln) \
+            or re.match(r'^<polygon points="([^"]+)" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="[-\d.]+"/>$', ln)   # piste en herbe (page.draw_scene)
         if not m:
             raise RepublishError(f'{name} : element inattendu dans le calque Runways : {ln}')
         runways.append([tuple(float(v) for v in p.split(',')) for p in m.group(1).split()])

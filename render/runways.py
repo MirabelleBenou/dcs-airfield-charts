@@ -55,6 +55,7 @@ class Runway:
     bars_len: float = None      # longueur entre barres de seuil (m), None si pas de barres
     pave_len: float = None      # longueur de revetement (m, marche a 70 %)
     surface: str = 'dur'        # 'dur', ou 'herbe' : piste declaree par le jeu, sans revetement detecte
+    declared_name: int = None   # 'herbe' : `Name` de la piste declaree par le jeu
 
     @property
     def length(self):
@@ -66,6 +67,7 @@ class Runway:
 
 
 DECLARED_MIN_LENGTH_M = 100.0       # une piste declaree plus courte ne compte pas (base sans piste)
+DECLARED_NUMBER_MAX_DEG = 20.0      # ecart maximal, modulo 180, entre `Name` x 10 et le cap grille d'une piste declaree
 
 
 def end_number(name):
@@ -87,24 +89,34 @@ def matching_refs(name, refs):
     return [i for i, (a, b) in enumerate(refs or []) if sorted([end_number(a), end_number(b)]) == want]
 
 
-def runways_from_declared(declared, refs=None):
+def runways_from_declared(declared, refs=None, rejected=None):
     """Pistes declarees par le jeu (dcsdata.declared_runways) -> liste de Runway 'herbe' : cap grille = -course, axe
     d = (cos course, -sin course) en (x, z), extremites = centre -/+ d * longueur / 2, largeur declaree, sans marquage.
-    Une piste de moins de 100 m ne donne rien. `ref` : indice de la piste pydcs (`refs` : liste de (nom, nom oppose)) dont
-    les deux numeros d'extremite sont ceux de la piste declaree (voir matching_refs) ; None s'il n'y en a aucune ou
-    plusieurs. Pure : ni image, ni fichier."""
+    Le seul filtre : une piste de moins de 100 m ne donne rien, et une piste dont le numero (`Name` x 10) s'ecarte de plus de
+    20 deg (modulo 180) de son cap grille n'est pas retenue. `rejected` (liste, optionnelle) recoit (piste declaree, raison)
+    de chaque piste ecartee. `ref` : indice de la piste pydcs (`refs` : liste de (nom, nom oppose)) dont les deux numeros
+    d'extremite sont ceux de la piste declaree (voir matching_refs) ; None s'il n'y en a aucune ou plusieurs.
+    Pure : ni image, ni fichier."""
     out = []
     for gr in declared:
         if gr['length'] < DECLARED_MIN_LENGTH_M:
+            if rejected is not None:
+                rejected.append((gr, f'moins de {DECLARED_MIN_LENGTH_M:.0f} m ({gr["length"]:.0f} m)'))
             continue
         c = gr['course']
+        grid = math.degrees(-c) % 360.0
+        gap = heading_diff(int(gr['Name']) * 10.0, grid)
+        if gap > DECLARED_NUMBER_MAX_DEG:
+            if rejected is not None:
+                rejected.append((gr, f'numero sans rapport avec le cap (numero {int(gr["Name"])}, cap grille {grid:.1f}, ecart {gap:.1f} deg)'))
+            continue
         d = (math.cos(c), -math.sin(c))
         cx, cz = gr['x'], gr['z']
         h = gr['length'] / 2
         m = matching_refs(gr['Name'], refs)
         ref = m[0] if len(m) == 1 else None
         out.append(Runway((cx - d[0] * h, cz - d[1] * h), (cx + d[0] * h, cz + d[1] * h), float(gr['width']), 0, d, ref,
-                          False, 'revetement', None, float(gr['length']), 'herbe'))
+                          False, 'revetement', None, float(gr['length']), 'herbe', int(gr['Name'])))
     return out
 
 

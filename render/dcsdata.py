@@ -159,23 +159,32 @@ DECLARED_DIR = Path(__file__).resolve().parent / 'data' / 'runways_declared'
 
 @lru_cache(maxsize=None)
 def _declared_file(theatre):
-    path = DECLARED_DIR / f'{theatre}.json'
-    if not path.is_file():
+    """Fichier des pistes declarees d'un theatre ; le nom du theatre se compare sans tenir compte de la casse."""
+    if not DECLARED_DIR.is_dir():
         return None
-    return json.loads(path.read_text(encoding='utf-8'))
+    for path in DECLARED_DIR.glob('*.json'):
+        if path.stem.lower() == str(theatre).lower():
+            return json.loads(path.read_text(encoding='utf-8'))
+    return None
+
+
+def _norm_name(name):
+    """Nom de base compare sans casse et avec `_` pour une espace (dossier `Grosse_Wiese` sur le PC)."""
+    return str(name).lower().replace('_', ' ')
 
 
 def declared_runways(theatre, base, airport_name=None):
     """Pistes declarees par le jeu (`Airbase:getRunways()`) d'une base d'un theatre : liste de dicts {Name, course, length,
-    width, x, z} (radians, metres). Le nom se cherche sans tenir compte de la casse, par le nom du dossier de la base
-    (`base`) puis par le nom pydcs (`airport_name`). Liste vide si le theatre n'a pas de fichier ou la base pas d'entree."""
+    width, x, z} (radians, metres). Le nom se cherche sans tenir compte de la casse, `_` valant une espace, par le nom du
+    dossier de la base (`base`) puis par le nom pydcs (`airport_name`) ; le theatre aussi se trouve sans tenir compte de la
+    casse. Liste vide si le theatre n'a pas de fichier ou la base pas d'entree."""
     doc = _declared_file(theatre)
     if not doc:
         return []
-    by_name = {b['name'].lower(): b for b in doc['airbases']}
+    by_name = {_norm_name(b['name']): b for b in doc['airbases']}
     for key in (base, airport_name):
-        if key and key.lower() in by_name:
-            return [dict(r) for r in by_name[key.lower()]['runways']]
+        if key and _norm_name(key) in by_name:
+            return [dict(r) for r in by_name[_norm_name(key)]['runways']]
     return []
 
 

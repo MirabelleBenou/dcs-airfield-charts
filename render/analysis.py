@@ -319,11 +319,14 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
                                      second_pass_min=runways.HELI_SPARE_SEGMENT_MIN_M if heli_mode else None)
         if not rws:                                       # lot terrains-herbe : la piste en herbe que declare le jeu
             entry = dcsdata.declared_runways(theatre, base, facts.name)    # sans entree (Syria ...) : l'erreur d'origine
-            declared = [gr for gr in entry if gr['length'] >= runways.DECLARED_MIN_LENGTH_M]
-            rws = runways.runways_from_declared(declared, [(m.name, o.name) for m, o in facts.rw_refs])
-            for r, gr in zip(rws, declared):
-                log(f'piste declaree par le jeu {gr["Name"]} : {r.length:.0f} m (aucune piste detectee sur la F10)')
-            if not rws and not (entry and heli_mode):
+            dropped = []
+            rws = runways.runways_from_declared(entry, [(m.name, o.name) for m, o in facts.rw_refs], dropped)
+            for r in rws:
+                log(f'AVERTISSEMENT piste declaree par le jeu {r.declared_name} : {r.length:.0f} m (aucune piste detectee sur la F10)')
+            for gr, why in dropped:
+                log(f'piste declaree par le jeu {gr["Name"]} ecartee : {why}')
+            only_short = bool(entry) and len(dropped) == len(entry) and all(gr['length'] < runways.DECLARED_MIN_LENGTH_M for gr, _ in dropped)
+            if not rws and not (only_short and heli_mode):
                 raise ChartError('aucune piste detectee')
     else:
         rws = []                                          # lot heliports (4.2) : aucune piste pydcs, la detection ne tourne pas
