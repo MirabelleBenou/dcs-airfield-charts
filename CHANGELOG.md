@@ -5,16 +5,17 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
-## Coming next
-
-- Cold War Germany: the 25 grass strips.
-
 ## Unreleased
 
 **An approach page for every ILS runway in DCS.**
 
 - New page `11-1`, `11-2`… after the airfield pages, one per runway end with an ILS in DCS: localizer frequency and course as read on the cockpit compass, threshold elevation, a plan view of the final approach over 10 NM (game north up), a 3° profile and a distance and altitude table, with the distances read on the nearest DME. It is not a real approach chart: DCS gives no procedure and no minima.
 - `render/build_chart.py --approches-seulement` renders only these pages; `render/republish.py --ajouter <folder>` adds them to the charts of a release zip, without the F10 captures.
+
+**Cold War Germany: the grass strips are charted.**
+
+- 24 grass strips that had no chart (the F10 map draws no runway there) now have one. Their runway is the one DCS declares for the airfield: centre, heading, length and width as the game gives them. It is drawn as an outline, without markings, and the runway table says « PISTE EN HERBE ».
+- Landstuhl, whose declared runway is 10 m long, is charted as a helicopter base, on the F10 map background.
 
 ## AC-V1.6.0 — 7 November 2026
 
