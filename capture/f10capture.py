@@ -2,7 +2,7 @@
 
 Usage (python -I f10capture.py ...) :
   index   <Theatre>                      -> out/<theatre>/index.json
-  capture <Theatre> <Base> [<Base> ...]  -> out/<theatre>/<Base>/{tiles/,tiles.json,mosaic.png,base.json}
+  capture <Theatre> <Base> [<Base> ...] [--marge <m>]  -> out/<theatre>/<Base>/{tiles/,tiles.json,mosaic.png,base.json} ; avec --marge : zone = emprise .rn4 + <m> m, sous out/<theatre>/contexte/<Base>/
   modes   <Theatre> <Base> [map|alt|sat] -> out/<theatre>/<Base>/modes/<mode>.png (une capture par mode ;
                                             sans mode : les trois, avec attente de Entree entre chaque)
   theatre <Theatre> [--force]            -> capture de tout l'index (bases et helistations), voir CADRAGE_CAPTURE_SYRIA_v1.md
@@ -41,6 +41,7 @@ CALIB_ALIGN_MAX_DEG = 0.5
 CALIB_PRED_MAX = 0.02        # ecart max de la moyenne a l'echelle prevue
 OVERLAP = 0.20
 MARGIN_ZONE_M = 400.0
+MARGE_MAX_M = 5000.0   # borne de l'option --marge
 STAB_FRAC = 0.005      # 0,5 % des pixels
 PIX_THR = 8            # seuil par pixel (sur 255)
 POLL_S = 0.1
@@ -381,9 +382,11 @@ def usable_px():
     return w - MARGIN_L - MARGIN_R, h - MARGIN_T - MARGIN_B
 
 
-def zone_of(ext):
-    return {'x_min': ext['x_min'] - MARGIN_ZONE_M, 'x_max': ext['x_max'] + MARGIN_ZONE_M,
-            'z_min': ext['z_min'] - MARGIN_ZONE_M, 'z_max': ext['z_max'] + MARGIN_ZONE_M}
+def zone_of(ext, margin=None):
+    """Zone capturee : emprise .rn4 + margin metres de chaque cote (MARGIN_ZONE_M si margin est None)."""
+    m = MARGIN_ZONE_M if margin is None else margin
+    return {'x_min': ext['x_min'] - m, 'x_max': ext['x_max'] + m,
+            'z_min': ext['z_min'] - m, 'z_max': ext['z_max'] + m}
 
 
 def crop_offset(mpp):
@@ -628,11 +631,12 @@ def calibrate(zone, alt, mpp_pred, odir, label, prog=None):
     return res
 
 
-def capture_base(theatre, base, strict=False, prog=None):
+def capture_base(theatre, base, strict=False, prog=None, margin=None):
     """Capture d'une entree (base : etalonnee ; helistation : sans etalonnage, echelle prevue).
     Etalonnage en echec (tolerance ou image non stable) : repli sur l'echelle prevue (calibrated false, calib_fallback).
     strict (commande theatre) : aucun point, image de grille non stable -> EntryFailure.
-    prog : Progress de la commande theatre (STATUS a chaque image)."""
+    prog : Progress de la commande theatre (STATUS a chaque image).
+    margin : metres autour de l'emprise .rn4 (option --marge) ; la capture va alors sous out/<theatre>/contexte/<Base>/."""
     rn4 = find_rn4(theatre, base)
     kind = 'heliport' if is_heliport_file(rn4) else 'airbase'
     ext = rn4_extent(rn4)
@@ -640,9 +644,10 @@ def capture_base(theatre, base, strict=False, prog=None):
         if strict:
             raise EntryFailure('rn4', f'aucun point valide dans {rn4}')
         raise SystemExit(f'ARRET : aucun point valide dans {rn4}')
-    zone = zone_of(ext)
+    zone = zone_of(ext, margin)
     alt, mpp_pred = cam_params(ext)
-    odir = out_theatre(theatre) / rn4.stem
+    odir = (out_theatre(theatre) / rn4.stem if margin is None
+            else out_theatre(theatre) / 'contexte' / rn4.stem)
     odir.mkdir(parents=True, exist_ok=True)
     print(f"{rn4.stem} ({kind}): altitude {alt:.0f} m (y_max {ext['y_max']:.0f}), echelle prevue {mpp_pred:.4f} m/px")
     cal, fallback, fallback_meas = None, None, None
@@ -711,17 +716,44 @@ def capture_base(theatre, base, strict=False, prog=None):
                  'tile_px': [usable_px()[0], usable_px()[1]], 'mosaic_px': [W, H],
                  'n_captures': len(tiles), 'n_not_stable': sum(1 for t in tiles if not t['stable']),
                  'total_s': round(total, 2), 'mean_s': round(sum(times) / len(times), 3),
-                 'max_s': round(max(times), 3)}
+                 'max_s': round(max(times), 3),
+                 **({} if margin is None else {'margin_m': margin})}
     (odir / 'base.json').write_text(json.dumps(base_json, indent=1), encoding='utf-8')
     print(f"  total {total:.1f}s, moyenne {base_json['mean_s']}s, max {base_json['max_s']}s, "
           f"non stables {base_json['n_not_stable']}, zone couverte {base_json['zone_fully_covered']}")
     return base_json
 
 
-def cmd_capture(theatre, bases):
+def parse_marge(args):
+    """Separe les arguments de `capture` (apres <Theatre>) en (bases, marge). --marge <m> : 0 < m <= MARGE_MAX_M,
+    une seule fois, n'importe ou ; tout le reste est une base. Refus : SystemExit (avant toute capture)."""
+    bases, marge, i = [], None, 0
+    while i < len(args):
+        if args[i] == '--marge':
+            if marge is not None:
+                raise SystemExit('ARRET : --marge donne deux fois')
+            if i + 1 >= len(args):
+                raise SystemExit('ARRET : --marge sans valeur (attendu : un nombre de metres, 0 < m <= 5000)')
+            try:
+                marge = float(args[i + 1])
+            except ValueError:
+                raise SystemExit(f'ARRET : --marge {args[i + 1]!r} n\'est pas un nombre de metres') from None
+            if not 0 < marge <= MARGE_MAX_M:
+                raise SystemExit(f'ARRET : --marge {args[i + 1]} hors bornes (0 < m <= {MARGE_MAX_M:.0f})')
+            i += 2
+        else:
+            bases.append(args[i])
+            i += 1
+    if not bases:
+        raise SystemExit('ARRET : capture sans base')
+    return bases, marge
+
+
+def cmd_capture(theatre, args):
+    bases, marge = parse_marge(args)
     try:
         for b in bases:
-            capture_base(theatre, b)
+            capture_base(theatre, b, margin=marge)
     finally:
         hook_release()
 
