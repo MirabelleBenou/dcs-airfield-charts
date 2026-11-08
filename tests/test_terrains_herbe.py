@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from render import analysis, dcsdata, geo, naming, page, runways
+from render import analysis, dcsdata, naming, page, runways
 
 DATA = Path(__file__).resolve().parent.parent / 'render' / 'data' / 'runways_declared' / 'GermanyColdWar.json'
 THEATRE = 'GermanyColdWar'
