@@ -87,16 +87,30 @@ def test_runway_surface_default_is_hard():
     assert runways.Runway((0, 0), (1, 1), 10.0).surface == 'dur'
 
 
-def test_ref_uses_detection_rule_and_tolerance():
-    hf = lambda ln: math.degrees(math.atan2(ln['d'][1], ln['d'][0])) % 180.0
-    c = math.radians(-100.0)                                        # cap grille 100
-    refs = [('30/12', 30.0), ('10/28', 100.0 + 12.9)]
-    (rw,) = runways.runways_from_declared([decl_rw(c, 500.0)], refs, hf)
+def test_declared_numbers_and_end_numbers():
+    assert runways.declared_numbers(30) == (30, 12)
+    assert runways.declared_numbers(12) == (12, 30)
+    assert runways.declared_numbers(36) == (36, 18)
+    assert runways.declared_numbers(18) == (18, 36)
+    assert runways.declared_numbers(7) == (7, 25)
+    assert [runways.end_number(n) for n in ('07', '7', '25L', '09C', '36R')] == [7, 7, 25, 9, 36]
+
+
+def test_ref_matches_by_name_without_heading_tolerance():
+    refs = [('30', '12'), ('10L', '28R')]
+    assert runways.matching_refs(30, refs) == [0]
+    assert runways.matching_refs(12, refs) == [0]
+    assert runways.matching_refs(28, refs) == [1]
+    assert runways.matching_refs(7, [('07', '25')]) == [0]            # zero de tete
+    assert runways.matching_refs(6, [('06', '24')]) == [0]
+    (rw,) = runways.runways_from_declared([decl_rw(1.0, 500.0, name=10)], refs)        # le cap n'entre pas en jeu
     assert rw.ref == 1
-    (rw,) = runways.runways_from_declared([decl_rw(c, 500.0)], [('x', 100.0 + 13.1)], hf)
-    assert rw.ref is None
-    (rw,) = runways.runways_from_declared([decl_rw(c, 500.0)])
-    assert rw.ref is None
+
+
+def test_ref_none_when_no_or_several_pydcs_runways():
+    assert runways.runways_from_declared([decl_rw(1.0, 500.0, name=9)], [('30', '12')])[0].ref is None
+    assert runways.runways_from_declared([decl_rw(1.0, 500.0, name=9)])[0].ref is None
+    assert runways.runways_from_declared([decl_rw(1.0, 500.0, name=9)], [('09L', '27R'), ('09R', '27L')])[0].ref is None
 
 
 def _facts(name):
@@ -105,23 +119,13 @@ def _facts(name):
     return dcsdata.airport_facts(ap)
 
 
-def _heading_fn(facts, year=1985.0):
-    proj = geo.Projection.for_theatre(THEATRE)
-    lat, lon = proj.to_latlon(facts.x, facts.z)
-    decl = geo.declination(lat, lon, year)
-
-    def mag_heading(ln):
-        az = math.degrees(math.atan2(ln['d'][1], ln['d'][0]))
-        return (az + proj.convergence(*ln['p']) - decl) % 180.0
-    return mag_heading
-
-
 @pytest.mark.parametrize('name', HERBE)
-def test_all_grass_strips_have_one_runway_with_a_ref(name):
+def test_all_grass_strips_have_one_runway_matched_by_name(name):
     facts = _facts(name)
     declared = dcsdata.declared_runways(THEATRE, name, facts.name)
-    refs = [(f'{m.name}/{o.name}', m.heading) for m, o in facts.rw_refs]
-    rws = runways.runways_from_declared(declared, refs, _heading_fn(facts))
+    refs = [(m.name, o.name) for m, o in facts.rw_refs]
+    assert len(runways.matching_refs(declared[0]['Name'], refs)) == 1
+    rws = runways.runways_from_declared(declared, refs)
     assert len(rws) == 1
     assert rws[0].ref is not None
     names = naming.name_ends([(rws[0].p0, rws[0].p1)], [(a.name, a.heading) for a in facts.approaches],
@@ -133,7 +137,7 @@ def test_landstuhl_has_no_runway():
     facts = _facts('Landstuhl')
     declared = dcsdata.declared_runways(THEATRE, 'Landstuhl', facts.name)
     assert declared and declared[0]['length'] < 100.0
-    assert runways.runways_from_declared(declared, [], None) == []
+    assert runways.runways_from_declared(declared, []) == []
     assert facts.slots and all(s.heli_only for s in facts.slots)
 
 

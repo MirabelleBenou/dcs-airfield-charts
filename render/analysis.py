@@ -320,7 +320,7 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
         if not rws:                                       # lot terrains-herbe : la piste en herbe que declare le jeu
             declared = [gr for gr in dcsdata.declared_runways(theatre, base, facts.name)
                         if gr['length'] >= runways.DECLARED_MIN_LENGTH_M]
-            rws = runways.runways_from_declared(declared, refs, mag_heading)
+            rws = runways.runways_from_declared(declared, [(m.name, o.name) for m, o in facts.rw_refs])
             for r, gr in zip(rws, declared):
                 log(f'piste declaree par le jeu {gr["Name"]} : {r.length:.0f} m (aucune piste detectee sur la F10)')
             if not rws and not heli_mode:

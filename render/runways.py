@@ -68,13 +68,32 @@ class Runway:
 DECLARED_MIN_LENGTH_M = 100.0       # une piste declaree plus courte ne compte pas (base sans piste)
 
 
-def runways_from_declared(declared, refs=None, heading_fn=None):
+def end_number(name):
+    """Numero d'extremite d'un nom de piste : sans la lettre L, C ou R ni zero de tete ('07L' -> 7)."""
+    digits = ''.join(ch for ch in str(name) if ch.isdigit())
+    return int(digits) if digits else None
+
+
+def declared_numbers(name):
+    """Les deux numeros d'une piste declaree : `Name` du jeu et son oppose (Name + 18, ramene dans 1..36)."""
+    n = int(name)
+    return n, (n + 18 - 1) % 36 + 1
+
+
+def matching_refs(name, refs):
+    """Indices des pistes pydcs (`refs` : liste de (nom d'extremite, nom de l'extremite opposee)) dont les deux numeros
+    d'extremite sont exactement ceux de la piste declaree `name` (appariement par le nom, sans tolerance de cap)."""
+    want = sorted(declared_numbers(name))
+    return [i for i, (a, b) in enumerate(refs or []) if sorted([end_number(a), end_number(b)]) == want]
+
+
+def runways_from_declared(declared, refs=None):
     """Pistes declarees par le jeu (dcsdata.declared_runways) -> liste de Runway 'herbe' : cap grille = -course, axe
     d = (cos course, -sin course) en (x, z), extremites = centre -/+ d * longueur / 2, largeur declaree, sans marquage.
-    Une piste de moins de 100 m ne donne rien. `ref` : indice de la piste pydcs (`refs` : liste de (nom, cap pydcs)) dont
-    le cap est le plus proche de celui de la piste, a MATCH_MAX_DEG au plus (`heading_fn({'d': d, 'p': (x, z)})` : le calcul
-    de cap de l'appariement de analysis.py), une piste pydcs ne servant qu'une fois ; None sinon. Pure : ni image, ni fichier."""
-    out, used = [], set()
+    Une piste de moins de 100 m ne donne rien. `ref` : indice de la piste pydcs (`refs` : liste de (nom, nom oppose)) dont
+    les deux numeros d'extremite sont ceux de la piste declaree (voir matching_refs) ; None s'il n'y en a aucune ou
+    plusieurs. Pure : ni image, ni fichier."""
+    out = []
     for gr in declared:
         if gr['length'] < DECLARED_MIN_LENGTH_M:
             continue
@@ -82,14 +101,8 @@ def runways_from_declared(declared, refs=None, heading_fn=None):
         d = (math.cos(c), -math.sin(c))
         cx, cz = gr['x'], gr['z']
         h = gr['length'] / 2
-        ref = None
-        if refs and heading_fn is not None:
-            hd = heading_fn({'d': d, 'p': (cx, cz)})
-            cand = [(heading_diff(rh, hd), i) for i, (_, rh) in enumerate(refs) if i not in used]
-            cand = [t for t in cand if t[0] <= MATCH_MAX_DEG]
-            if cand:
-                ref = min(cand)[1]
-                used.add(ref)
+        m = matching_refs(gr['Name'], refs)
+        ref = m[0] if len(m) == 1 else None
         out.append(Runway((cx - d[0] * h, cz - d[1] * h), (cx + d[0] * h, cz + d[1] * h), float(gr['width']), 0, d, ref,
                           False, 'revetement', None, float(gr['length']), 'herbe'))
     return out
