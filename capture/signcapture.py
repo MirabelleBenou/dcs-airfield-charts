@@ -3,11 +3,12 @@
 Usage (python -I capture/signcapture.py ...) :
   visee   <Theatre> [<Base> ...]   -> <work_dir>/panneaux/<Theatre>/<Base>/vues.json et <work_dir>/panneaux/<Theatre>/visee.json
   capture <Theatre> <Base> [...]   -> <work_dir>/panneaux/<Theatre>/<Base>/{img/,vignettes/,index.json}
+  lire    <Theatre> <Base> [...]   -> <work_dir>/panneaux/<Theatre>/<Base>/{lecture.json,lecture.tsv} (capture/signread.py)
 Option : --config <chemin> (sinon variable DCS_CHARTS_CONFIG, sinon capture/config.json ; voir config.example.json)
 
 La visee lit le graphe des voies du .rn5 de chaque base (rn5.py) et planifie ou regarder pour voir les panneaux : sorties de
 piste (bretelles) et intersections de taxiways. La prise de vues les realise dans DCS, camera libre (vue F11), DCS au premier
-plan, avec le crochet de ce depot (commande `cam`). Aucune lecture des panneaux ; rien n'est ecrit hors de
+plan, avec le crochet de ce depot (commande `cam`). La lecture des panneaux est dans signread.py (commande `lire`) ; rien n'est ecrit hors de
 <work_dir>/panneaux/.
 """
 import hashlib
@@ -750,13 +751,19 @@ def cmd_capture(cfg, theatre, bases, env=None, log=print):
 
 
 def main(argv, cfg):
-    if len(argv) < 3 or argv[1] not in ('visee', 'capture'):
+    if len(argv) < 3 or argv[1] not in ('visee', 'capture', 'lire'):
         raise SystemExit(__doc__)
     cmd, theatre, bases = argv[1], argv[2], argv[3:]
-    if cmd == 'capture' and not bases:
+    if cmd in ('capture', 'lire') and not bases:
         raise SystemExit(__doc__)
     if cmd == 'visee':
         cmd_visee(cfg, theatre, bases)
+    elif cmd == 'lire':
+        import signread
+        try:
+            signread.cmd_lire(cfg, theatre, bases, panneaux_dir, find_base)
+        except signread.ReadError as e:
+            raise Stop(f'ARRET : {e}')
     else:
         cmd_capture(cfg, theatre, bases)
 
