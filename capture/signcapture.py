@@ -33,12 +33,13 @@ CAM_FAR_M = 60.0              # camera a 60 m ou plus du point vise
 CAM_NEAR_M = 40.0             # a defaut, 40 m ou plus
 FROM_RUNWAY_MIN_M = 40.0      # vue depuis la piste : point vise a au moins 40 m de l'axe
 FROM_RUNWAY_MAX_M = 70.0      # au-dela, camera ramenee a 60 m
-INTERSECTION_MIN_AXIS_M = 120.0
+ENTRY_MAX_AXIS_M = 30.0       # entree non typee : noeud taxiway_end a moins de 30 m de l'axe de piste
+ENTRY_TYPE = 'taxiway_end'
 STAND_BRANCH_M = 150.0        # bretelle de poste : somme des troncons entiers jusqu'a un poste, moins de 150 m
 STAND_BRANCH_MAX_SEGS = 20
 INTERSECTION_MIN_BRANCHES = 3
-INTERSECTION_MIN_WALK_M = 80.0
-INTERSECTION_AIM_M = 30.0
+INTERSECTION_MIN_WALK_M = 40.0
+INTERSECTION_CAM_M = 40.0     # camera au point de la marche a 40 m, point vise = le noeud d'intersection
 CAM_HEIGHT_M = 3.0
 AIM_HEIGHT_M = 1.5
 DEDUP_DIST_M = 15.0
@@ -50,6 +51,9 @@ MIN_RN5_BYTES = 5000
 PASS_PREFIXES = ('taxiway_l', 'taxiway_l_mirror', 'auto__', 'taxi_point_holding_position')
 HOLD_TYPE = 'taxi_point_holding_position'
 INTERSECTION_TYPES = ('taxiway_t', 'taxiway_cross', 'taxiway_x')
+SENS_ENTRY_TO = 'vers la piste (entrée non typée)'
+SENS_ENTRY_FROM = 'depuis la piste (entrée non typée)'
+SENS_INTERSECTION = 'vers l\'intersection (40 m)'
 
 # ---------- constantes de la prise de vues ----------
 WAIT_S = 3.0                  # attente apres la pose de la vue
@@ -378,19 +382,56 @@ def views_bretelle(g, nodes, bid):
     return out
 
 
+def untyped_entries(g):
+    """Les entrees de piste non typees : noeuds taxiway_end a moins de 30 m de l'axe de piste (ids, ordre du fichier)."""
+    return [n.id for n in g.r.nodes
+            if n.type == ENTRY_TYPE and g.axis_foot(g.pos[n.id])[1] < ENTRY_MAX_AXIS_M]
+
+
+def aim_s_entry(g, w):
+    """Abscisse visee d'une entree non typee : en avancant de 2 m en 2 m depuis 0, la premiere abscisse dont le point est a
+    70 m ou plus de l'axe de piste ; aucune : la moitie de la longueur de la marche (aucun plafond)."""
+    d = 0.0
+    while d <= w.length:
+        if g.axis_foot(w.at(d))[1] >= FAR_AXIS_M:
+            return d
+        d += STEP_M
+    return w.length / 2.0
+
+
+def views_entry(g, nid):
+    """Les vues d'une entree non typee : marche sans limite d'angle le long de son premier troncon, vue vers la piste (camera
+    comme une bretelle) et vue depuis la piste (pied sur l'axe, comme une bretelle)."""
+    ports = g.r.nodes[nid].ports
+    if not ports:
+        return []
+    t = ports[0]
+    w = walk(g, nid, t, None)
+    s = aim_s_entry(g, w)
+    a = w.at(s)
+    out = []
+    c = camera_toward(w, s, a)
+    if c is not None:
+        out.append(make_view(c, a, 'piste', SENS_ENTRY_TO, nid, None, t))
+    c = camera_from_runway(g, a)
+    if c is not None:
+        out.append(make_view(c, a, 'piste', SENS_ENTRY_FROM, nid, None, t))
+    return out
+
+
 def views_intersection(g, node):
+    """Les vues d'une intersection : pour chaque branche gardee (ni piste ni bretelle de poste ; trois au moins), la marche
+    (30 degres) ; moins de 40 m : pas de vue ; sinon camera au point de la marche a 40 m, point vise = le noeud."""
     keep = [t for t in node.ports if not g.runway[t] and not stand_branch(g, node.id, t)]
     out = []
     if len(keep) < INTERSECTION_MIN_BRANCHES:
         return out
+    a = g.pos[node.id]
     for t in keep:
         w = walk(g, node.id, t, ANGLE_TAXIWAY_DEG)
         if w.length < INTERSECTION_MIN_WALK_M:
             continue
-        a = w.at(INTERSECTION_AIM_M)
-        c = camera_toward(w, INTERSECTION_AIM_M, a)
-        if c is not None:
-            out.append(make_view(c, a, 'taxiway', 'vers l\'intersection', None, node.id, t))
+        out.append(make_view(w.at(INTERSECTION_CAM_M), a, 'taxiway', SENS_INTERSECTION, None, node.id, t))
     return out
 
 
@@ -405,15 +446,19 @@ def dedupe(views):
 
 
 def plan_base(r):
-    """La visee d'une base. Retourne (graphe, vues, bretelles, intersections) ; vues numerotees a partir de 1, sans arrondi."""
+    """La visee d'une base. Retourne (graphe, vues, bretelles, intersections, entrees non typees) ; vues numerotees a partir
+    de 1, sans arrondi. Ordre avant dedoublonnage : les bretelles, les entrees non typees, les intersections."""
     g = Graph(r)
     brs = bretelles(g)
     views = []
     for nodes in brs:
         views += views_bretelle(g, nodes, nodes[0])
+    entries = untyped_entries(g)
+    for nid in entries:
+        views += views_entry(g, nid)
     inter = []
     for n in r.nodes:
-        if n.type in INTERSECTION_TYPES and g.axis_foot(g.pos[n.id])[1] >= INTERSECTION_MIN_AXIS_M:
+        if n.type in INTERSECTION_TYPES:
             vs = views_intersection(g, n)
             if vs:
                 inter.append(n.id)
@@ -421,7 +466,7 @@ def plan_base(r):
     views = dedupe(views)
     for i, v in enumerate(views, 1):
         v['numero'] = i
-    return g, views, brs, inter
+    return g, views, brs, inter, entries
 
 
 # ---------- sortie de la visee ----------
@@ -436,31 +481,35 @@ def _round_view(v):
     }
 
 
-def summarize(g, views, brs, inter):
-    """Les bretelles (id, noeuds, vues 'piste' dont le point vise est a moins de 130 m d'un noeud) et les comptes."""
+def summarize(g, views, brs, inter, entries=()):
+    """Les bretelles (id, noeuds, vues 'piste' dont le point vise est a moins de 130 m d'un noeud ; les vues des entrees non
+    typees ne comptent pas) et les comptes, dont les entrees non typees (ids) et celles sans aucune vue."""
     brets = []
     for nodes in brs:
-        n = sum(1 for v in views if v['genre'] == 'piste'
+        n = sum(1 for v in views if v['genre'] == 'piste' and v['sens'] not in (SENS_ENTRY_TO, SENS_ENTRY_FROM)
                 and any(_dist((v['vise']['x'], v['vise']['z']), g.pos[i]) < NEAR_NODE_M for i in nodes))
         lateral = any(g.r.nodes[i].type.startswith('runway_taxiway') for i in nodes)
         brets.append({'id': nodes[0], 'noeuds': nodes, 'laterale': lateral, 'vues_piste': n})
     short = [b['id'] for b in brets if b['laterale'] and b['vues_piste'] < 2]
     nothing = [b['id'] for b in brets if not b['laterale'] and b['vues_piste'] == 0]
+    seen = {v['bretelle'] for v in views if v['sens'] in (SENS_ENTRY_TO, SENS_ENTRY_FROM)}
+    no_view = [i for i in entries if i not in seen]
     counts = {
         'bretelles': len(brets), 'bretelles_laterales_sous_deux_vues': len(short),
         'entrees_de_seuil_sans_vue': len(nothing), 'intersections': len(inter), 'vues': len(views),
         'duree_estimee_s': round(len(views) * SECONDS_PER_VIEW, 1),
         'bretelles_laterales_sous_deux_vues_ids': short, 'entrees_de_seuil_sans_vue_ids': nothing,
+        'entrees_non_typees': list(entries), 'entrees_non_typees_sans_vue_ids': no_view,
     }
     return brets, counts
 
 
 def build_vues_json(theatre, base, source, r):
     """(contenu de vues.json, comptes) d'une base lue."""
-    g, views, brs, inter = plan_base(r)
-    brets, counts = summarize(g, views, brs, inter)
+    g, views, brs, inter, entries = plan_base(r)
+    brets, counts = summarize(g, views, brs, inter, entries)
     doc = {'base': base, 'theatre': theatre, 'source': source, 'bretelles': brets,
-           'intersections': inter, 'vues': [_round_view(v) for v in views]}
+           'entrees_non_typees': list(entries), 'intersections': inter, 'vues': [_round_view(v) for v in views]}
     return doc, counts
 
 
@@ -520,8 +569,8 @@ def cmd_visee(cfg, theatre, bases, log=print):
         doc, counts = build_vues_json(theatre, name, path.name, r)
         _write(out / name / 'vues.json', _dump(doc))
         summary[name] = counts
-        log(f'{name} : {counts["bretelles"]} bretelles, {counts["intersections"]} intersections, {counts["vues"]} vues '
-            f'(~{counts["duree_estimee_s"] / 60:.1f} min)')
+        log(f'{name} : {counts["bretelles"]} bretelles, {len(counts["entrees_non_typees"])} entrees non typees, '
+            f'{counts["intersections"]} intersections, {counts["vues"]} vues (~{counts["duree_estimee_s"] / 60:.1f} min)')
     _write(vpath, _dump({'theatre': theatre, 'bases': {k: summary[k] for k in sorted(summary, key=str.lower)}}))
     log(f'visee {theatre} : {len(todo)} base(s) en {time.perf_counter() - t0:.1f} s')
     return summary

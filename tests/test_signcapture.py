@@ -176,6 +176,101 @@ def test_dedupe_needs_both_15_m_and_20_degrees():
     assert [(v['camera']['x'], v['cap']) for v in kept] == [(0, 10), (10, 40), (20, 10)]
 
 
+# ---------- entrees non typees et intersections a 40 m (graphes synthetiques) ----------
+# Dans ces graphes le troncon 0 est la piste ; les autres troncons sont numerotes a partir de 1, dans l'ordre ecrit.
+def _runway_nodes():
+    return [('rwy_point_takeoff_landing', -500, 0), ('rwy_point_takeoff_landing', 500, 0)], [('runway_45m', 0, 1, [(-500, 0), (0, 0), (500, 0)])]
+
+
+def test_untyped_entry_is_a_taxiway_end_within_30_m_of_the_axis():
+    nodes, segs = _runway_nodes()
+    nodes += [('taxiway_end', 0, 10), ('taxiway_end', 100, 29), ('taxiway_end', 200, 30), ('taxiway_end', 300, 60),
+              ('taxiway_t', 0, 300), ('taxiway_t', 100, 300), ('taxiway_t', 200, 300), ('taxiway_t', 300, 300)]
+    segs += [('taxiway_15m', 2 + i, 6 + i, [(x, 15 + 5 * i), (x, 290)]) for i, x in enumerate((0, 100, 200, 300))]
+    g = sc.Graph(mk(nodes, segs))
+    assert sc.untyped_entries(g) == [2, 3]                  # 10 m et 29 m ; pas 30 m, pas 60 m ; ni les autres types
+    nodes[2] = ('taxiway_l', 0, 10)
+    assert sc.untyped_entries(sc.Graph(mk(nodes, segs))) == [3]
+
+
+def test_untyped_entry_views_walk_from_the_first_segment_without_angle_limit():
+    nodes, segs = _runway_nodes()
+    nodes += [('taxiway_end', 0, 10), ('taxiway_t', 0, 100), ('stand_a', 300, 100)]
+    segs += [('taxiway_15m', 2, 3, [(0, 15), (0, 60), (0, 99)]),
+             ('taxiway_15m', 3, 4, [(5, 100), (100, 100), (200, 100), (295, 100)])]      # virage a 90 degres : permis
+    g = sc.Graph(mk(nodes, segs))
+    w = sc.walk(g, 2, 1, None)
+    assert w.segs == [1, 2] and w.pts[0] == (0.0, 10.0)
+    assert sc.aim_s_entry(g, w) == 60.0                       # (0, 70) : premier pas de 2 m a 70 m ou plus de l'axe
+    vs = sc.views_entry(g, 2)
+    assert [v['sens'] for v in vs] == [sc.SENS_ENTRY_TO, sc.SENS_ENTRY_FROM]
+    to, frm = vs
+    assert (to['vise']['x'], to['vise']['z']) == pytest.approx((0.0, 70.0))
+    assert to['genre'] == frm['genre'] == 'piste' and to['bretelle'] == 2 and to['troncon'] == 1 and to['intersection'] is None
+    assert (frm['camera']['x'], frm['camera']['z']) == pytest.approx((0.0, 0.0)) and frm['cap'] == pytest.approx(90.0)
+    assert to['distance'] >= 40.0                              # camera_toward du lot A : 60 m, ou a defaut 40 m
+
+
+def test_untyped_entry_without_a_far_point_aims_at_half_the_walk_and_may_have_no_view():
+    nodes, segs = _runway_nodes()
+    nodes += [('taxiway_end', 0, 10), ('stand_a', 0, 60)]
+    segs += [('taxiway_15m', 2, 3, [(0, 15), (0, 55)])]
+    g = sc.Graph(mk(nodes, segs))
+    w = sc.walk(g, 2, 1, None)
+    assert w.length == pytest.approx(45.0) and sc.aim_s_entry(g, w) == pytest.approx(22.5)    # aucun point a 70 m : la moitie
+    assert sc.views_entry(g, 2) == []                          # A a 32 m de l'axe : ni vue vers la piste (40 m) ni depuis la piste
+    g2, views, brs, inter, entries = sc.plan_base(mk(nodes, segs))
+    assert entries == [2] and views == []
+    doc, counts = sc.build_vues_json('T', 'B', 'B.rn5', mk(nodes, segs))
+    assert counts['entrees_non_typees'] == [2] and counts['entrees_non_typees_sans_vue_ids'] == [2]      # listee, jamais tue
+    assert doc['entrees_non_typees'] == [2] and doc['vues'] == []
+
+
+def _cross(axis_gap, south_len):
+    """Une intersection a axis_gap m de l'axe : branches ouest et est de 100 m (terminees par un noeud t), branche sud de
+    south_len m jusqu'a un poste. Troncons 1 (ouest), 2 (est), 3 (sud)."""
+    nodes, segs = _runway_nodes()
+    nodes += [('taxiway_t', 0, axis_gap), ('taxiway_t', -100, axis_gap), ('taxiway_t', 100, axis_gap),
+              ('stand_a', 0, axis_gap + south_len)]
+    segs += [('taxiway_15m', 2, 3, [(-5, axis_gap), (-95, axis_gap)]),
+             ('taxiway_15m', 2, 4, [(5, axis_gap), (95, axis_gap)]),
+             ('taxiway_15m', 2, 5, [(0, axis_gap + 5), (0, axis_gap + south_len - 5)])]
+    return sc.Graph(mk(nodes, segs))
+
+
+def test_intersection_camera_at_40_m_aims_at_the_node_with_no_distance_to_runway_condition():
+    g = _cross(axis_gap=50.0, south_len=200.0)                 # a 50 m de l'axe : le lot A exigeait 120 m
+    assert g.axis_foot(g.pos[2])[1] == 50.0
+    vs = sc.views_intersection(g, g.r.nodes[2])
+    assert len(vs) == 3 and {v['troncon'] for v in vs} == {1, 2, 3}
+    for v in vs:
+        assert v['sens'] == "vers l'intersection (40 m)" and v['genre'] == 'taxiway' and v['intersection'] == 2
+        assert (v['vise']['x'], v['vise']['z']) == (0.0, 50.0) and v['distance'] == pytest.approx(40.0)
+    west = [v for v in vs if v['troncon'] == 1][0]
+    assert (west['camera']['x'], west['camera']['z']) == pytest.approx((-40.0, 50.0))
+    assert west['cap'] == pytest.approx(0.0) and west['tangage'] == pytest.approx(-2.15, abs=0.01)
+    g2, views, brs, inter, entries = sc.plan_base(g.r)
+    assert inter == [2] and len(views) == 3                    # et plan_base la retient
+
+
+def test_intersection_branch_shorter_than_40_m_gives_no_view():
+    # un noeud a quatre branches libres : ouest, est et nord de 100 m ou plus, et une branche sud de 39 m de marche
+    nodes, segs = _runway_nodes()
+    nodes += [('taxiway_cross', 0, 200), ('taxiway_t', -100, 200), ('taxiway_t', 100, 200), ('taxiway_t', 0, 400),
+              ('taxiway_t', 0, 239)]
+    segs += [('taxiway_15m', 2, 3, [(-5, 200), (-95, 200)]), ('taxiway_15m', 2, 4, [(5, 200), (95, 200)]),
+             ('taxiway_15m', 2, 5, [(0, 205), (0, 395)]), ('taxiway_15m', 2, 6, [(0, 195), (0, 161)])]
+    g2 = sc.Graph(mk(nodes, segs))
+    assert sc.walk(g2, 2, 4, 30.0).length == pytest.approx(39.0)          # 5 + 34 : la branche courte (39 m)
+    assert sorted(v['troncon'] for v in sc.views_intersection(g2, g2.r.nodes[2])) == [1, 2, 3]       # pas de vue pour le troncon 4
+
+
+def test_intersection_needs_three_kept_branches():
+    g = _cross(axis_gap=200.0, south_len=60.0)
+    assert sc.stand_branch(g, 2, 3) is True                    # 60 m jusqu'au poste : bretelle de poste, ecartee
+    assert sc.views_intersection(g, g.r.nodes[2]) == []        # il ne reste que deux branches
+
+
 # ---------- visee sur Mahlwinkel (echantillons) ----------
 MAHL = ('dcs_install', 'Mods', 'terrains', 'GermanyColdWar', 'AirfieldsTaxiways', 'Mahlwinkel.rn5')
 
@@ -187,19 +282,54 @@ def mahl(samples):
 
 
 def test_mahlwinkel_plan(mahl):
-    r, (g, views, brs, inter) = mahl
-    assert [b[0] for b in brs] == [17, 52, 199] and len(inter) == 11 and len(views) == 40
+    r, (g, views, brs, inter, entries) = mahl
+    assert [b[0] for b in brs] == [17, 52, 199] and len(inter) == 11 and entries == [208] and len(views) == 42
     exp = [(-217685.6, -589450.2, 7.6), (-217564.7, -589434.1, 187.5), (-218020.7, -586975.2, 7.6)]
-    for v, (x, z, cap) in zip(views, exp):
+    for v, (x, z, cap) in zip(views, exp):          # les vues des bretelles, premieres et inchangees (lot A)
         assert v['camera']['x'] == pytest.approx(x, abs=0.15) and v['camera']['z'] == pytest.approx(z, abs=0.15)
         assert v['cap'] == pytest.approx(cap, abs=0.1)
-    assert [v['numero'] for v in views] == list(range(1, 41))
-    assert all(40.0 <= v['distance'] <= 70.0 for v in views)
+    assert [v['numero'] for v in views] == list(range(1, 43))
+    assert all(28.0 <= v['distance'] <= 72.0 for v in views)
     assert all(v['hauteur'] == 3.0 and v['tangage'] < 0 for v in views)
+    # l'ordre : bretelles, puis entrees non typees, puis intersections
+    senses = [v['sens'] for v in views]
+    assert senses[:6] == ['vers la piste', 'depuis la piste'] * 3
+    assert senses[6:8] == [sc.SENS_ENTRY_TO, sc.SENS_ENTRY_FROM]
+    assert set(senses[8:]) == {"vers l'intersection (40 m)"} and len(senses[8:]) == 34
+
+
+def test_mahlwinkel_untyped_entry_208(mahl):
+    r, (g, views, brs, inter, entries) = mahl
+    assert r.nodes[208].type == 'taxiway_end' and g.axis_foot(g.pos[208])[1] < 30.0
+    ev = [v for v in views if v['bretelle'] == 208]
+    assert [v['sens'] for v in ev] == ['vers la piste (entrée non typée)', 'depuis la piste (entrée non typée)']
+    assert all(v['genre'] == 'piste' and v['troncon'] == r.nodes[208].ports[0] and v['intersection'] is None for v in ev)
+    to, frm = ev
+    a = (to['vise']['x'], to['vise']['z'])
+    assert a == (frm['vise']['x'], frm['vise']['z']) and g.axis_foot(a)[1] >= 70.0       # point vise : a 70 m ou plus de l'axe
+    assert g.axis_foot(a)[1] < 74.0                                                      # la premiere abscisse (pas de 2 m)
+    assert 28.0 <= to['distance'] <= 72.0 and frm['distance'] == pytest.approx(60.0)     # depuis la piste : ramenee a 60 m
+    assert g.axis_foot((to['camera']['x'], to['camera']['z']))[1] > g.axis_foot(a)[1] - 1.0    # vers la piste : camera plus loin de l'axe
+
+
+def test_mahlwinkel_intersection_views_are_at_40_m(mahl):
+    r, (g, views, brs, inter, entries) = mahl
+    iv = [v for v in views if v['intersection'] is not None]
+    assert iv and {v['intersection'] for v in iv} == set(inter)
+    for v in iv:
+        assert (v['vise']['x'], v['vise']['z']) == pytest.approx(g.pos[v['intersection']], abs=0.01)   # point vise = le noeud
+        assert v['distance'] <= 40.0 + 0.01 and v['genre'] == 'taxiway'                              # 40 m le long de la marche
+
+
+def test_konya_intersections_near_the_runway_are_aimed(samples):
+    r = rn5.read(samples.joinpath('dcs_install', 'Mods', 'terrains', 'Syria', 'AirfieldsTaxiways', 'Konya.rn5'))
+    g, views, brs, inter, entries = sc.plan_base(r)
+    near = [i for i in inter if g.axis_foot(g.pos[i])[1] < 120.0]      # le lot A les ecartait ; il y en a deux a Konya
+    assert len(near) == 2 and all(any(v['intersection'] == i for v in views) for i in near)
 
 
 def test_mahlwinkel_every_camera_is_on_pavement(mahl):
-    r, (g, views, brs, inter) = mahl
+    r, (g, views, brs, inter, entries) = mahl
     for v in views:
         c = (v['camera']['x'], v['camera']['z'])
         ok = any(sc._foot(c, a, b)[1] <= s.half_width + 0.5
@@ -208,7 +338,7 @@ def test_mahlwinkel_every_camera_is_on_pavement(mahl):
 
 
 def test_mahlwinkel_walk_from_a_runway_exit(mahl):
-    r, (g, views, brs, inter) = mahl
+    r, (g, views, brs, inter, entries) = mahl
     w = sc.walk(g, 17, 31, None)
     s = sc.aim_s(g, w)
     assert s == 90.0                                     # plafonnee a 90 m : aucun point d'attente a Mahlwinkel
@@ -229,10 +359,12 @@ def test_visee_outputs_and_reproducible(samples, tmp_path):
     first = (out / 'Mahlwinkel' / 'vues.json').read_bytes()
     doc = json.loads(first)
     assert doc['base'] == 'Mahlwinkel' and doc['theatre'] == 'GermanyColdWar' and doc['source'] == 'Mahlwinkel.rn5'
-    assert len(doc['vues']) == 40 and len(doc['intersections']) == 11 and len(doc['bretelles']) == 3
+    assert len(doc['vues']) == 42 and len(doc['intersections']) == 11 and len(doc['bretelles']) == 3
+    assert doc['entrees_non_typees'] == [208]
     assert all(b['vues_piste'] >= 2 for b in doc['bretelles'])
     summ = json.loads((out / 'visee.json').read_bytes())['bases']['Mahlwinkel']
-    assert summ['vues'] == 40 and summ['duree_estimee_s'] == 180.0 and summ['bretelles_laterales_sous_deux_vues'] == 0
+    assert summ['vues'] == 42 and summ['duree_estimee_s'] == 189.0 and summ['bretelles_laterales_sous_deux_vues'] == 0
+    assert summ['entrees_non_typees'] == [208] and summ['entrees_non_typees_sans_vue_ids'] == []
     sc.cmd_visee(cfg, 'GermanyColdWar', ['Mahlwinkel'], log=lambda *a: None)
     assert (out / 'Mahlwinkel' / 'vues.json').read_bytes() == first
 
