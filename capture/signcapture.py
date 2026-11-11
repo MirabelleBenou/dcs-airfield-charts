@@ -4,12 +4,16 @@ Usage (python -I capture/signcapture.py ...) :
   visee   <Theatre> [<Base> ...]   -> <work_dir>/panneaux/<Theatre>/<Base>/vues.json et <work_dir>/panneaux/<Theatre>/visee.json
   capture <Theatre> <Base> [...]   -> <work_dir>/panneaux/<Theatre>/<Base>/{img/,vignettes/,index.json}
   lire    <Theatre> <Base> [...]   -> <work_dir>/panneaux/<Theatre>/<Base>/{lecture.json,lecture.tsv} (capture/signread.py)
+  attribuer <Theatre> <Base> [...] [--champ 90]  -> <work_dir>/panneaux/<Theatre>/<Base>/attribution.json et
+                                      <work_dir>/taxiways_dcs/<theatre>/<Base>.json (capture/signattr.py)
 Option : --config <chemin> (sinon variable DCS_CHARTS_CONFIG, sinon capture/config.json ; voir config.example.json)
 
 La visee lit le graphe des voies du .rn5 de chaque base (rn5.py) et planifie ou regarder pour voir les panneaux : sorties de
 piste (bretelles) et intersections de taxiways. La prise de vues les realise dans DCS, camera libre (vue F11), DCS au premier
 plan, avec le crochet de ce depot (commande `cam`). La lecture des panneaux est dans signread.py (commande `lire`) ; rien n'est ecrit hors de
-<work_dir>/panneaux/.
+<work_dir>/panneaux/, sauf par `attribuer` (<work_dir>/taxiways_dcs/).
+L'attribution situe chaque lettre lue au sol, la rattache a une sortie de piste du graphe et ecrit pour le moteur des charts un
+fichier de noms tire du jeu (signattr.py, commande `attribuer`) ; elle n'a besoin d'aucune image.
 """
 import hashlib
 import json
@@ -750,14 +754,48 @@ def cmd_capture(cfg, theatre, bases, env=None, log=print):
         capture_base(cfg, env, theatre, name, log)
 
 
+def _split_champ(args):
+    """Retire --champ <degres> (ou --champ=<degres>) des arguments : (champ ou None, reste)."""
+    rest, champ, i = [], None, 0
+    while i < len(args):
+        a = args[i]
+        if a == '--champ' or a.startswith('--champ='):
+            if a == '--champ':
+                if i + 1 >= len(args):
+                    raise SystemExit(__doc__)
+                val, i = args[i + 1], i + 2
+            else:
+                val, i = a[len('--champ='):], i + 1
+            try:
+                champ = float(val)
+            except ValueError:
+                raise SystemExit(__doc__)
+            if not 0.0 < champ < 180.0:
+                raise SystemExit(__doc__)
+            continue
+        rest.append(a)
+        i += 1
+    return champ, rest
+
+
 def main(argv, cfg):
-    if len(argv) < 3 or argv[1] not in ('visee', 'capture', 'lire'):
+    if len(argv) < 3 or argv[1] not in ('visee', 'capture', 'lire', 'attribuer'):
         raise SystemExit(__doc__)
     cmd, theatre, bases = argv[1], argv[2], argv[3:]
-    if cmd in ('capture', 'lire') and not bases:
+    champ = None
+    if cmd == 'attribuer':
+        champ, bases = _split_champ(bases)
+    if cmd in ('capture', 'lire', 'attribuer') and not bases:
         raise SystemExit(__doc__)
     if cmd == 'visee':
         cmd_visee(cfg, theatre, bases)
+    elif cmd == 'attribuer':
+        import signattr
+        try:
+            signattr.cmd_attribuer(cfg, theatre, bases, panneaux_dir, find_base,
+                                   signattr.CHAMP_DEG if champ is None else champ)
+        except signattr.AttrError as e:
+            raise Stop(f'ARRET : {e}')
     elif cmd == 'lire':
         import signread
         try:
