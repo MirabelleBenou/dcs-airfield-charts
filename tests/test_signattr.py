@@ -531,3 +531,89 @@ def test_frankfurt_two_passes_are_identical_to_the_byte(frankfurt):
         out.append(((cfg.work_dir / 'taxiways_dcs' / 'germanycoldwar' / 'Frankfurt.json').read_bytes(),
                     (d / 'attribution.json').read_bytes()))
     assert out[0] == out[1]
+
+
+# ---------- addendum 1 : base sans sortie de piste ; taille de l'image tracee ----------
+def test_a_base_without_any_exit_leaves_the_letter_unattached_with_the_reason_and_no_exception():
+    L = _letter_at(10.0)
+    sa.attach([L], [], [])
+    assert not L['rattachee'] and L['sortie'] is None and L['distances'] == [] and L['motif'] == sa.MOTIF_AUCUNE_SORTIE
+    assert sa.name_exits([L], []) == []
+
+
+def test_command_on_a_graph_without_exit_writes_attribution_no_game_file_and_goes_on(synth, monkeypatch):
+    cfg, d, _, _ = synth
+    nodes = [('taxiway_t', 0, 100), ('taxiway_end_a', 0, -100)]
+    segs = [('taxiway_15m', 0, 1, [(0, 90), (0, 0), (0, -90)])]
+    monkeypatch.setattr(rn5, 'read', lambda path: mk(nodes, segs))
+    # une deuxieme base apres la premiere : elle doit etre traitee
+    (cfg.terrains / 'Syria' / 'AirfieldsTaxiways' / 'Suite.rn5').write_bytes(b'x' * 6000)
+    d2 = cfg.work_dir / 'panneaux' / 'Syria' / 'Suite'
+    d2.mkdir(parents=True)
+    for n in ('vues.json', 'index.json', 'lecture.json'):
+        (d2 / n).write_bytes((d / n).read_bytes())
+    lines = []
+    import signattr
+    signattr.cmd_attribuer(cfg, 'Syria', ['Test', 'Suite'], sc.panneaux_dir, sc.find_base, log=lines.append)
+    assert len(lines) == 2 and lines[1].startswith('attribuer Syria/Suite :')
+    for base_dir in (d, d2):
+        att = json.loads((base_dir / 'attribution.json').read_text(encoding='utf-8'))
+        L = att['lettres'][0]
+        assert L['position'] is not None and not L['rattachee'] and L['motif'] == 'aucune sortie' and L['distances'] == []
+        assert att['sorties'] == [] and att['comptes']['sorties'] == 0
+    assert not (cfg.work_dir / 'taxiways_dcs').exists()
+
+
+def test_attribution_carries_the_image_size_and_its_source_per_letter_and_the_line_says_how_many_views_used_the_default(synth):
+    from PIL import Image
+    cfg, d, write_lecture, tb = synth
+    lines = _run(cfg)                                          # aucune image : taille par defaut
+    att = json.loads((d / 'attribution.json').read_text(encoding='utf-8'))
+    assert att['lettres'][0]['image'] == {'largeur': 3440, 'hauteur': 1440, 'source': 'défaut'}
+    assert lines[0].endswith(' ; 1 vue(s) sans image : taille par défaut 3440x1440')
+    (d / 'img').mkdir()
+    Image.new('RGB', (3440, 1440)).save(d / 'img' / '001.png')
+    idx = json.loads((d / 'index.json').read_text(encoding='utf-8'))
+    idx['vues'][0]['img'] = 'img/001.png'
+    (d / 'index.json').write_text(json.dumps(idx), encoding='utf-8')
+    lines = _run(cfg)                                          # l'image est la : sa taille, sa source, rien en fin de ligne
+    att = json.loads((d / 'attribution.json').read_text(encoding='utf-8'))
+    assert att['lettres'][0]['image'] == {'largeur': 3440, 'hauteur': 1440, 'source': 'image'}
+    assert 'sans image' not in lines[0] and lines[0].endswith('0 B)')
+
+
+def test_the_size_read_from_the_image_is_the_one_used_for_the_ray(synth):
+    from PIL import Image
+    cfg, d, _, _ = synth
+    _run(cfg)
+    default = json.loads((d / 'attribution.json').read_text(encoding='utf-8'))['lettres'][0]['position']
+    (d / 'img').mkdir()
+    Image.new('RGB', (1720, 720)).save(d / 'img' / '001.png')
+    idx = json.loads((d / 'index.json').read_text(encoding='utf-8'))
+    idx['vues'][0]['img'] = 'img/001.png'
+    (d / 'index.json').write_text(json.dumps(idx), encoding='utf-8')
+    _run(cfg)
+    att = json.loads((d / 'attribution.json').read_text(encoding='utf-8'))['lettres'][0]
+    assert att['image'] == {'largeur': 1720, 'hauteur': 720, 'source': 'image'} and att['position'] != default
+
+
+def test_the_line_counts_distinct_views_that_used_the_default_size(synth):
+    from PIL import Image
+    cfg, d, write_lecture, tb = synth
+    views = json.loads((d / 'vues.json').read_text(encoding='utf-8'))['vues']
+    v2, v3 = dict(views[0], numero=2), dict(views[0], numero=3)
+    (d / 'vues.json').write_text(json.dumps({'vues': views + [v2, v3]}), encoding='utf-8')
+    idx = json.loads((d / 'index.json').read_text(encoding='utf-8'))
+    e = idx['vues'][0]
+    idx['vues'] += [dict(e, numero=2), dict(e, numero=3)]
+    (d / 'img').mkdir()
+    Image.new('RGB', (3440, 1440)).save(d / 'img' / '001.png')
+    idx['vues'][0]['img'] = 'img/001.png'              # la vue 1 a son image ; les vues 2 et 3 n'en ont pas
+    (d / 'index.json').write_text(json.dumps(idx), encoding='utf-8')
+    tile = dict(tb, attente=False, coupee=False, car='B', score=0.9, depart=0.9, ecart=1.0)
+    doc = {'vues': [{'vue': n, 'image': 'lue', 'tuiles': [tile, tile] if n == 2 else [tile]} for n in (1, 2, 3)]}
+    (d / 'lecture.json').write_text(json.dumps(doc), encoding='utf-8')
+    lines = _run(cfg)
+    assert lines[0].endswith(' ; 2 vue(s) sans image : taille par défaut 3440x1440')
+    att = json.loads((d / 'attribution.json').read_text(encoding='utf-8'))
+    assert [L['image']['source'] for L in att['lettres']] == ['image', 'défaut', 'défaut', 'défaut']

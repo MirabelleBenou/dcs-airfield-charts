@@ -35,6 +35,8 @@ RATTACHE_MAX_M = 150.0        # la sortie la plus proche est a 150 m au plus
 RATTACHE_ECART_M = 100.0      # la suivante est a 100 m de plus au moins
 SOURCE_PLAN, SOURCE_TRI = 'plan', 'triangulée'
 MOTIF_TROP_LOIN, MOTIF_AMBIGUE = 'trop loin', 'ambiguë'
+MOTIF_AUCUNE_SORTIE = 'aucune sortie'
+SOURCE_IMAGE, SOURCE_DEFAUT = 'image', 'défaut'
 MOTIF_NON_SITUEE = 'non située (rayon qui ne descend pas)'
 MOTIF_SANS_POSE = 'non située (vue sans position)'
 LAT_LON_DECIMALES = 7
@@ -165,28 +167,37 @@ def triangulate(letters):
 
 
 # ---------- situer ----------
-def image_size(base_dir, entry):
-    """Taille (largeur, hauteur) de l'image d'une vue : l'en-tete du fichier `img` de index.json s'il existe, sinon IMAGE_DEFAUT."""
+def image_info(base_dir, entry):
+    """((largeur, hauteur), source) de l'image d'une vue : l'en-tete du fichier `img` de index.json s'il existe (source `image`),
+    sinon IMAGE_DEFAUT (source `défaut`)."""
     img = (entry or {}).get('img')
     if img and (Path(base_dir) / img).is_file():
         try:
             from PIL import Image
             with Image.open(Path(base_dir) / img) as im:
-                return im.size
+                return tuple(im.size), SOURCE_IMAGE
         except Exception:
             pass
-    return IMAGE_DEFAUT
+    return IMAGE_DEFAUT, SOURCE_DEFAUT
 
 
-def place_letters(tiles, vues, positions, champ_deg=CHAMP_DEG, sizes=None):
+def image_size(base_dir, entry):
+    """Taille (largeur, hauteur) de l'image d'une vue (voir image_info)."""
+    return image_info(base_dir, entry)[0]
+
+
+def place_letters(tiles, vues, positions, champ_deg=CHAMP_DEG, sizes=None, sources=None):
     """Les rayons et la position au sol de chaque lettre (tuiles de tiles_from_lecture), puis la triangulation.
-    vues : {numero: vue de vues.json} ; positions : {numero: (x, y, z) ou None} (index.json) ; sizes : {numero: (largeur, hauteur)}.
+    vues : {numero: vue de vues.json} ; positions : {numero: (x, y, z) ou None} (index.json) ; sizes : {numero: (largeur, hauteur)} ;
+    sources : {numero: `image` ou `défaut`} (defaut : `défaut` pour une vue absente de sizes, sinon `image`).
     Retourne (lettres, paires retenues) ; une lettre non situee a xz None et un motif."""
-    sizes = sizes or {}
+    sizes, sources = sizes or {}, sources or {}
     letters = []
     for t in tiles:
         n = t['vue']
-        L = {'vue': n, 'tuile': t, 'car': t['car'], 'cam': None, 'd': None, 'xz': None, 'source': None,
+        size = sizes.get(n, IMAGE_DEFAUT)
+        L = {'vue': n, 'tuile': t, 'car': t['car'], 'taille': size,
+             'taille_source': sources.get(n, SOURCE_IMAGE if n in sizes else SOURCE_DEFAUT), 'cam': None, 'd': None, 'xz': None, 'source': None,
              'hauteurs': None, 'paire': None, 'motif': None}
         pos = positions.get(n)
         if n not in vues:
@@ -195,7 +206,7 @@ def place_letters(tiles, vues, positions, champ_deg=CHAMP_DEG, sizes=None):
             L['motif'] = MOTIF_SANS_POSE
         else:
             L['cam'] = camera(vues[n], pos)
-            L['d'] = ray(L['cam'], t, sizes.get(n, IMAGE_DEFAUT), champ_deg)
+            L['d'] = ray(L['cam'], t, size, champ_deg)
             L['xz'] = ground_point(L['cam'], L['d'])
             if L['xz'] is None:
                 L['d'] = None
@@ -219,6 +230,9 @@ def attach(letters, groups, node_pos):
     for L in letters:
         L['sortie'], L['distances'], L['rattachee'] = None, [], False
         if L['xz'] is None:
+            continue
+        if not groups:                                     # une base sans sortie de piste : rien a quoi rattacher
+            L['motif'] = MOTIF_AUCUNE_SORTIE
             continue
         ds = sorted(((exit_distance(gr, node_pos, L['xz']), gr[0]) for gr in groups))
         L['distances'] = [(sid, d) for d, sid in ds[:2]]
@@ -256,6 +270,7 @@ def build_attribution(theatre, base, letters, pairs, exits, champ_deg):
         t = L['tuile']
         rec = {'vue': L['vue'], 'boite': {'x': t['x'], 'y': t['y'], 'w': t['w'], 'h': t['h']}, 'car': L['car'],
                'position': None if L['xz'] is None else {'x': _r(L['xz'][0]), 'z': _r(L['xz'][1])},
+               'image': {'largeur': L['taille'][0], 'hauteur': L['taille'][1], 'source': L['taille_source']},
                'source': L['source'],
                'hauteurs': None if L['hauteurs'] is None else [_r(h) for h in L['hauteurs']],
                'paire': None if L['paire'] is None else {'vue': letters[L['paire']]['vue'],
@@ -331,11 +346,13 @@ def attribute_base(cfg, theatre, base, base_dir, rn5_path, champ_deg=CHAMP_DEG, 
     entries = {e['numero']: e for e in index.get('vues', []) if isinstance(e, dict) and 'numero' in e}
     positions = {n: (tuple(e['position']) if e.get('position') else None) for n, e in entries.items()}
     tiles = tiles_from_lecture(lecture)
-    sizes = {n: image_size(base_dir, entries.get(n)) for n in {t['vue'] for t in tiles}}
+    infos = {n: image_info(base_dir, entries.get(n)) for n in {t['vue'] for t in tiles}}
+    sizes = {n: i[0] for n, i in infos.items()}
+    sources = {n: i[1] for n, i in infos.items()}
 
     g = sc.Graph(rn5mod.read(rn5_path))
     groups = sc.bretelles(g)
-    letters, pairs = place_letters(tiles, vues, positions, champ_deg, sizes)
+    letters, pairs = place_letters(tiles, vues, positions, champ_deg, sizes, sources)
     attach(letters, groups, g.pos)
     exits = name_exits(letters, groups)
     doc = build_attribution(theatre, base, letters, pairs, exits, champ_deg)
@@ -350,10 +367,12 @@ def attribute_base(cfg, theatre, base, base_dir, rn5_path, champ_deg=CHAMP_DEG, 
     elif target.is_file():
         target.unlink()
     c = doc['comptes']
+    n_defaut = len({L['vue'] for L in letters if L['taille_source'] == SOURCE_DEFAUT})
     log(f'attribuer {theatre}/{base} : {c["lettres"]} lettre(s), {c["rattachees"]} rattachee(s), '
         f'{c["paires_triangulees"]} paire(s) triangulee(s), {len(named)} sortie(s) nommee(s)'
         + (' (' + ', '.join(f'{e["id"]} {e["nom"]}' for e in named) + ')' if named else '')
-        + (f', {c["sorties_en_conflit"]} en conflit' if c['sorties_en_conflit'] else ''))
+        + (f', {c["sorties_en_conflit"]} en conflit' if c['sorties_en_conflit'] else '')
+        + (f' ; {n_defaut} vue(s) sans image : taille par défaut {IMAGE_DEFAUT[0]}x{IMAGE_DEFAUT[1]}' if n_defaut else ''))
     return doc
 
 
