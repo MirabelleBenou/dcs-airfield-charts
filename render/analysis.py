@@ -92,6 +92,7 @@ class ChartData:
     heli_mode: bool = False    # lot heliports (4.1) : toutes les aires pydcs sont reservees aux helicopteres
     icao_known: bool = True    # un OACI a ete donne (option --icao ou fichier OSM) ; sinon `icao` porte le nom de la capture
     f10_img: object = None     # lot heliports-fond (4.3) : mosaique (RGB, icone et nom de l'heliport effaces), seulement sur fond F10
+    taxiway_source: str = 'osm'  # origine des noms de taxiways : 'osm' (fichier OSM) ou 'jeu' (taxiways_dcs a pris la place des ways d'OSM)
     ils_antennas: dict = field(default_factory=dict)   # lot ac-approche-ils : par nom d'extremite ILS, antennes du localizer et du glide (`ils_antenna_info`)
 
     @property
@@ -410,4 +411,4 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
                      georef=g, pav_rings=pav_rings, bld_rings=bld_rings, masks={'pav': pav, 'bld': bld, 'clear': None},
                      osm_ways=osm_ways, osm_kept=sorted({w['ref'] for w in osm_ways}, key=dcsdata.natural_key),
                      osm_icao=osm_icao, projection=proj, n_shelter=n_shelter, heli_mode=heli_mode, icao_known=icao_known, f10_img=f10_img,
-                     ils_antennas=ils_antennas)
+                     ils_antennas=ils_antennas, taxiway_source='jeu' if game is not None else 'osm')

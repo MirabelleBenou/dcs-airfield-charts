@@ -401,14 +401,28 @@ def header(doc, data, index, kind, bands=True):
     return bottom
 
 
+FOOTER_RIGHT = 'PAS POUR LA NAVIGATION RÉELLE'
+FOOTER_MARGIN_MM = 3.0   # espace minimal entre le texte de gauche et la mention de droite
+
+
+def footer_text(data, osm):
+    """Texte de gauche du pied de page : OpenStreetMap n'est credite que pour ce qui vient d'OSM. Noms d'OSM (`osm` : des
+    taxiways gardes) : « taxiways © OpenStreetMap contributors » ; noms du jeu (data.taxiway_source == 'jeu', fichier taxiways_dcs,
+    couverts par « fichiers de DCS World ») : « OACI © OpenStreetMap contributors » si l'OACI vient du fichier OSM, sinon rien."""
+    s = 'DCS AIRFIELD CHARTS · données : carte F10 et fichiers de DCS World (Eagle Dynamics), via pydcs'
+    if getattr(data, 'taxiway_source', 'osm') == 'jeu':
+        if data.osm_icao:
+            s += ' · OACI © OpenStreetMap contributors'
+    elif osm:
+        s += ' · taxiways © OpenStreetMap contributors'
+    return s
+
+
 def footer(doc, data, osm):
     L = 'Footer'
     doc.add(L, line(X0, FOOTER_RULE_Y, X1, FOOTER_RULE_Y, INK, 0.5))
-    s = 'DCS AIRFIELD CHARTS · données : carte F10 et fichiers de DCS World (Eagle Dynamics), via pydcs'
-    if osm:
-        s += ' · taxiways © OpenStreetMap contributors'
-    doc.add(L, text(X0, FOOTER_Y, s, pt(6.1), 'regular', INK2))
-    doc.add(L, text(X1, FOOTER_Y, 'PAS POUR LA NAVIGATION RÉELLE', pt(6.1), 'bold', INK, 'end'))
+    doc.add(L, text(X0, FOOTER_Y, footer_text(data, osm), pt(6.1), 'regular', INK2))
+    doc.add(L, text(X1, FOOTER_Y, FOOTER_RIGHT, pt(6.1), 'bold', INK, 'end'))
 
 
 def legend(doc, y, x_left=None, x_right=None, note=None, sym_r=SYM_PLAN_R, heli=False, fond=False):

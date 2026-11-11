@@ -116,7 +116,7 @@ def test_without_a_game_file_nothing_changes_and_the_log_says_osm(fresh_work, ko
     ref, _ = konya_reference
     lines = []
     data = analysis.analyze(fresh_work, 'Syria', 'Konya', 1985, log=lines.append)
-    assert data.osm_kept == ref.osm_kept and data.osm_icao == ref.osm_icao == 'LTAN'
+    assert data.osm_kept == ref.osm_kept and data.osm_icao == ref.osm_icao == 'LTAN' and data.taxiway_source == 'osm'
     assert [w['ref'] for w in data.osm_ways] == [w['ref'] for w in ref.osm_ways]
     src = [ln for ln in lines if ln.startswith('taxiways :')]
     assert src == [f'taxiways : OSM ({fresh_work.work_dir / "osm" / "syria" / "Konya.json"})']
@@ -127,7 +127,7 @@ def test_with_a_game_file_the_names_come_from_it_and_the_icao_from_the_osm_file(
     game = _write_game(fresh_work, _game_doc(fresh_work, ref))
     lines = []
     data = analysis.analyze(fresh_work, 'Syria', 'Konya', 1985, log=lines.append)
-    assert data.osm_kept == ['Y', 'Z']                               # Q, hors revetement, est ecarte par le filtre d'OSM
+    assert data.osm_kept == ['Y', 'Z'] and data.taxiway_source == 'jeu'    # Q, hors revetement, est ecarte par le filtre d'OSM
     assert data.osm_icao == 'LTAN' and data.icao == 'LTAN' and data.icao_known
     assert [ln for ln in lines if ln.startswith('taxiways :')] == [f'taxiways : jeu ({game})']
     assert not any('OSM (' in ln for ln in lines)
@@ -139,7 +139,7 @@ def test_with_an_explicit_osm_file_the_game_file_is_ignored_and_nothing_is_logge
     lines = []
     osm = fresh_work.work_dir / 'osm' / 'syria' / 'Konya.json'
     data = analysis.analyze(fresh_work, 'Syria', 'Konya', 1985, osm_path=str(osm), log=lines.append)
-    assert data.osm_kept == ref.osm_kept and data.osm_icao == 'LTAN'
+    assert data.osm_kept == ref.osm_kept and data.osm_icao == 'LTAN' and data.taxiway_source == 'osm'
     assert not any(ln.startswith('taxiways :') for ln in lines)
 
 
@@ -159,3 +159,68 @@ def test_a_game_file_without_an_osm_file_gives_the_names_and_no_icao(fresh_work,
     empty.mkdir()
     data = analysis.analyze(fresh_work, 'Syria', 'Konya', 1985, osm_dir=empty, log=lambda *a: None)
     assert data.osm_kept == ['Y', 'Z'] and data.osm_icao is None and not data.icao_known and data.icao == 'Konya'
+
+
+def test_the_source_is_the_game_even_when_the_filter_drops_every_game_way(fresh_work, konya_reference):
+    ref, _ = konya_reference
+    doc = _game_doc(fresh_work, ref)
+    doc['ways'] = [w for w in doc['ways'] if w['ref'] == 'Q']          # seul le tracé hors revetement
+    _write_game(fresh_work, doc)
+    data = analysis.analyze(fresh_work, 'Syria', 'Konya', 1985, log=lambda *a: None)
+    assert data.osm_ways == [] and data.taxiway_source == 'jeu' and data.osm_icao == 'LTAN'
+
+
+def test_konya_page_footer_credits_osm_only_for_the_icao_when_the_names_come_from_the_game(fresh_work, konya_reference):
+    from render import compose
+    ref, _ = konya_reference
+    _write_game(fresh_work, _game_doc(fresh_work, ref))
+    data = analysis.analyze(fresh_work, 'Syria', 'Konya', 1985, log=lambda *a: None)
+    svg = compose.build_pages(data, log=lambda *a: None)[0].svg
+    assert 'via pydcs · OACI © OpenStreetMap contributors' in svg and 'taxiways ©' not in svg
+
+
+# ---------- le pied de page : trois textes, trois marges ----------
+BASE_FOOTER = 'DCS AIRFIELD CHARTS · données : carte F10 et fichiers de DCS World (Eagle Dynamics), via pydcs'
+
+
+def _data(source, icao):
+    return SimpleNamespace(taxiway_source=source, osm_icao=icao)
+
+
+FOOTERS = [
+    ('osm', 'LTAN', True, BASE_FOOTER + ' · taxiways © OpenStreetMap contributors'),          # noms d'OSM : inchange
+    ('jeu', 'LTAN', True, BASE_FOOTER + ' · OACI © OpenStreetMap contributors'),               # noms du jeu, OACI d'OSM
+    ('jeu', 'LTAN', False, BASE_FOOTER + ' · OACI © OpenStreetMap contributors'),              # idem, tous les ways du jeu ecartes
+    ('jeu', None, True, BASE_FOOTER),                                                          # noms du jeu, sans OACI d'OSM
+    ('osm', None, False, BASE_FOOTER),                                                         # ni noms d'OSM, ni jeu : inchange
+]
+
+
+@pytest.mark.parametrize('source, icao, osm, expected', FOOTERS)
+def test_footer_text_credits_osm_only_for_what_comes_from_osm(source, icao, osm, expected):
+    from render import page
+    assert page.footer_text(_data(source, icao), osm) == expected
+
+
+@pytest.mark.parametrize('source, icao, osm, expected', FOOTERS)
+def test_footer_never_touches_the_right_hand_notice_and_keeps_3_mm(source, icao, osm, expected):
+    from render import page
+    from render.fonts import pt, text_width
+    left = text_width(page.footer_text(_data(source, icao), osm), 'regular', pt(6.1))
+    right = text_width(page.FOOTER_RIGHT, 'bold', pt(6.1))
+    margin = (page.X1 - right) - (page.X0 + left)
+    assert margin >= page.FOOTER_MARGIN_MM == 3.0
+    if expected.endswith('taxiways © OpenStreetMap contributors'):
+        assert margin == pytest.approx(7.18, abs=0.01)
+    elif expected.endswith('OACI © OpenStreetMap contributors'):
+        assert margin == pytest.approx(10.44, abs=0.01)
+    print(f'marge {source}/{icao}/{osm} : {margin:.2f} mm')
+
+
+def test_footer_draws_the_text_in_the_svg():
+    from render import page
+    from render.svgdoc import Doc
+    d = Doc()
+    page.footer(d, _data('jeu', 'LTAN'), True)
+    svg = d.render()
+    assert 'via pydcs · OACI © OpenStreetMap contributors' in svg and 'PAS POUR LA NAVIGATION RÉELLE' in svg
