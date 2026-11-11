@@ -69,6 +69,7 @@ FAIR_RIVAL = False
 SECOND_GAP = 0.02                 # ecart minimal entre le meilleur glyphe et le suivant
 COARSE_MIN = 0.65                 # correlation entiere minimale d'un glyphe pour l'affiner
 DOUBT_MIN = 0.85                 # score au-dela duquel une tuile non decidee est quand meme signalee (`?`)
+NEIGHBOUR_SCORE, NEIGHBOUR_GAP, NEIGHBOUR_FULL, NEIGHBOUR_H = 0.90, 0.08, 0.48, 11
 MIN_TILE = 8                      # tuile la plus petite lue (px de haut)
 PIX_THR = 8                       # pixel qui differe : ecart de plus de 8/255 sur un canal
 FROZEN_FRAC = 1e-4                # moins de 0,01 % des pixels differents : image figee
@@ -401,7 +402,7 @@ def recognize(m, tpl, cx, cy, s, rivals=3):
             'full': full, 'tile': tile if tile is not None else _tile_of_core(box1)}
 
 
-def decide(r):
+def decide(r, attached=False):
     """Le caractere rendu, ou '?' : jamais devine. Les seuils durcissent avec la petitesse de la tuile."""
     if r is None:
         return '?'
@@ -414,6 +415,9 @@ def decide(r):
         smin, fmin, dmin, gmin = 0.88, 0.68, 0.50, 0.40
     ok = r['score'] >= smin and r['full'] >= fmin and r['depart'] >= dmin and r['ecart'] >= gmin
     ok = ok and r['score'] - r['second'] >= SECOND_GAP      # deux glyphes a egalite (B/8) : on ne tranche pas
+    if not ok and attached and r['score'] >= NEIGHBOUR_SCORE and r['score'] - r['second'] >= NEIGHBOUR_GAP \
+            and r['full'] >= NEIGHBOUR_FULL and h >= NEIGHBOUR_H:
+        ok = True                         # tuile voisine d'un panneau d'attente : le contexte confirme le cadre, le glyphe domine nettement
     return r['car'] if ok else '?'
 
 
@@ -547,7 +551,8 @@ def read_image(bgr, tpl, timings=None, debug=None):
     for r in kept:
         tx, ty, tw, th = r['tile']
         box = [int(round(tx)), int(round(ty)), int(round(tw)), int(round(th))]
-        car = decide(r)
+        att = _attached(box, panels)
+        car = decide(r, att)
         cut = box[0] <= 1 or box[1] <= 1 or box[0] + box[2] >= W - 1 or box[1] + box[3] >= H - 1
         if cut and r['score'] < DOUBT_MIN:
             continue
@@ -555,7 +560,7 @@ def read_image(bgr, tpl, timings=None, debug=None):
             continue                      # rien qui ressemble a une lettre : pas de tuile
         tiles.append({'x': box[0], 'y': box[1], 'w': box[2], 'h': box[3], 'car': '?' if cut else car,
                       'score': round(r['score'], 3), 'depart': round(r['depart'], 2), 'ecart': round(r['ecart'], 2),
-                      'attente': _attached(box, panels), 'coupee': bool(cut)})
+                      'attente': att, 'coupee': bool(cut)})
     tiles.extend(_cut_beside_panels(soft, panels, tiles, W))
     if timings is not None:
         timings.update({'cartes': t1 - t0, 'cadres': t2 - t1, 'lecture': t3 - t2, 'total': time.perf_counter() - t0})

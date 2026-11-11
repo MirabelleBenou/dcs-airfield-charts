@@ -309,3 +309,14 @@ def test_a_full_size_image_reads_within_two_seconds(tpl):
     res = sr.read_image(img, tpl)
     assert _letters(res) == ['F']
     assert time.perf_counter() - t0 < 2.0
+
+
+# ---------- tuile voisine d'un panneau d'attente ----------
+def test_decide_accepts_a_dominant_glyph_beside_a_panel_only():
+    r = {'car': 'F', 'score': 0.93, 'second': 0.84, 'full': 0.5, 'depart': -0.9, 'ecart': -0.4, 'tile': (0, 0, 11, 13)}
+    assert sr.decide(r) == '?'
+    assert sr.decide(r, attached=True) == 'F'
+    assert sr.decide(dict(r, second=0.90), attached=True) == '?'        # rival trop proche
+    assert sr.decide(dict(r, score=0.85, second=0.7), attached=True) == '?'
+    assert sr.decide(dict(r, full=0.3), attached=True) == '?'
+    assert sr.decide(dict(r, tile=(0, 0, 8, 10)), attached=True) == '?'        # trop petite : le contexte ne suffit plus
