@@ -640,3 +640,38 @@ def test_the_line_counts_distinct_views_that_used_the_default_size(synth):
     assert lines[0].endswith(' ; 2 vue(s) sans image : taille par défaut 3440x1440')
     att = json.loads((d / 'attribution.json').read_text(encoding='utf-8'))
     assert [L['image']['source'] for L in att['lettres']] == ['image', 'défaut', 'défaut', 'défaut']
+
+
+# ---------- les sorties : bretelles et entrees non typees a 100 m au moins ----------
+MAHLWINKEL = ('dcs_install', 'Mods', 'terrains', 'GermanyColdWar', 'AirfieldsTaxiways', 'Mahlwinkel.rn5')
+
+
+def test_exit_groups_add_mahlwinkel_untyped_entry_208_after_the_exits(samples):
+    g = sc.Graph(rn5.read(samples.joinpath(*MAHLWINKEL)))
+    assert sc.untyped_entries(g) == [208]
+    assert sa.exit_groups(g) == sc.bretelles(g) + [[208]] == [[17], [52], [199], [208]]
+
+
+def test_exit_groups_leave_frankfurt_untyped_entries_out_as_ends_of_exits(samples):
+    g = sc.Graph(rn5.read(samples.joinpath(*FRANKFURT)))
+    assert sc.untyped_entries(g) == [412, 434, 473]
+    assert sa.exit_groups(g) == sc.bretelles(g)
+
+
+def _entry_graph(x):
+    """Une piste (axe x), une bretelle au noeud 0 (0, 0), et un noeud taxiway_end sur l'axe a (x, 0)."""
+    nodes = [('runway_taxiway_t', 0, 0), ('taxiway_t', 0, 100), ('runway_taxiway_t', 600, 0),
+             ('rwy_point_takeoff_landing', 1000, 0), ('taxiway_end', x, 0)]
+    segs = [('runway_45m', 0, 2, [(0, 0), (300, 0), (600, 0)]),
+            ('taxiway_15m', 0, 1, [(0, 5), (0, 50), (0, 95)]),
+            ('runway_45m', 2, 3, [(600, 0), (1000, 0)])]
+    return sc.Graph(mk(nodes, segs))
+
+
+def test_exit_groups_untyped_entry_at_99_9_m_of_an_exit_node_is_dropped_and_at_100_0_m_is_kept():
+    g = _entry_graph(99.9)
+    assert sc.untyped_entries(g) == [4] and sc.bretelles(g) == [[0]]
+    assert sa.exit_groups(g) == [[0]]
+    g = _entry_graph(100.0)
+    assert sc.untyped_entries(g) == [4]
+    assert sa.exit_groups(g) == [[0], [4]]

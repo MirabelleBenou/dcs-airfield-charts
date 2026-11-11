@@ -11,7 +11,8 @@ Methode :
      vues.json, position de index.json, repere du crochet ChartsCaptureHook.lua), coupe par le plan sol + 0,70 m ;
   2. un meme panneau vu de deux vues (deux lettres identiques, rayons qui se coupent au sol devant les deux cameras, hauteurs
      impliquees concordantes) est triangule ;
-  3. une lettre est rattachee a la sortie de piste (groupe de noeuds de signcapture.bretelles) dont le noeud est le plus
+  3. une lettre est rattachee a la sortie de piste (groupe de
+     noeuds de signcapture.bretelles, ou entree non typee a 100 m au moins de toute bretelle) dont le noeud est le plus
      proche, si elle est a 150 m au plus et si la suivante est a 100 m de plus ; une sortie ne recoit un nom que si toutes ses
      lettres sont la meme.
 Jamais OSM, ni comme verite, ni comme recours, pour un nom.
@@ -219,6 +220,19 @@ def place_letters(tiles, vues, positions, champ_deg=CHAMP_DEG, sizes=None, sourc
     return letters, pairs
 
 
+# ---------- les sorties ----------
+def exit_groups(g):
+    """Les sorties de l'attribution : les bretelles de signcapture.bretelles(g), dans leur ordre, puis le groupe d'un noeud
+    [e] pour chaque entree non typee e de signcapture.untyped_entries(g), dans son ordre, si e est a RATTACHE_ECART_M au moins
+    de chacun des noeuds de toutes les bretelles (distance au sol, g.pos) ; sinon e n'est pas une sortie (un bout de bretelle)."""
+    import signcapture as sc
+    brs = sc.bretelles(g)
+    nodes = [n for b in brs for n in b]
+    extra = [[e] for e in sc.untyped_entries(g)
+             if all(math.dist(g.pos[e], g.pos[n]) >= RATTACHE_ECART_M for n in nodes)]
+    return brs + extra
+
+
 # ---------- rattacher ----------
 def exit_distance(group, node_pos, xz):
     """Distance (x, z) de xz au noeud le plus proche du groupe."""
@@ -354,7 +368,7 @@ def attribute_base(cfg, theatre, base, base_dir, rn5_path, champ_deg=CHAMP_DEG, 
     sources = {n: i[1] for n, i in infos.items()}
 
     g = sc.Graph(rn5mod.read(rn5_path))
-    groups = sc.bretelles(g)
+    groups = exit_groups(g)
     letters, pairs = place_letters(tiles, vues, positions, champ_deg, sizes, sources)
     attach(letters, groups, g.pos)
     exits = name_exits(letters, groups)

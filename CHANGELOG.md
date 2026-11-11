@@ -28,6 +28,7 @@ What changed in the published charts, version by version. Each version is a GitH
 **Taxiway names read in DCS.**
 
 - New command `capture/signcapture.py attribuer`: the letters read on the taxiway signs at the runway exits are placed on the ground and given to their exit, into `taxiways_dcs/<theatre>/<Base>.json`. When that file exists for an airfield, its chart takes the taxiway names from the game instead of OpenStreetMap. The published charts do not change until such files are produced.
+- A taxiway that ends on the runway centreline without a runway node now counts as a runway exit for the letters read there, when it is at least 100 m from the other exits (Mahlwinkel: its B).
 
 ## AC-V1.6.0 — 7 November 2026
 
