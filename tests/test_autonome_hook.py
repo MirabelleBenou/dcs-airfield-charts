@@ -13,7 +13,7 @@ SRC = HOOK.read_text(encoding='utf-8')
 T_EPOCH = 1_800_000_000
 
 FAUX_DCS = r'''
-CALLS = { execute = {}, setcmd = {}, exit = 0, callbacks = nil, exit_file_lua = nil }
+CALLS = { execute = {}, file_lua_a_l_execute = {}, setcmd = {}, exit = 0, callbacks = nil, exit_file_lua = nil }
 CLOCK = { real = 100.0, pause = true, time = %d }
 FAIL = {}
 Sim = {
@@ -27,7 +27,11 @@ Sim = {
   setUserCallbacks = function(cb) CALLS.callbacks = cb end,
 }
 Export = { LoSetCommand = function(c) table.insert(CALLS.setcmd, c); if FAIL.setcmd then error('boom') end end }
-os.execute = function(c) table.insert(CALLS.execute, c); return 0 end
+os.execute = function(c)
+  table.insert(CALLS.execute, c)
+  local f = io.open(DOSSIER_TEST .. 'file.lua', 'r'); table.insert(CALLS.file_lua_a_l_execute, f and f:read('*a') or '<absent>'); if f then f:close() end
+  return 0
+end
 os.time = function() return CLOCK.time end
 '''
 
@@ -254,7 +258,14 @@ def test_lancer_une_seule_fois(hote):
     assert len(hote.executes) == 1
     hote.arreter()
     hote.pause(True)
-    hote.demarrer()                                # meme session DCS, la file n'est pas rearmee tant qu'elle est armee
+    hote.demarrer()                                # nouvelle mission : file.lua est desarme, rien
+    hote.pause(False)
+    hote.tick(1, 100)
+    assert len(hote.executes) == 1
+    hote.arreter()
+    hote.armer()                                   # reamorce a la main dans la meme session DCS : refuse, la file est deja partie
+    hote.pause(True)
+    hote.demarrer()
     hote.pause(False)
     hote.tick(1, 100)
     assert len(hote.executes) == 1 and 'deja partie' in hote.journal()
@@ -304,7 +315,7 @@ def test_vue_a_la_demande(hote, mot, cmd):
     assert hote.fichier('vue_faite.txt') == mot.strip()
 
 
-@pytest.mark.parametrize('mot', ['f12', 'F10', 'f10 f11', '', 'autre'])
+@pytest.mark.parametrize('mot', ['f12', 'F10', 'f10 f11', 'autre'])
 def test_vue_inconnue_erreur(hote, mot):
     hote.lancer_la_file()
     (hote.dir / 'vue_demande.txt').write_text(mot)
@@ -437,3 +448,69 @@ def test_aucun_appel_hors_liste():
     code = '\n'.join(c for _, c in lignes_de_code())
     assert set(re.findall(r'\b(?:Sim|Export)\.(\w+)', code)) == {'getRealTime', 'getPause', 'exitProcess', 'LoSetCommand', 'setUserCallbacks'}
     assert 'os.execute' in code and 'io.popen' not in code and 'require' not in code
+
+
+# ------------------------------------------------------------------ ADDENDUM 1
+
+def test_c1_desarme_au_lancement_avant_l_execute(hote):
+    hote.lancer_la_file()
+    assert hote.L.eval('CALLS.file_lua_a_l_execute')[1].strip() == 'return false'      # deja desarme quand `lancer` part
+    assert hote.fichier('file.lua').strip() == 'return false'
+    # la nuit tourne quand meme (l'armement est en memoire) : vue, pouls, fin
+    (hote.dir / 'vue_demande.txt').write_text('f10')
+    hote.tick(1)
+    assert hote.commandes_vue == [15]
+    (hote.dir / 'fin.txt').write_text('rester')
+    hote.tick(1)
+    assert hote.sorties == 1
+
+
+def test_c1_une_nuit_coupee_ne_reprend_pas_la_session_suivante(tmp_path):
+    h = Hote(tmp_path)
+    h.lancer_la_file()
+    # le PC plante : DCS est relance, la mission redemarre ; le crochet ne voit plus qu'un `return false`
+    h2 = Hote(tmp_path)
+    h2.demarrer()
+    h2.pause(False)
+    h2.tick(1, 100)
+    assert h2.executes == [] and h2.fichier('battement.txt') == str(T_EPOCH)       # le pouls est celui de la nuit coupee, pas un nouveau
+
+
+@pytest.mark.parametrize('decalage,attendu', [(299, True), (301, False), (T_EPOCH * 1000 - T_EPOCH, False)])
+def test_c2_arme_le_dans_le_futur(hote, decalage, attendu):
+    hote.armer(age_s=-decalage)
+    hote.demarrer()
+    hote.pause(False)
+    hote.tick(1, 12)
+    assert (len(hote.executes) == 1) == attendu
+    if not attendu:
+        assert 'futur' in hote.journal() and hote.fichier('battement.txt') is None
+
+
+@pytest.mark.parametrize('vide', ['', '   ', '\n', ' \t '])
+def test_c3_fin_txt_vide_ni_lu_ni_supprime(hote, vide):
+    hote.lancer_la_file()
+    (hote.dir / 'fin.txt').write_text(vide)
+    hote.tick(1, 5)
+    assert hote.sorties == 0 and hote.fichier('fin.txt') == vide
+    (hote.dir / 'fin.txt').write_text('eteindre')            # l'autre cote a fini d'ecrire
+    hote.tick(1)
+    assert hote.sorties == 1 and hote.executes[-1] == 'shutdown /s /t 120'
+
+
+@pytest.mark.parametrize('vide', ['', '  ', '\n'])
+def test_c3_vue_demande_vide_ni_lue_ni_supprimee(hote, vide):
+    hote.lancer_la_file()
+    (hote.dir / 'vue_demande.txt').write_text(vide)
+    hote.tick(1, 3)
+    assert hote.commandes_vue == [] and hote.fichier('vue_demande.txt') == vide and hote.fichier('vue_faite.txt') is None
+    (hote.dir / 'vue_demande.txt').write_text('f11')
+    hote.tick(1)
+    assert hote.commandes_vue == [16] and hote.fichier('vue_faite.txt') == 'f11'
+
+
+def test_c10_commentaire_d_en_tete():
+    entete = SRC.split('if DOSSIER == nil')[0]
+    assert 'start "" /min "<python.exe>" -I "<depot>\\capture\\autonome\\nuit.py" jouer "<work_dir>\\autonome\\nuit.json"' in entete
+    assert 'budget_captures_s + delai_commande_s' in entete and 'rassemblement' in entete and 'depot' in entete
+    assert entete.splitlines()[0].startswith('local DOSSIER = nil')

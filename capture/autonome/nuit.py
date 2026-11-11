@@ -11,7 +11,9 @@ comme fichiers d'une release GitHub, puis dit au crochet de fermer DCS (fin.txt)
 Tout ce qui est propre a Windows (veille, ecran, arbre de processus, arret du PC), le lancement des outils, l'horloge, les attentes et
 la racine de l'API passent par l'objet Deps, que les tests remplacent. Ce module s'importe sous Linux sans erreur.
 """
+import contextlib
 import hashlib
+import io
 import json
 import os
 import re
@@ -30,14 +32,17 @@ CAPTURE_DIR = Path(__file__).resolve().parent.parent
 BUDGET_DEFAUT_S = 12600
 DELAI_DEFAUT_S = 3600
 TAILLE_ZIP_DEFAUT = 1900000000
+TAILLE_ZIP_BORNE = 2147483647          # borne de taille_zip_max_o, et taille au-dela de laquelle un zip n'est pas televerse
+BUDGET_MARGE_S = 1800                  # rassemblement et depot, pour le budget conseille du crochet
 POULS_GRACE_S = 60
 POULS_MAX_S = 300
+POULS_RELECTURE_S = 2
 VUE_ATTENTE_S = 30
 VUE_STABILISATION_S = 5
 ESSAIS_TELEVERSEMENT = 3
 API_DEFAUT = 'https://api.github.com'
 
-TYPES = ('charts', 'contexte', 'panneaux', 'theatre')
+TYPES = ('charts', 'contexte', 'panneaux')
 CLES_FILE = ('etapes', 'budget_captures_s', 'delai_commande_s', 'eteindre', 'ecran_eteint', 'taille_zip_max_o', 'config', 'tampon')
 CLES_ETAPE = ('type', 'theatre', 'bases', 'marge')
 CLES_TAMPON = ('depot', 'jeton', 'release')
@@ -81,7 +86,7 @@ def valider_file(data):
                 raise FileErreur(f'{nom} : cle inconnue : "{k}"')
         t = e.get('type')
         if t not in TYPES:
-            raise FileErreur(f'{nom} : "type" doit etre l\'un de {", ".join(TYPES)}')
+            raise FileErreur(f'{nom} : "type" doit etre l\'un de {", ".join(TYPES)} (recu : {t!r})')
         try:
             theatre = _texte(e.get('theatre'), 'theatre')
             bases = e.get('bases')
@@ -106,8 +111,8 @@ def valider_file(data):
         out[k] = data.get(k, False)
     if 'taille_zip_max_o' in data:
         v = data['taille_zip_max_o']
-        if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
-            raise FileErreur('"taille_zip_max_o" doit etre un entier superieur a 0')
+        if isinstance(v, bool) or not isinstance(v, int) or not 0 < v <= TAILLE_ZIP_BORNE:
+            raise FileErreur(f'"taille_zip_max_o" doit etre un entier entre 1 et {TAILLE_ZIP_BORNE}')
         out['taille_zip_max_o'] = v
     else:
         out['taille_zip_max_o'] = TAILLE_ZIP_DEFAUT
@@ -161,9 +166,6 @@ def deplier(file):
 
     for i, e in enumerate(file['etapes']):
         t, th = e['type'], e['theatre']
-        if t == 'theatre':
-            raise FileErreur(f'etapes[{i}] : le type "theatre" n\'est pas deplie par cet outil (la commande f10capture.py theatre '
-                             f'attend des reponses)')
         for b in e['bases']:
             if t == 'charts':
                 ajouter('f10capture.py', 'capture', th, b, ['capture', th, b], 'f10')
@@ -182,6 +184,15 @@ def ligne_commande(c, file):
     return c['outil'] + ' ' + ' '.join(args)
 
 
+def _nombre_texte(v):
+    return str(int(v)) if float(v).is_integer() else repr(float(v))
+
+
+def budget_conseille(file):
+    """budget_s du crochet : au moins les captures, la derniere commande allant jusqu'a son delai, puis le rassemblement et le depot."""
+    return file['budget_captures_s'] + file['delai_commande_s'] + BUDGET_MARGE_S
+
+
 def cmd_verifier(chemin, out=None):
     out = out or sys.stdout
     try:
@@ -197,6 +208,7 @@ def cmd_verifier(chemin, out=None):
             vue = c['vue']
             print(f'    -> vue {vue} demandee', file=out)
         print(f'{c["n"]:02d}  [{c["vue"]}]  {ligne_commande(c, file)}', file=out)
+    print(f'budget_s du crochet conseille : {_nombre_texte(budget_conseille(file))} s au moins', file=out)
     return 0
 
 
@@ -208,7 +220,9 @@ def veille_windows(actif):
         return
     import ctypes
     es_continuous, es_system_required = 0x80000000, 0x00000001
-    ctypes.windll.kernel32.SetThreadExecutionState(es_continuous | (es_system_required if actif else 0))
+    f = ctypes.windll.kernel32.SetThreadExecutionState
+    f.argtypes = [ctypes.c_uint]
+    f(es_continuous | (es_system_required if actif else 0))
 
 
 def ecran_windows():
@@ -240,7 +254,7 @@ def lancer_reel(argv, log_path, timeout_s, cwd, tuer_arbre):
     """Lance une commande, sortie et erreurs ajoutees a log_path. Retourne (code, delai_depasse)."""
     kw = {}
     if os.name == 'nt':
-        kw['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+        kw['creationflags'] = getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0x00000200)
     else:
         kw['start_new_session'] = True
     with open(log_path, 'ab') as log:
@@ -289,15 +303,24 @@ def _est_image(nom):
 
 
 def rassembler(work_dir, nuit_dir, t_nuit):
-    """Fichiers de la nuit : [(chemin, nom dans le zip)] triee. Modifies depuis t_nuit sous out/, panneaux/, taxiways_dcs/,
-    plus tous les fichiers du dossier de la nuit (journaux, bilan.json ; pas les zips)."""
+    """Fichiers de la nuit : ([(chemin, nom dans le zip)] trie, [fichiers sautes]). Modifies depuis t_nuit sous out/, panneaux/,
+    taxiways_dcs/, plus tous les fichiers du dossier de la nuit (journaux, bilan.json ; pas les zips). Un fichier ou un dossier
+    illisible ou verrouille est saute et note {chemin, raison} : le rassemblement ne perd jamais la nuit."""
     work_dir, nuit_dir = Path(work_dir), Path(nuit_dir)
-    trouves = {}
+    trouves, sautes = {}, []
+
+    def saute(chemin, e):
+        try:
+            nom = Path(chemin).relative_to(work_dir).as_posix()
+        except ValueError:
+            nom = str(chemin)
+        sautes.append({'chemin': nom, 'raison': f'{type(e).__name__}: {e.strerror or e}'})
+
     racines = [work_dir / 'out', work_dir / 'panneaux', work_dir / 'taxiways_dcs', nuit_dir]
     for racine in racines:
         if not racine.is_dir():
             continue
-        for dossier, _, noms in os.walk(racine):
+        for dossier, _, noms in os.walk(racine, onerror=lambda e: saute(e.filename, e)):
             for nom in noms:
                 p = Path(dossier) / nom
                 if racine == nuit_dir and nom.lower().endswith('.zip'):
@@ -307,10 +330,13 @@ def rassembler(work_dir, nuit_dir, t_nuit):
                         continue
                     if racine != nuit_dir and p.stat().st_mtime < t_nuit:
                         continue
-                except OSError:
+                    with open(p, 'rb'):
+                        pass
+                except OSError as e:
+                    saute(p, e)
                     continue
                 trouves[p.relative_to(work_dir).as_posix()] = p
-    return [(trouves[a], a) for a in sorted(trouves)]
+    return [(trouves[a], a) for a in sorted(trouves)], sautes
 
 
 def _cout_zip(chemin, arcname):
@@ -332,10 +358,14 @@ ZIP_FIXE = 100
 
 
 def planifier_zips(fichiers, limite):
-    """Repartit les fichiers en zips. Retourne (groupes, noms des fichiers plus gros que la limite)."""
-    groupes, courant, cout, trop = [], [], ZIP_FIXE, []
+    """Repartit les fichiers en zips. Retourne (groupes, noms des fichiers plus gros que la limite, fichiers sautes)."""
+    groupes, courant, cout, trop, sautes = [], [], ZIP_FIXE, [], []
     for chemin, arc in fichiers:
-        c = _cout_zip(chemin, arc)
+        try:
+            c = _cout_zip(chemin, arc)
+        except OSError as e:
+            sautes.append({'chemin': arc, 'raison': f'{type(e).__name__}: {e.strerror or e}'})
+            continue
         if ZIP_FIXE + c > limite:
             if courant:
                 groupes.append(courant)
@@ -350,7 +380,7 @@ def planifier_zips(fichiers, limite):
         cout += c
     if courant:
         groupes.append(courant)
-    return groupes, trop
+    return groupes, trop, sautes
 
 
 def sha256_fichier(chemin):
@@ -362,15 +392,21 @@ def sha256_fichier(chemin):
 
 
 def ecrire_zips(groupes, nuit_dir, stamp):
-    zips = []
+    """Ecrit les zips ; retourne ([{nom, taille_o, sha256, fichiers}], [fichiers sautes]). Un fichier qui ne s'ouvre pas est saute."""
+    zips, sautes = [], []
     for n, groupe in enumerate(groupes, 1):
         nom = f'nuit_{stamp}_{n}.zip'
         chemin = Path(nuit_dir) / nom
-        with zipfile.ZipFile(chemin, 'w') as zf:
+        ecrits = 0
+        with zipfile.ZipFile(chemin, 'w', strict_timestamps=False) as zf:
             for p, arc in groupe:
-                zf.write(p, arc, compress_type=zipfile.ZIP_STORED if _est_image(arc) else zipfile.ZIP_DEFLATED)
-        zips.append({'nom': nom, 'taille_o': chemin.stat().st_size, 'sha256': sha256_fichier(chemin), 'fichiers': len(groupe)})
-    return zips
+                try:
+                    zf.write(p, arc, compress_type=zipfile.ZIP_STORED if _est_image(arc) else zipfile.ZIP_DEFLATED)
+                    ecrits += 1
+                except OSError as e:
+                    sautes.append({'chemin': arc, 'raison': f'{type(e).__name__}: {e.strerror or e}'})
+        zips.append({'nom': nom, 'taille_o': chemin.stat().st_size, 'sha256': sha256_fichier(chemin), 'fichiers': ecrits})
+    return zips, sautes
 
 
 # ------------------------------------------------------------------ le depot (API REST de GitHub)
@@ -383,6 +419,7 @@ class Depot:
     def __init__(self, depot, release, jeton, deps):
         self.depot, self.release, self._jeton, self.deps = depot, release, jeton, deps
         self.api = deps.api.rstrip('/')
+        self.release_id = None
 
     def _nettoyer(self, texte):
         texte = str(texte)
@@ -428,29 +465,42 @@ class Depot:
         self._json('DELETE', f'{base}/git/refs/tags/{tag}', ok=(204,), absent=(404, 422))
         _, cree = self._json('POST', f'{base}/releases', {'tag_name': self.release, 'name': self.release, 'prerelease': True,
                                                           'body': body}, ok=(201,))
-        if not isinstance(cree, dict) or not cree.get('upload_url'):
-            raise DepotErreur('la release creee ne donne pas d\'upload_url')
+        if not isinstance(cree, dict) or not cree.get('upload_url') or cree.get('id') is None:
+            raise DepotErreur('la release creee ne donne pas d\'id ou d\'upload_url')
+        self.release_id = cree['id']
         url = cree['upload_url'].split('{')[0]
         hote = urllib.parse.urlsplit(url).netloc
         if hote not in (urllib.parse.urlsplit(self.api).netloc, 'uploads.github.com'):
             raise DepotErreur(f'upload_url vers un hote inattendu : {hote}')
         return url
 
+    def retirer_asset(self, nom):
+        """Supprime de la release le fichier de ce nom, s'il y est (reste d'un envoi partiel)."""
+        base = f'/repos/{self.depot}'
+        _, liste = self._json('GET', f'{base}/releases/{self.release_id}/assets?per_page=100', ok=(200,))
+        for a in liste or []:
+            if isinstance(a, dict) and a.get('name') == nom and a.get('id') is not None:
+                self._json('DELETE', f'{base}/releases/assets/{a["id"]}', ok=(204,), absent=(404,))
+
     def televerser(self, upload_url, chemin, type_mime):
+        nom = Path(chemin).name
         taille = Path(chemin).stat().st_size
-        url = upload_url + '?' + urllib.parse.urlencode({'name': Path(chemin).name})
+        url = upload_url + '?' + urllib.parse.urlencode({'name': nom})
         derniere = None
         for essai in range(1, ESSAIS_TELEVERSEMENT + 1):
             try:
+                if essai > 1:
+                    self.deps.sleep(self.deps.attente_depot_s)
+                    self.retirer_asset(nom)               # un envoi partiel a pu laisser le fichier dans la release
                 with open(chemin, 'rb') as f:
                     code, corps = self._requete('POST', url, f, {'Content-Type': type_mime, 'Content-Length': str(taille)})
                 if code == 201:
                     return
-                derniere = self._erreur(f'televersement de {Path(chemin).name}', code, corps)
+                derniere = self._erreur(f'televersement de {nom}', code, corps)
             except DepotErreur as e:
                 derniere = e
-            if essai < ESSAIS_TELEVERSEMENT:
-                self.deps.sleep(self.deps.attente_depot_s)
+            except OSError as e:
+                derniere = DepotErreur(self._nettoyer(f'lecture de {nom} : {e}'))
         raise derniere
 
 
@@ -472,20 +522,35 @@ def corps_release(cause, commandes):
 
 
 def deposer(tampon, bilan, bilan_path, zips_paths, deps):
-    """Retourne le resultat du depot : {'statut': 'ok'|'echec'|'sans_jeton', ...}. Ne leve jamais ; le jeton n'en sort jamais."""
+    """Retourne le resultat du depot : {'statut': 'ok'|'echec'|'sans_jeton', ...}. Ne leve jamais ; le jeton n'en sort jamais.
+    Un fichier perdu (3 essais) n'arrete pas les autres ; un zip de plus de TAILLE_ZIP_BORNE o n'est pas televerse."""
     jeton = lire_jeton(tampon['jeton'])
     if not jeton:
         return {'statut': 'sans_jeton'}
     depot = Depot(tampon['depot'], tampon['release'], jeton, deps)
+    non = []
     try:
         url = depot.remplacer_release(corps_release(bilan['cause'], bilan['commandes']))
-        depot.televerser(url, bilan_path, 'application/json')
-        for z in zips_paths:
-            depot.televerser(url, z, 'application/zip')
+        envois = [(bilan_path, 'application/json')] + [(z, 'application/zip') for z in zips_paths]
+        for chemin, mime in envois:
+            nom = Path(chemin).name
+            if mime == 'application/zip' and Path(chemin).stat().st_size > TAILLE_ZIP_BORNE:
+                raison = f'plus de {TAILLE_ZIP_BORNE} o : non televerse'
+                for z in bilan['zips']:
+                    if z['nom'] == nom:
+                        z['non_depose'] = raison
+                non.append(f'{nom} ({raison})')
+                continue
+            try:
+                depot.televerser(url, chemin, mime)
+            except DepotErreur as e:
+                non.append(f'{nom} ({e})')
     except DepotErreur as e:
         return {'statut': 'echec', 'detail': depot._nettoyer(e)}
     except Exception as e:           # jamais de trace qui pourrait porter le jeton
         return {'statut': 'echec', 'detail': depot._nettoyer(f'{type(e).__name__}: {e}')}
+    if non:
+        return {'statut': 'echec', 'detail': depot._nettoyer('fichiers non deposes : ' + '; '.join(non))}
     return {'statut': 'ok', 'depot': tampon['depot'], 'release': tampon['release']}
 
 
@@ -503,6 +568,19 @@ def _fin_journal(chemin, n=10):
         return []
 
 
+def ecrire_echec(dossier, cause):
+    """Un echec avant la boucle laisse une trace et rend la main a DCS : erreur.txt (la cause, une ligne), file.lua a
+    `return false`, fin.txt a `rester`, dans le dossier de la nuit (ou a cote de la file)."""
+    dossier = Path(dossier)
+    ligne = ' '.join(str(cause).split())
+    for nom, texte in (('erreur.txt', ligne + '\n'), ('file.lua', 'return false\n'), ('fin.txt', 'rester')):
+        try:
+            dossier.mkdir(parents=True, exist_ok=True)
+            _ecrire(dossier / nom, texte)
+        except OSError as e:
+            print(f'Erreur : {nom} non ecrit dans {dossier} ({e})', file=sys.stderr)
+
+
 class Nuit:
     def __init__(self, file, cfg, deps, out=None):
         self.file, self.cfg, self.deps = file, cfg, deps
@@ -512,6 +590,7 @@ class Nuit:
         self.vue_posee = None
         self.t_nuit = None
         self.nuit_dir = None
+        self.stamp = None
         self.journal_path = None
 
     # -- petits services
@@ -519,10 +598,14 @@ class Nuit:
         ligne = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.deps.now())) + ' ' + msg
         print(ligne, file=self.out, flush=True)
         if self.journal_path:
-            with open(self.journal_path, 'a', encoding='utf-8', newline='\n') as f:
-                f.write(ligne + '\n')
+            try:
+                with open(self.journal_path, 'a', encoding='utf-8', newline='\n') as f:
+                    f.write(ligne + '\n')
+            except OSError:
+                pass
 
     def lire_mot(self, nom):
+        """Le contenu du fichier sans les blancs ; None s'il est absent ou illisible. Un fichier vide donne '' : pas encore ecrit."""
         try:
             return (self.dir / nom).read_text(encoding='utf-8', errors='replace').strip()
         except OSError:
@@ -535,15 +618,21 @@ class Nuit:
             pass
 
     # -- les controles d'avant commande
-    def pouls_ok(self):
-        t = self.deps.now()
-        if t - self.t_nuit < POULS_GRACE_S:
-            return True
+    def _pouls_frais(self):
         v = self.lire_mot('battement.txt')
         try:
-            return t - float(v) <= POULS_MAX_S
+            return self.deps.now() - float(v) <= POULS_MAX_S
         except (TypeError, ValueError):
             return False
+
+    def pouls_ok(self):
+        """DCS est tenu pour absent seulement si deux lectures du pouls, a 2 s d'intervalle, disent absent, vide, illisible ou trop ancien."""
+        if self.deps.now() - self.t_nuit < POULS_GRACE_S:
+            return True
+        if self._pouls_frais():
+            return True
+        self.deps.sleep(POULS_RELECTURE_S)
+        return self._pouls_frais()
 
     def budget_depasse(self):
         return self.deps.now() - self.t_nuit > self.file['budget_captures_s']
@@ -556,10 +645,11 @@ class Nuit:
         reponse = None
         while True:
             reponse = self.lire_mot('vue_faite.txt')
-            if reponse is not None:
+            if reponse:                                  # vide : le crochet est en train de l'ecrire, on attend
                 self.supprimer('vue_faite.txt')
                 break
             if self.deps.now() - debut >= VUE_ATTENTE_S:
+                reponse = None
                 break
             self.deps.sleep(0.5)
         if reponse != vue:
@@ -584,6 +674,11 @@ class Nuit:
         log = self.nuit_dir / nom
         _ecrire(log, '# ' + ' '.join(argv) + '\n')
         res['journal'] = nom
+        question = self.work_dir / 'sync' / 'QUESTION.txt'
+        try:
+            question.unlink()                            # celle d'avant ne compte pas : `question` = ecrite par cette commande
+        except OSError:
+            pass
         debut = self.deps.now()
         res['debut'] = _iso(debut)
         self.jr(f'{c["n"]:02d} lance : {ligne_commande(c, self.file)}')
@@ -602,11 +697,10 @@ class Nuit:
             res['statut'] = 'delai'
         elif code == 0:
             res['statut'] = 'ok'
-        elif code == 3 and (self.work_dir / 'sync' / 'QUESTION.txt').is_file():
-            q = self.work_dir / 'sync' / 'QUESTION.txt'
-            res['question'] = q.read_text(encoding='utf-8', errors='replace').strip()
+        elif code == 3 and question.is_file():
+            res['question'] = question.read_text(encoding='utf-8', errors='replace').strip()
             try:
-                q.unlink()
+                question.unlink()
             except OSError:
                 pass
             res['statut'] = 'question'
@@ -616,29 +710,73 @@ class Nuit:
         self.jr(f'{c["n"]:02d} {res["statut"]} (code {code}, {res["duree_s"]} s)')
 
     # -- la nuit entiere
-    def bilan_base(self, cmds, resultats, cause, fin):
+    def bilan_base(self, resultats, cause, fin):
         return {'file': self.file, 't_nuit': _iso(self.t_nuit), 't_nuit_epoch': self.t_nuit, 'fin': _iso(fin), 'cause': cause,
-                'dossier': self.nuit_dir.name, 'commandes': resultats, 'zips': [], 'fichiers_trop_gros': [],
+                'dossier': self.nuit_dir.name, 'commandes': resultats, 'zips': [], 'fichiers_trop_gros': [], 'fichiers_sautes': [],
                 'depot': {'statut': 'a_faire' if self.file['tampon'] else 'sans_depot'}}
+
+    def creer_dossier(self):
+        """nuits/<AAAA-MM-JJ_HHMM>/, ou _2, _3... si une autre nuit l'a deja pris dans la meme minute."""
+        stamp = time.strftime('%Y-%m-%d_%H%M', time.localtime(self.t_nuit))
+        (self.dir / 'nuits').mkdir(parents=True, exist_ok=True)
+        n = 1
+        while True:
+            nom = stamp if n == 1 else f'{stamp}_{n}'
+            try:
+                (self.dir / 'nuits' / nom).mkdir()
+            except FileExistsError:
+                n += 1
+                continue
+            self.stamp, self.nuit_dir = nom, self.dir / 'nuits' / nom
+            return
+
+    def apres_la_boucle(self, bilan):
+        """Rassemblement, zips, depot. Une exception se propage a l'appelant, qui la note au bilan."""
+        bilan_path = self.nuit_dir / 'bilan.json'
+        self.ecrire_bilan(bilan)
+        # le bilan (sans les zips) est range dans les zips, puis reecrit avec leurs empreintes
+        fichiers, sautes = rassembler(self.work_dir, self.nuit_dir, self.t_nuit)
+        groupes, trop, sautes2 = planifier_zips(fichiers, self.file['taille_zip_max_o'])
+        bilan['fichiers_trop_gros'] = trop
+        zips, sautes3 = ecrire_zips(groupes, self.nuit_dir, self.stamp)
+        bilan['zips'] = zips
+        bilan['fichiers_sautes'] = sautes + sautes2 + sautes3
+        for f in bilan['fichiers_sautes']:
+            self.jr(f'fichier saute : {f["chemin"]} ({f["raison"]})')
+        self.ecrire_bilan(bilan)
+        for z in zips:
+            self.jr(f'zip {z["nom"]} : {z["fichiers"]} fichier(s), {z["taille_o"]} o')
+        if self.file['tampon']:
+            bilan['depot'] = deposer(self.file['tampon'], bilan, bilan_path, [self.nuit_dir / z['nom'] for z in zips], self.deps)
+            self.jr(f'depot : {bilan["depot"]["statut"]}' + (f' ({bilan["depot"]["detail"]})' if bilan['depot'].get('detail') else ''))
+            self.ecrire_bilan(bilan)
 
     def jouer(self):
         d = self.deps
-        self.t_nuit = d.now()
-        stamp = time.strftime('%Y-%m-%d_%H%M', time.localtime(self.t_nuit))
-        self.nuit_dir = self.dir / 'nuits' / stamp
-        self.nuit_dir.mkdir(parents=True, exist_ok=True)
-        self.journal_path = self.nuit_dir / 'nuit.log'
-        cmds = deplier(self.file)
-        resultats = [{'n': c['n'], 'outil': c['outil'], 'arguments': c['args'] + (['--config', self.file['config']] if self.file['config'] else []),
-                      'vue': c['vue'], 'statut': None, 'debut': None, 'duree_s': None, 'code': None, 'fin_journal': []}
-                     for c in cmds]
-        for nom in ('vue_demande.txt', 'vue_faite.txt'):
-            self.supprimer(nom)
-        cause = 'file_finie'
-        eteindre = self.file['eteindre']
-        d.veille(True)
         try:
-            self.jr(f'nuit {stamp} : {len(cmds)} commande(s), budget {self.file["budget_captures_s"]} s')
+            self.t_nuit = d.now()
+            self.creer_dossier()
+            self.journal_path = self.nuit_dir / 'nuit.log'
+            cmds = deplier(self.file)
+            resultats = [{'n': c['n'], 'outil': c['outil'],
+                          'arguments': c['args'] + (['--config', self.file['config']] if self.file['config'] else []),
+                          'vue': c['vue'], 'statut': None, 'debut': None, 'duree_s': None, 'code': None, 'fin_journal': []}
+                         for c in cmds]
+            for nom in ('vue_demande.txt', 'vue_faite.txt'):
+                self.supprimer(nom)
+        except Exception as e:
+            msg = f'demarrage impossible : {type(e).__name__}: {e}'
+            print(f'Erreur : {msg}', file=sys.stderr)
+            ecrire_echec(self.dir, msg)
+            return 2
+        code, cause, bilan = 0, 'file_finie', None
+        eteindre = self.file['eteindre']
+        try:
+            try:
+                d.veille(True)
+            except Exception as e:
+                self.jr(f'veille non empechee : {type(e).__name__}: {e}')
+            self.jr(f'nuit {self.stamp} : {len(cmds)} commande(s), budget {self.file["budget_captures_s"]} s')
             arret = None
             for c, res in zip(cmds, resultats):
                 if arret is None:
@@ -659,38 +797,76 @@ class Nuit:
                     res['statut'] = 'vue_echec'
                     continue
                 self.executer(c, res)
-            fin = d.now()
             self.jr(f'fin de la file : {cause}')
-            bilan = self.bilan_base(cmds, resultats, cause, fin)
-            bilan_path = self.nuit_dir / 'bilan.json'
-            self.ecrire_bilan(bilan)
-            # rassemblement : le bilan (sans les zips) est range dans les zips, puis reecrit avec leurs empreintes
-            fichiers = rassembler(self.work_dir, self.nuit_dir, self.t_nuit)
-            groupes, trop = planifier_zips(fichiers, self.file['taille_zip_max_o'])
-            bilan['fichiers_trop_gros'] = trop
-            zips = ecrire_zips(groupes, self.nuit_dir, stamp)
-            bilan['zips'] = zips
-            self.ecrire_bilan(bilan)
-            for z in zips:
-                self.jr(f'zip {z["nom"]} : {z["fichiers"]} fichier(s), {z["taille_o"]} o')
-            if self.file['tampon']:
-                bilan['depot'] = deposer(self.file['tampon'], bilan, bilan_path, [self.nuit_dir / z['nom'] for z in zips], d)
-                self.jr(f'depot : {bilan["depot"]["statut"]}' + (f' ({bilan["depot"]["detail"]})' if bilan['depot'].get('detail') else ''))
-                self.ecrire_bilan(bilan)
+            bilan = self.bilan_base(resultats, cause, d.now())
+            try:
+                self.apres_la_boucle(bilan)
+            except Exception as e:
+                code = 1
+                bilan['erreur'] = f'{type(e).__name__}: {e}'
+                self.jr(f'erreur apres la file : {bilan["erreur"]}')
+                self.ecrire_bilan_sans_echec(bilan)
+        except Exception as e:
+            code, cause = 1, 'erreur'
+            self.jr(f'erreur pendant la file : {type(e).__name__}: {e}')
+            for r in resultats:
+                r['statut'] = r['statut'] or 'non_joue'
+            bilan = bilan or self.bilan_base(resultats, cause, d.now())
+            bilan['erreur'] = f'{type(e).__name__}: {e}'
+            self.ecrire_bilan_sans_echec(bilan)
         finally:
-            d.veille(False)
+            try:
+                d.veille(False)
+            except Exception:
+                pass
             try:
                 _ecrire(self.dir / 'file.lua', 'return false\n')
                 _ecrire(self.dir / 'fin.txt', 'eteindre' if eteindre else 'rester')
             except OSError as e:
                 print(f'Erreur : fin de nuit non ecrite ({e})', file=sys.stderr)
-        if cause == 'dcs_absent' and eteindre:
-            self.jr('DCS absent : arret du PC')
-            d.shutdown()
-        return 0
+            if cause == 'dcs_absent' and eteindre:          # le crochet n'est plus la pour le faire : apres fin.txt, toujours
+                try:
+                    self.jr('DCS absent : arret du PC')
+                    d.shutdown()
+                except Exception as e:
+                    print(f'Erreur : arret du PC impossible ({type(e).__name__}: {e})', file=sys.stderr)
+        return code
 
     def ecrire_bilan(self, bilan):
         _ecrire(self.nuit_dir / 'bilan.json', json.dumps(bilan, ensure_ascii=False, indent=2) + '\n')
+
+    def ecrire_bilan_sans_echec(self, bilan):
+        try:
+            self.ecrire_bilan(bilan)
+        except Exception as e:
+            print(f'Erreur : bilan non ecrit ({type(e).__name__}: {e})', file=sys.stderr)
+
+
+def _work_dir_connu(chemin):
+    """Le work_dir de la configuration de capture, si on peut le lire sans bruit ; sinon None."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    try:
+        from config import load_config
+        conf = None
+        try:
+            data = json.loads(Path(chemin).read_text(encoding='utf-8-sig'))
+            if isinstance(data, dict) and isinstance(data.get('config'), str) and data['config'].strip():
+                conf = data['config']
+        except (OSError, ValueError):
+            pass
+        with contextlib.redirect_stderr(io.StringIO()):
+            cfg, _ = load_config(['nuit.py'] + (['--config', conf] if conf else []))
+        return Path(cfg.work_dir)
+    except BaseException:                      # SystemExit de load_config compris
+        return None
+
+
+def _echec_jouer(chemin, work_dir, msg):
+    """Echec avant la boucle : message, trace dans le dossier de la nuit (ou a cote de la file), code 2."""
+    print(f'Erreur : {msg}', file=sys.stderr)
+    dossier = (Path(work_dir) / 'autonome') if work_dir else Path(chemin).resolve().parent
+    ecrire_echec(dossier, msg)
+    return 2
 
 
 def cmd_jouer(chemin, deps=None, out=None):
@@ -699,20 +875,27 @@ def cmd_jouer(chemin, deps=None, out=None):
         file = lire_file(chemin)
         deplier(file)
     except FileErreur as e:
-        print(f'Erreur : {e}', file=sys.stderr)
-        return 2
+        return _echec_jouer(chemin, _work_dir_connu(chemin), f'file refusee : {e}')
+    except Exception as e:
+        return _echec_jouer(chemin, None, f'file : {type(e).__name__}: {e}')
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from config import load_config
-    argv = ['nuit.py'] + (['--config', file['config']] if file['config'] else [])
+    cfg, refus = None, None
     try:
-        cfg, _ = load_config(argv)
-    except SystemExit:
-        return 2
+        from config import load_config
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            try:
+                cfg, _ = load_config(['nuit.py'] + (['--config', file['config']] if file['config'] else []))
+            except SystemExit:
+                refus = 'configuration illisible : ' + (' '.join(err.getvalue().split()) or 'inconnue')
+    except Exception as e:
+        refus = f'configuration : {type(e).__name__}: {e}'
+    if refus:
+        return _echec_jouer(chemin, None, refus)
     try:
         return Nuit(file, cfg, deps, out).jouer()
     except Exception as e:
-        print(f'Erreur : {type(e).__name__}: {e}', file=sys.stderr)
-        return 1
+        return _echec_jouer(chemin, cfg.work_dir, f'{type(e).__name__}: {e}')
 
 
 def main(argv, deps=None):

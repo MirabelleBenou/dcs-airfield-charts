@@ -2,12 +2,20 @@ local DOSSIER = nil -- chemin de <work_dir>\autonome\ , par exemple [[D:\Capture
 -- ChartsAutonome-hook.lua : crochet du GUI de DCS (Saved Games\<DCS>\Scripts\Hooks\) pour les captures de nuit sans personne au PC.
 -- Il lit <DOSSIER>file.lua a chaque onSimulationStart. Sans DOSSIER, ou si file.lua est absent, illisible, ne rend pas une table
 -- (par exemple `return false`), il ne fait rien (ni journal, ni pouls). Une table d'armement :
---   { arme_le = os.time(), budget_s = <n>, attente_s = <n>, eteindre_au_budget = <bool>, lancer = 'start ...' }
--- Quand la mission vole (Sim.getPause() faux) et apres attente_s, il lance `lancer` une seule fois (os.execute ; la commande doit
--- commencer par `start` pour rendre la main tout de suite), puis a chaque seconde : pouls dans battement.txt toutes les 30 s,
--- vue F10/F11 a la demande (vue_demande.txt -> vue_faite.txt), fin.txt, budget. A la fin il remet file.lua a `return false`, eteint
--- le PC si on le lui a dit (shutdown /s /t 120) puis ferme DCS. Journal : crochet.log. Seuls `lancer` et `shutdown` passent par
--- os.execute (il bloque le rendu) ; chaque appel a DCS est protege (pcall) : une erreur s'ecrit au journal, elle n'arrete pas DCS.
+--   { arme_le = os.time(), budget_s = <n>, attente_s = <n>, eteindre_au_budget = <bool>, lancer = [[...]] }
+-- `lancer` : la commande qui demarre nuit.py, avec des chemins absolus, le titre vide de `start` et /min (la console ne passe pas
+-- devant DCS, que f10capture capture par le bureau). Elle doit commencer par `start` (os.execute rend alors la main tout de suite) :
+--   start "" /min "<python.exe>" -I "<depot>\capture\autonome\nuit.py" jouer "<work_dir>\autonome\nuit.json"
+-- `budget_s` doit couvrir budget_captures_s + delai_commande_s + le rassemblement et le depot (voir la derniere ligne de
+-- `nuit.py verifier <nuit.json>`) : au-dela, le crochet ferme DCS, meme si nuit.py n'a pas fini.
+-- Un armement dont arme_le a plus de 12 heures, ou qui est dans le futur (plus de 5 minutes), est ignore.
+-- Quand la mission vole (Sim.getPause() faux) et apres attente_s, il remet file.lua a `return false` (la nuit ne reprendra pas une
+-- session de jeu suivante), puis lance `lancer` une seule fois (os.execute), puis a chaque seconde : pouls dans battement.txt
+-- toutes les 30 s, vue F10/F11 a la demande (vue_demande.txt -> vue_faite.txt), fin.txt, budget. Un fichier vide est un fichier
+-- que l'autre cote est en train d'ecrire : il n'est ni lu ni supprime, il est relu a la seconde suivante. A la fin il remet file.lua
+-- a `return false`, eteint le PC si on le lui a dit (shutdown /s /t 120) puis ferme DCS. Journal : crochet.log. Seuls `lancer` et
+-- `shutdown` passent par os.execute (il bloque le rendu) ; chaque appel a DCS est protege (pcall) : une erreur s'ecrit au
+-- journal, elle n'arrete pas DCS.
 
 if DOSSIER == nil then return end
 
@@ -16,6 +24,7 @@ local Sim = Sim or DCS
 local COMMANDE_F10 = 15  -- iCommandViewAWACS
 local COMMANDE_F11 = 16  -- iCommandViewFree
 local ARMEMENT_MAX_S = 12 * 3600
+local ARMEMENT_FUTUR_S = 300
 local POULS_S = 30
 
 local cb = {}
@@ -76,6 +85,10 @@ local function demarrer()
         jlog('armement ignore : arme_le absent ou de plus de 12 heures')
         return
     end
+    if q.arme_le > os.time() + ARMEMENT_FUTUR_S then
+        jlog('armement ignore : arme_le dans le futur (millisecondes ?)')
+        return
+    end
     if type(q.budget_s) ~= 'number' or type(q.lancer) ~= 'string' or not q.lancer:match('^%s*start%s') then
         jlog('armement ignore : budget_s ou lancer manquant, ou lancer ne commence pas par start')
         return
@@ -103,6 +116,7 @@ local function servir_vue()
     local brut = lire_texte('vue_demande.txt')
     if not brut then return end
     local mot = brut:gsub('%s+', '')
+    if mot == '' then return end          -- vide : l'autre cote est en train de l'ecrire, relu a la seconde suivante
     os.remove(chemin('vue_demande.txt'))
     local commande = (mot == 'f10' and COMMANDE_F10) or (mot == 'f11' and COMMANDE_F11) or nil
     if not commande then
@@ -124,6 +138,9 @@ local function lancer_la_file(t)
     deja_lance = true
     E.phase, E.t0, E.t_pouls = 'marche', t, t
     for _, nom in ipairs({ 'fin.txt', 'vue_demande.txt', 'vue_faite.txt', 'battement.txt' }) do os.remove(chemin(nom)) end
+    -- desarme : une nuit coupee (PC plante, courant) ne reprend jamais une session de jeu suivante ; l'armement reste en memoire
+    local ok0, err0 = pcall(ecrire_texte, 'file.lua', 'return false\n')
+    if not ok0 then jlog('file.lua non desarme : ' .. tostring(err0)) end
     pouls()
     local ok, r = pcall(os.execute, E.q.lancer)
     jlog('lance : ' .. E.q.lancer .. ' -> ' .. tostring(ok and r or ('erreur ' .. tostring(r))))
@@ -146,7 +163,8 @@ local function pas()
     if t - E.t_pouls >= POULS_S then E.t_pouls = t; pouls() end
     servir_vue()
     local mot = lire_texte('fin.txt')
-    if mot then finir('fin.txt', (mot:gsub('%s+', ''))); return end
+    mot = mot and mot:gsub('%s+', '')
+    if mot and mot ~= '' then finir('fin.txt', mot); return end
     if t - E.t0 > E.q.budget_s then finir('budget'); return end
 end
 

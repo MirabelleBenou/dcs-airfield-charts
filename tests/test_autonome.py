@@ -116,7 +116,8 @@ REFUS = [
     (_avec(tampon='a/b'), 'tampon'),
     ([], 'objet'),
     ('{pas du json', 'JSON'),
-    (_etape(type='theatre', theatre='T', bases=['B']), 'theatre'),
+    (_etape(type='theatre', theatre='T', bases=['B']), 'charts, contexte, panneaux'),                   # correction 12
+    (_avec(taille_zip_max_o=2147483648), 'taille_zip_max_o'),                                            # correction 9
 ]
 
 
@@ -354,10 +355,15 @@ def test_ecran_eteint_apres_la_premiere_vue(monde):
     assert monde.ecrans == 1
 
 
-def test_nuit_dossier_refuse_file_invalide(monde):
+def test_nuit_dossier_refuse_file_invalide(monde, capsys):
+    """Correction 5 : une file refusee laisse une trace (erreur.txt), desarme (file.lua) et rend la main (fin.txt `rester`), code 2."""
     assert monde.jouer({'etapes': []}) == 2
-    assert monde.appels == [] and not (monde.auto / 'nuits').exists() and not (monde.auto / 'fin.txt').exists()
-
+    assert monde.appels == [] and not (monde.auto / 'nuits').exists()
+    assert (monde.auto / 'fin.txt').read_text() == 'rester'
+    assert (monde.auto / 'file.lua').read_text().strip() == 'return false'
+    erreur = (monde.auto / 'erreur.txt').read_text().splitlines()
+    assert len(erreur) == 1 and 'etapes' in erreur[0]
+    assert 'etapes' in capsys.readouterr().err
 
 def test_vue_perimee_effacee_au_depart(monde):
     (monde.auto / 'vue_faite.txt').write_text('f11')
@@ -412,25 +418,21 @@ def test_pouls_absent_apres_la_grace(monde):
 
 
 def test_pouls_a_300_s_pile_tolere(monde):
-    monde.scripts = {1: {'duree': 60, 'mort': True}}
     d = monde.deps()
-    # le dernier pouls date de la fin de la 1re commande ; on attend 300 s : tolere, 301 s : absent
-    nuit_obj = None
-
-    class Aiguille(nuit.Nuit):
-        pass
     f = nuit.valider_file(file_exemple())
     cfg, _ = __import__('config').load_config(['x', '--config', str(monde.cfg)])
-    nuit_obj = Aiguille(f, cfg, d, io.StringIO())
-    nuit_obj.t_nuit = T0
+    n = nuit.Nuit(f, cfg, d, io.StringIO())
+    n.t_nuit = T0
     monde.t = T0 + 1000
+    monde.vivant = False                 # personne ne bat plus le pouls pendant la relecture
     (monde.auto / 'battement.txt').write_text(str(int(monde.t - 300)))
-    assert nuit_obj.pouls_ok()
+    assert n.pouls_ok()
     (monde.auto / 'battement.txt').write_text(str(int(monde.t - 301)))
-    assert not nuit_obj.pouls_ok()
+    assert not n.pouls_ok()
     (monde.auto / 'battement.txt').write_text('n importe quoi')
-    assert not nuit_obj.pouls_ok()
-
+    assert not n.pouls_ok()
+    (monde.auto / 'battement.txt').write_text('')
+    assert not n.pouls_ok()
 
 # ------------------------------------------------------------------ P6 : la fin
 
@@ -577,8 +579,10 @@ def test_zips_sans_fichier_de_la_nuit(monde):
 class FauxGitHub:
     """Faux serveur de l'API de GitHub (local). Enregistre les requetes ; `echecs` : nom d'asset -> nombre d'echecs avant succes."""
 
-    def __init__(self, existe=True, echecs=None, mode_tag=204, echo_jeton=False, upload_base=None):
+    def __init__(self, existe=True, echecs=None, mode_tag=204, echo_jeton=False, upload_base=None, partiels=None):
         self.upload_base = upload_base
+        self.partiels = dict(partiels or {})          # nom -> nombre d'envois qui laissent l'asset puis repondent 502
+        self.registre = {}                            # nom -> id des assets presents dans la release
         self.requetes, self.existe, self.echecs, self.mode_tag, self.echo_jeton = [], existe, dict(echecs or {}), mode_tag, echo_jeton
         self.assets = {}
         outer = self
@@ -612,12 +616,25 @@ class FauxGitHub:
                 if self.command == 'POST' and p == '/repos/o/r/releases':
                     outer.release = json.loads(corps)
                     return self._rep(201, {'id': 43, 'upload_url': f'{outer.upload_base or "http://127.0.0.1:%d" % outer.port}/uploads/repos/o/r/releases/43/assets{{?name,label}}'})
+                if self.command == 'GET' and p == '/repos/o/r/releases/43/assets':
+                    return self._rep(200, [{'id': i, 'name': n} for n, i in outer.registre.items()])
+                if self.command == 'DELETE' and p.startswith('/repos/o/r/releases/assets/'):
+                    ident = int(p.rsplit('/', 1)[1])
+                    outer.registre = {n: i for n, i in outer.registre.items() if i != ident}
+                    return self._rep(204)
                 if self.command == 'POST' and p == '/uploads/repos/o/r/releases/43/assets':
                     nom = self.path.split('name=')[1]
+                    if outer.partiels.get(nom, 0) > 0:
+                        outer.partiels[nom] -= 1
+                        outer.registre[nom] = 1000 + len(outer.requetes)
+                        return self._rep(502, {'message': 'bad gateway apres envoi partiel'})
+                    if nom in outer.registre:
+                        return self._rep(422, {'message': 'already_exists'})
                     if outer.echecs.get(nom, 0) > 0:
                         outer.echecs[nom] -= 1
                         return self._rep(502, {'message': 'bad gateway', 'eco': self.headers.get('Authorization') if outer.echo_jeton else ''})
                     outer.assets[nom] = corps
+                    outer.registre[nom] = 2000 + len(outer.requetes)
                     return self._rep(201, {'name': nom})
                 return self._rep(500, {'message': 'inattendu'})
             do_GET = do_POST = do_DELETE = _faire
@@ -652,6 +669,16 @@ def tampon_pour(monde, jeton=JETON, release='nuit'):
     if jeton is not None:
         chemin.write_text('\n  \n' + jeton + '\nautre ligne\n')
     return {'depot': 'o/r', 'jeton': str(chemin), 'release': release}
+
+
+def verifier_jeton_absent(monde, capsys=None):
+    """Le jeton n'est dans aucun fichier ecrit (zips ouverts), ni sur stdout ni sur stderr, ni dans la sortie du pilote."""
+    for nom, data in tout_ce_qui_est_ecrit(monde):
+        assert JETON.encode() not in data, nom
+    assert JETON not in monde.sortie
+    if capsys is not None:
+        sortie = capsys.readouterr()
+        assert JETON not in sortie.out and JETON not in sortie.err
 
 
 def tout_ce_qui_est_ecrit(monde):
@@ -715,20 +742,18 @@ def test_depot_televersement_deux_echecs_puis_ok(monde):
         assert 'bilan.json' in srv.assets
 
 
-def test_depot_trois_echecs(monde):
+def test_depot_trois_echecs(monde, capsys):
+    """Correction 8 : un fichier perdu (3 essais) n'arrete pas les autres ; le depot est `echec` et le detail liste le fichier."""
     preparer_fichiers(monde)
     with FauxGitHub(echecs={'bilan.json': 3}, echo_jeton=True) as srv:
         monde.jouer(file_exemple(tampon=tampon_pour(monde)), api=srv.api, opener=srv.opener)
         d = monde.bilan()['depot']
-        assert d['statut'] == 'echec' and '502' in d['detail']
+        assert d['statut'] == 'echec' and d['detail'].startswith('fichiers non deposes : bilan.json') and '502' in d['detail']
         assert [r['p'] for r in srv.requetes].count('/uploads/repos/o/r/releases/43/assets?name=bilan.json') == 3
-        assert not any(p.endswith('zip') for _, p in srv.trace())          # on s'arrete au premier fichier perdu
-    assert list(monde.nuit_dir.glob('*.zip'))                              # les zips restent sur le PC
+        assert any(n.endswith('.zip') for n in srv.assets) and 'bilan.json' not in srv.assets   # les zips sont partis quand meme
+    assert list(monde.nuit_dir.glob('*.zip'))                              # et restent sur le PC
     assert (monde.auto / 'fin.txt').exists()
-    for nom, data in tout_ce_qui_est_ecrit(monde):
-        assert JETON.encode() not in data, nom
-    assert JETON not in monde.sortie
-
+    verifier_jeton_absent(monde, capsys)
 
 def test_depot_zip_perdu_trois_fois(monde):
     preparer_fichiers(monde)
@@ -834,3 +859,487 @@ def test_import_sans_windows_et_fonctions_windows_inertes():
     assert nuit.veille_windows(True) is None or os.name == 'nt'
     assert nuit.ecran_windows() is None or os.name == 'nt'
     assert nuit.arret_windows() is None or os.name == 'nt'
+
+
+# ------------------------------------------------------------------ ADDENDUM 1
+
+# -- correction 3 (cote nuit.py) : un fichier vide est un fichier pas encore ecrit
+
+def test_c3_vue_faite_vide_on_attend(monde):
+    d = monde.deps()
+    etat = {}
+
+    # le faux crochet ecrit d'abord un fichier vide (3 passes), puis le mot
+    def sleep2(s):
+        monde.avancer(s)
+        dem = monde.auto / 'vue_demande.txt'
+        faite = monde.auto / 'vue_faite.txt'
+        if dem.exists():
+            mot = dem.read_text()
+            dem.unlink()
+            monde.demandes.append((monde.t, mot))
+            faite.write_text('')
+            etat['mot'] = mot
+            etat['passes'] = 0
+        elif faite.exists() and faite.read_text() == '':
+            etat['passes'] += 1
+            if etat['passes'] >= 3:
+                faite.write_text(etat['mot'])
+    d.sleep = sleep2
+    monde.scripts = {}
+    p = ecrire_file(monde.tmp, dict(_etape(type='charts', theatre='T', bases=['B']), config=str(monde.cfg)))
+    nuit.cmd_jouer(str(p), d, io.StringIO())
+    assert statuts(monde.bilan()) == ['ok'] and [m for _, m in monde.demandes] == ['f10']
+
+
+def test_c3_vue_faite_vide_jusqu_au_bout_est_un_echec(monde):
+    d = monde.deps()
+
+    def sleep(s):
+        monde.avancer(s)
+        dem = monde.auto / 'vue_demande.txt'
+        if dem.exists():
+            dem.unlink()
+            (monde.auto / 'vue_faite.txt').write_text('  \n')
+    d.sleep = sleep
+    p = ecrire_file(monde.tmp, dict(_etape(type='charts', theatre='T', bases=['B']), config=str(monde.cfg)))
+    nuit.cmd_jouer(str(p), d, io.StringIO())
+    assert statuts(monde.bilan()) == ['vue_echec'] and monde.appels == []
+
+
+def test_c3_pouls_relu_une_fois_apres_2_s(monde):
+    """Deux lectures, a 2 s d'intervalle : DCS n'est absent que si les deux le disent."""
+    f = nuit.valider_file(file_exemple())
+    cfg, _ = __import__('config').load_config(['x', '--config', str(monde.cfg)])
+    d = monde.deps()
+    n = nuit.Nuit(f, cfg, d, io.StringIO())
+    n.t_nuit = T0
+    monde.t = T0 + 1000
+    bat = monde.auto / 'battement.txt'
+    # 1re lecture : vide (le crochet est en train de l'ecrire), 2 s plus tard : frais
+    bat.write_text('')
+    dormi = []
+
+    def sleep(s):
+        dormi.append(s)
+        monde.t += s
+        bat.write_text(str(int(monde.t)))
+    d.sleep = sleep
+    assert n.pouls_ok() and dormi == [2]
+    # 1re lecture : trop ancien, 2 s plus tard : frais
+    bat.write_text(str(int(monde.t - 400)))
+    dormi.clear()
+    assert n.pouls_ok() and dormi == [2]
+    # 1re lecture : absent, 2 s plus tard : absent aussi
+    bat.unlink()
+    d.sleep = lambda s: dormi.append(s)
+    dormi.clear()
+    assert not n.pouls_ok() and dormi == [2]
+    # pouls frais : une seule lecture, pas d'attente
+    bat.write_text(str(int(monde.t)))
+    dormi.clear()
+    assert n.pouls_ok() and dormi == []
+
+
+def test_c3_pouls_en_retard_puis_ecrit_pendant_la_relecture_ne_declare_pas_dcs_absent(monde):
+    """De bout en bout : avant la 3e commande le pouls a 400 s ; le crochet l'ecrit pendant l'attente de 2 s : la file continue."""
+    monde.scripts = {2: {'duree': 400, 'mort': True}}      # le crochet ne bat plus pendant la 2e commande
+    d = monde.deps()
+    sleep0 = d.sleep
+
+    def sleep(s):
+        if s == nuit.POULS_RELECTURE_S:
+            monde.vivant = True                            # le crochet reprend la main pendant la relecture
+        sleep0(s)
+    d.sleep = sleep
+    p = ecrire_file(monde.tmp, dict(file_exemple(), config=str(monde.cfg)))
+    nuit.cmd_jouer(str(p), d, io.StringIO())
+    b = monde.bilan()
+    assert statuts(b) == ['ok'] * 5 and b['cause'] == 'file_finie' and monde.arrets == 0
+
+
+# -- correction 4 : QUESTION.txt d'avant
+
+def test_c4_question_d_avant_supprimee_avant_la_commande(monde):
+    monde.fichier('sync/QUESTION.txt', 'vieille question')
+    monde.scripts = {1: {'code': 3}, 2: {'code': 3, 'question': 'nouvelle question'}}
+    monde.jouer(file_exemple(etapes=[{'type': 'charts', 'theatre': 'T', 'bases': ['A', 'B', 'C']}]))
+    b = monde.bilan()
+    assert statuts(b) == ['echec', 'question', 'ok']
+    assert 'question' not in b['commandes'][0] and b['commandes'][1]['question'] == 'nouvelle question'
+    assert not (monde.work / 'sync' / 'QUESTION.txt').exists()
+
+
+def test_c4_question_d_avant_supprimee_meme_si_la_commande_reussit(monde):
+    monde.fichier('sync/QUESTION.txt', 'vieille question')
+    monde.jouer(_etape(type='charts', theatre='T', bases=['B']))
+    assert statuts(monde.bilan()) == ['ok'] and not (monde.work / 'sync' / 'QUESTION.txt').exists()
+
+
+# -- correction 5 : un echec au demarrage laisse une trace et rend la main
+
+def lire_trace(dossier):
+    return ((dossier / 'erreur.txt').read_text(encoding='utf-8'), (dossier / 'file.lua').read_text().strip(),
+            (dossier / 'fin.txt').read_text())
+
+
+def test_c5_file_refusee_config_connue_trace_dans_autonome(monde, capsys):
+    p = ecrire_file(monde.tmp, {'etapes': [], 'config': str(monde.cfg)})
+    assert nuit.cmd_jouer(str(p), monde.deps(), io.StringIO()) == 2
+    erreur, lua, fin = lire_trace(monde.auto)
+    assert erreur.count('\n') == 1 and 'file refusee' in erreur and (lua, fin) == ('return false', 'rester')
+    assert 'file refusee' in capsys.readouterr().err
+    assert not (monde.tmp / 'erreur.txt').exists()
+
+
+def test_c5_file_illisible_sans_config_trace_a_cote_de_la_file(monde, tmp_path_factory):
+    d = tmp_path_factory.mktemp('hors')
+    p = d / 'nuit.json'
+    p.write_text('{pas du json')
+    assert nuit.cmd_jouer(str(p), monde.deps(), io.StringIO()) == 2
+    erreur, lua, fin = lire_trace(d)
+    assert 'JSON' in erreur and (lua, fin) == ('return false', 'rester')
+
+
+def test_c5_configuration_illisible_trace_a_cote_de_la_file(monde, tmp_path_factory, capsys):
+    d = tmp_path_factory.mktemp('hors2')
+    p = d / 'nuit.json'
+    p.write_text(json.dumps(dict(file_exemple(), config=str(d / 'absente.json'))))
+    assert nuit.cmd_jouer(str(p), monde.deps(), io.StringIO()) == 2
+    erreur, lua, fin = lire_trace(d)
+    assert 'configuration illisible' in erreur and 'introuvable' in erreur and erreur.count('\n') == 1
+    assert (lua, fin) == ('return false', 'rester') and monde.appels == []
+    assert 'configuration illisible' in capsys.readouterr().err
+
+
+def test_c5_dossier_de_la_nuit_impossible(monde):
+    (monde.auto / 'nuits').write_text('je suis un fichier, pas un dossier')
+    assert monde.jouer(file_exemple()) == 2
+    erreur, lua, fin = lire_trace(monde.auto)
+    assert 'demarrage impossible' in erreur and (lua, fin) == ('return false', 'rester')
+    assert monde.appels == [] and monde.veilles == []
+
+
+def test_c5_exception_au_demarrage(monde, monkeypatch):
+    def boum(self):
+        raise RuntimeError('boum au demarrage')
+    monkeypatch.setattr(nuit.Nuit, 'creer_dossier', boum)
+    assert monde.jouer(file_exemple()) == 2
+    erreur, lua, fin = lire_trace(monde.auto)
+    assert 'boum au demarrage' in erreur and (lua, fin) == ('return false', 'rester')
+    assert monde.arrets == 0
+
+
+# -- correction 6 : le rassemblement ne perd jamais la nuit
+
+def test_c6_fichier_illisible_saute_et_liste(monde, monkeypatch):
+    preparer_fichiers(monde)
+    vrai_open = open
+
+    def open_(f, mode='r', *a, **k):
+        if str(f).endswith('b.jpg') and 'b' in mode and 'r' in mode:
+            raise PermissionError(13, 'Permission denied', str(f))
+        return vrai_open(f, mode, *a, **k)
+    monkeypatch.setattr(nuit, 'open', open_, raising=False)
+    monde.jouer(file_exemple())
+    b = monde.bilan()
+    assert [x['chemin'] for x in b['fichiers_sautes']] == ['out/germanycoldwar/Mahlwinkel/b.jpg']
+    assert 'PermissionError' in b['fichiers_sautes'][0]['raison']
+    tous = [n for info in membres(monde).values() for n in info]
+    assert 'out/germanycoldwar/Mahlwinkel/b.jpg' not in tous and 'out/germanycoldwar/Mahlwinkel/a.png' in tous
+    assert b['cause'] == 'file_finie'
+
+
+def test_c6_fichier_qui_disparait_ou_se_verrouille_entre_planification_et_zip(tmp_path):
+    a, b = tmp_path / 'a.json', tmp_path / 'b.json'
+    a.write_text('{}')
+    b.write_text('{}')
+    groupes = [[(a, 'out/a.json'), (tmp_path / 'fantome.json', 'out/fantome.json'), (b, 'out/b.json')]]
+    zips, sautes = nuit.ecrire_zips(groupes, tmp_path, 'X')
+    assert [x['chemin'] for x in sautes] == ['out/fantome.json'] and zips[0]['fichiers'] == 2
+    with zipfile.ZipFile(tmp_path / zips[0]['nom']) as zf:
+        assert sorted(zf.namelist()) == ['out/a.json', 'out/b.json'] and zf.testzip() is None
+    g, trop, sautes = nuit.planifier_zips([(a, 'out/a.json'), (tmp_path / 'fantome.json', 'out/fantome.json')], 10000)
+    assert [x['chemin'] for x in sautes] == ['out/fantome.json'] and len(g) == 1
+
+
+def test_c6_exception_du_rassemblement_notee_au_bilan_et_fin_ecrite(monde, monkeypatch):
+    monde.scripts = {2: {'duree': 400, 'mort': True}}          # DCS absent : le shutdown doit passer quand meme
+    monkeypatch.setattr(nuit, 'rassembler', lambda *a: (_ for _ in ()).throw(RuntimeError('disque plein')))
+    ordre = []
+    d_shutdown = monde.deps
+    code = None
+
+    def deps(**kw):
+        d = d_shutdown(**kw)
+        d.shutdown = lambda: ordre.append(('shutdown', (monde.auto / 'fin.txt').exists(), (monde.auto / 'file.lua').read_text().strip()))
+        return d
+    monde.deps = deps
+    code = monde.jouer(file_exemple())
+    b = monde.bilan()
+    assert code == 1 and 'disque plein' in b['erreur'] and b['cause'] == 'dcs_absent'
+    assert (monde.auto / 'fin.txt').read_text() == 'eteindre' and (monde.auto / 'file.lua').read_text().strip() == 'return false'
+    assert ordre == [('shutdown', True, 'return false')]        # le shutdown passe apres fin.txt, dans le finally
+
+
+def test_c6_exception_du_depot_notee_et_fin_ecrite(monde, monkeypatch):
+    monkeypatch.setattr(nuit, 'deposer', lambda *a: (_ for _ in ()).throw(RuntimeError('depot en panne')))
+    code = monde.jouer(file_exemple(tampon=tampon_pour(monde)))
+    assert code == 1 and 'depot en panne' in monde.bilan()['erreur'] and (monde.auto / 'fin.txt').exists()
+    assert list(monde.nuit_dir.glob('*.zip'))
+
+
+def test_c6_exception_pendant_la_file_ne_saute_pas_la_fin(monde, monkeypatch):
+    monkeypatch.setattr(nuit.Nuit, 'executer', lambda self, c, res: (_ for _ in ()).throw(RuntimeError('executer en panne')))
+    code = monde.jouer(file_exemple())
+    b = monde.bilan()
+    assert code == 1 and b['cause'] == 'erreur' and 'executer en panne' in b['erreur'] and statuts(b) == ['non_joue'] * 5
+    assert (monde.auto / 'fin.txt').read_text() == 'eteindre' and monde.arrets == 0
+
+
+def test_c6_shutdown_en_panne_ne_perd_rien(monde):
+    monde.scripts = {1: {'duree': 400, 'mort': True}}
+    d = monde.deps()
+    d.shutdown = lambda: (_ for _ in ()).throw(OSError('pas de droit'))
+    p = ecrire_file(monde.tmp, dict(file_exemple(), config=str(monde.cfg)))
+    assert nuit.cmd_jouer(str(p), d, io.StringIO()) == 0
+    assert (monde.auto / 'fin.txt').read_text() == 'eteindre'
+
+
+# -- correction 7 : reessayer un televersement apres un envoi partiel
+
+def test_c7_envoi_partiel_l_asset_est_retire_avant_le_nouvel_essai(monde):
+    preparer_fichiers(monde)
+    with FauxGitHub(partiels={'bilan.json': 1}) as srv:
+        monde.jouer(file_exemple(tampon=tampon_pour(monde)), api=srv.api, opener=srv.opener)
+        assert monde.bilan()['depot']['statut'] == 'ok', monde.bilan()['depot']
+        t = [x[0] + ' ' + x[1] for x in srv.trace()]
+        i = t.index('POST /uploads/repos/o/r/releases/43/assets?name=bilan.json')
+        assert t[i + 1] == 'GET /repos/o/r/releases/43/assets?per_page=100'
+        assert t[i + 2].startswith('DELETE /repos/o/r/releases/assets/')
+        assert t[i + 3] == 'POST /uploads/repos/o/r/releases/43/assets?name=bilan.json'
+        assert 'bilan.json' in srv.assets
+
+
+def test_c7_sans_envoi_partiel_la_liste_est_quand_meme_faite_sans_rien_supprimer(monde):
+    with FauxGitHub(echecs={'bilan.json': 1}) as srv:
+        monde.jouer(file_exemple(tampon=tampon_pour(monde)), api=srv.api, opener=srv.opener)
+        assert monde.bilan()['depot']['statut'] == 'ok'
+        t = srv.trace()
+        assert ('GET', '/repos/o/r/releases/43/assets?per_page=100') in t
+        assert not any(m == 'DELETE' and '/assets/' in p for m, p in t)
+
+
+def test_c7_envoi_partiel_a_chaque_essai_echec_net(monde):
+    with FauxGitHub(partiels={'bilan.json': 3}) as srv:
+        monde.jouer(file_exemple(tampon=tampon_pour(monde)), api=srv.api, opener=srv.opener)
+        d = monde.bilan()['depot']
+        assert d['statut'] == 'echec' and 'bilan.json' in d['detail']
+        assert [r['p'] for r in srv.requetes].count('/uploads/repos/o/r/releases/43/assets?name=bilan.json') == 3
+
+
+# -- correction 8 : un fichier perdu n'arrete pas les autres
+
+def test_c8_un_zip_perdu_les_autres_partent(monde):
+    preparer_fichiers(monde)
+    stamp = time.strftime('%Y-%m-%d_%H%M', time.localtime(T0))
+    with FauxGitHub(echecs={f'nuit_{stamp}_2.zip': 9}) as srv:
+        monde.jouer(file_exemple(tampon=tampon_pour(monde), taille_zip_max_o=11000), api=srv.api, opener=srv.opener)
+        b = monde.bilan()
+        noms = [z['nom'] for z in b['zips']]
+        assert len(noms) >= 3
+        assert b['depot']['statut'] == 'echec'
+        assert b['depot']['detail'].startswith(f'fichiers non deposes : nuit_{stamp}_2.zip') and b['depot']['detail'].count('.zip (') == 1
+        assert set(srv.assets) == {'bilan.json'} | (set(noms) - {f'nuit_{stamp}_2.zip'})
+
+
+def test_c8_deux_fichiers_perdus_tous_deux_listes(monde):
+    preparer_fichiers(monde)
+    stamp = time.strftime('%Y-%m-%d_%H%M', time.localtime(T0))
+    with FauxGitHub(echecs={'bilan.json': 9, f'nuit_{stamp}_1.zip': 9}) as srv:
+        monde.jouer(file_exemple(tampon=tampon_pour(monde), taille_zip_max_o=11000), api=srv.api, opener=srv.opener)
+        d = monde.bilan()['depot']
+        assert d['statut'] == 'echec' and 'bilan.json' in d['detail'] and f'nuit_{stamp}_1.zip' in d['detail']
+
+
+# -- correction 9 : borne des zips
+
+def test_c9_borne_de_taille_zip_max(tmp_path, capsys):
+    assert nuit.valider_file(_avec(taille_zip_max_o=2147483647))['taille_zip_max_o'] == 2147483647
+    for v in (2147483648, 0, -1):
+        with pytest.raises(nuit.FileErreur, match='taille_zip_max_o'):
+            nuit.valider_file(_avec(taille_zip_max_o=v))
+    assert nuit.main(['nuit.py', 'verifier', str(ecrire_file(tmp_path, _avec(taille_zip_max_o=2147483648)))]) == 2
+    assert 'taille_zip_max_o' in capsys.readouterr().err
+
+
+def test_c9_zip_au_dela_de_la_borne_pas_televerse(monde, monkeypatch):
+    preparer_fichiers(monde)
+    monde.scripts[1]['fichiers'].append(('out/germanycoldwar/Mahlwinkel/gros.png', bytes(range(256)) * 200))      # 51 200 o, seul dans son zip
+    monkeypatch.setattr(nuit, 'TAILLE_ZIP_BORNE', 30000)
+    with FauxGitHub() as srv:
+        monde.jouer(file_exemple(tampon=tampon_pour(monde), taille_zip_max_o=20000), api=srv.api, opener=srv.opener)
+        b = monde.bilan()
+        gros = [z for z in b['zips'] if z['taille_o'] > 30000]
+        assert len(gros) == 1 and 'non_depose' in gros[0]
+        assert b['depot']['statut'] == 'echec' and gros[0]['nom'] in b['depot']['detail'] and 'non televerse' in b['depot']['detail']
+        assert gros[0]['nom'] not in srv.assets and 'bilan.json' in srv.assets
+        assert set(srv.assets) == {'bilan.json'} | {z['nom'] for z in b['zips']} - {gros[0]['nom']}
+    assert (monde.nuit_dir / gros[0]['nom']).exists()
+
+
+# -- correction 11 : le budget conseille
+
+def test_c11_budget_conseille(tmp_path, capsys):
+    assert nuit.main(['nuit.py', 'verifier', str(ecrire_file(tmp_path, file_exemple()))]) == 0
+    derniere = capsys.readouterr().out.splitlines()[-1]
+    assert derniere == 'budget_s du crochet conseille : 18000 s au moins'               # 12600 + 3600 + 1800
+    d = {'etapes': [{'type': 'charts', 'theatre': 'T', 'bases': ['B']}], 'budget_captures_s': 600, 'delai_commande_s': 90.5}
+    assert nuit.main(['nuit.py', 'verifier', str(ecrire_file(tmp_path, d))]) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == 'budget_s du crochet conseille : 2490.5 s au moins'
+    d = {'etapes': [{'type': 'charts', 'theatre': 'T', 'bases': ['B']}]}
+    nuit.main(['nuit.py', 'verifier', str(ecrire_file(tmp_path, d))])
+    assert capsys.readouterr().out.splitlines()[-1] == 'budget_s du crochet conseille : 18000 s au moins'
+
+
+# -- correction 12 : les types d'etape
+
+def test_c12_les_trois_types_seulement():
+    assert nuit.TYPES == ('charts', 'contexte', 'panneaux')
+    with pytest.raises(nuit.FileErreur) as e:
+        nuit.valider_file(_etape(type='theatre', theatre='T', bases=['B']))
+    assert 'charts, contexte, panneaux' in str(e.value)
+    # `theatre` reste la cle de l'etape
+    assert nuit.valider_file(_etape(type='charts', theatre='GermanyColdWar', bases=['B']))['etapes'][0]['theatre'] == 'GermanyColdWar'
+
+
+# -- correction 13 : deux nuits dans la meme minute
+
+def test_c13_dossier_de_la_meme_minute(monde):
+    stamp = time.strftime('%Y-%m-%d_%H%M', time.localtime(T0))
+    (monde.auto / 'nuits' / stamp).mkdir(parents=True)
+    (monde.auto / 'nuits' / stamp / 'vieux.log').write_text('une autre nuit')
+    monde.jouer(_etape(type='charts', theatre='T', bases=['B']))
+    dossiers = sorted(p.name for p in (monde.auto / 'nuits').iterdir())
+    assert dossiers == [stamp, f'{stamp}_2']
+    nouveau = monde.auto / 'nuits' / f'{stamp}_2'
+    assert (nouveau / 'bilan.json').exists() and not (monde.auto / 'nuits' / stamp / 'bilan.json').exists()
+    assert [p.name for p in nouveau.glob('*.zip')] == [f'nuit_{stamp}_2_1.zip']
+    assert json.loads((nouveau / 'bilan.json').read_text())['dossier'] == f'{stamp}_2'
+    with zipfile.ZipFile(nouveau / f'nuit_{stamp}_2_1.zip') as zf:
+        assert not any('vieux.log' in n for n in zf.namelist())
+        assert any(n.startswith(f'autonome/nuits/{stamp}_2/') for n in zf.namelist())
+
+
+def test_c13_troisieme_nuit(tmp_path):
+    m = Monde(tmp_path)
+    stamp = time.strftime('%Y-%m-%d_%H%M', time.localtime(T0))
+    for suffixe in ('', '_2'):
+        (m.auto / 'nuits' / (stamp + suffixe)).mkdir(parents=True)
+    m.jouer(_etape(type='charts', theatre='T', bases=['B']))
+    assert (m.auto / 'nuits' / f'{stamp}_3' / 'bilan.json').exists()
+
+
+# -- Q2 : le jeton, depot reussi comme en echec
+
+def test_q2_jeton_absent_apres_un_depot_reussi(monde, capsys):
+    preparer_fichiers(monde)
+    with FauxGitHub() as srv:
+        monde.jouer(file_exemple(tampon=tampon_pour(monde), taille_zip_max_o=11000), api=srv.api, opener=srv.opener)
+        assert monde.bilan()['depot']['statut'] == 'ok'
+        assert any(JETON in r['h']['authorization'] for r in srv.requetes)          # il est bien parti vers l'API
+    verifier_jeton_absent(monde, capsys)
+
+
+def test_q2_jeton_absent_apres_un_depot_en_echec_stdout_stderr(monde, capsys):
+    with FauxGitHub(echecs={'bilan.json': 9}, echo_jeton=True) as srv:
+        monde.jouer(file_exemple(tampon=tampon_pour(monde)), api=srv.api, opener=srv.opener)
+    verifier_jeton_absent(monde, capsys)
+
+
+# -- Q3 : les voies Windows, simulees
+
+class AppelsEnregistres:
+    def __init__(self):
+        self.appels, self.argtypes = [], None
+
+    def __call__(self, *a, **k):
+        self.appels.append((a, k))
+        return 1
+
+
+class OsNt:
+    """Le module os vu par nuit.py, avec name == 'nt'."""
+    name = 'nt'
+
+    def __getattr__(self, n):
+        return getattr(os, n)
+
+
+class SubprocessEnregistre:
+    DEVNULL = subprocess.DEVNULL
+
+    def __init__(self):
+        self.appels = []
+
+    def run(self, argv, **k):
+        self.appels.append((argv, k))
+
+    def __getattr__(self, n):
+        return getattr(subprocess, n)
+
+
+@pytest.fixture
+def windows(monkeypatch):
+    import types
+    ctypes_faux = types.ModuleType('ctypes')
+    ctypes_faux.c_uint = int
+    veille, msg = AppelsEnregistres(), AppelsEnregistres()
+    ctypes_faux.windll = types.SimpleNamespace(kernel32=types.SimpleNamespace(SetThreadExecutionState=veille),
+                                               user32=types.SimpleNamespace(PostMessageW=msg))
+    sub = SubprocessEnregistre()
+    monkeypatch.setitem(sys.modules, 'ctypes', ctypes_faux)
+    monkeypatch.setattr(nuit, 'os', OsNt())
+    monkeypatch.setattr(nuit, 'subprocess', sub)
+    return types.SimpleNamespace(veille=veille, msg=msg, sub=sub)
+
+
+def test_q3_veille_constantes_exactes(windows):
+    nuit.veille_windows(True)
+    nuit.veille_windows(False)
+    assert [a[0] for a in windows.veille.appels] == [(0x80000001,), (0x80000000,)]
+    assert windows.sub.appels == []
+
+
+def test_q3_ecran_constantes_exactes(windows):
+    nuit.ecran_windows()
+    assert windows.msg.appels == [((0xFFFF, 0x0112, 0xF170, 2), {})]
+
+
+def test_q3_taskkill_argv_exact(windows):
+    class P:
+        pid = 4321
+    nuit.tuer_arbre_windows(P())
+    (argv, kw), = windows.sub.appels
+    assert argv == ['taskkill', '/F', '/T', '/PID', '4321'] and kw.get('check') is False
+
+
+def test_q3_shutdown_argv_exact(windows):
+    nuit.arret_windows()
+    (argv, kw), = windows.sub.appels
+    assert argv == ['shutdown', '/s', '/t', '120'] and kw.get('check') is False
+
+
+def test_q3_hors_windows_rien_n_est_appele():
+    if os.name == 'nt':
+        pytest.skip('test des voies inertes sous POSIX')
+    sub = SubprocessEnregistre()
+    vrai = nuit.subprocess
+    nuit.subprocess = sub
+    try:
+        nuit.arret_windows()
+        nuit.veille_windows(True)
+        nuit.ecran_windows()
+    finally:
+        nuit.subprocess = vrai
+    assert sub.appels == []
