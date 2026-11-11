@@ -40,6 +40,7 @@ SOURCE_IMAGE, SOURCE_DEFAUT = 'image', 'défaut'
 MOTIF_NON_SITUEE = 'non située (rayon qui ne descend pas)'
 MOTIF_SANS_POSE = 'non située (vue sans position)'
 LAT_LON_DECIMALES = 7
+TRACE_MAX_M = 300.0           # un `way` du jeu : la marche depuis le noeud de la sortie, jusqu'a 300 m
 
 
 class AttrError(Exception):
@@ -296,21 +297,23 @@ def build_attribution(theatre, base, letters, pairs, exits, champ_deg):
 
 
 def game_ways(g, groups, exits, proj):
-    """Un `way` par sortie nommee et par troncon non-piste qui part d'un de ses noeuds (un troncon une fois par sortie) :
-    {'aeroway': 'taxiway', 'ref': nom, 'pts': [[lat, lon], ...]}, les points (x, z) du troncon passes en lat/lon."""
+    """Un `way` par sortie nommee, par noeud du groupe et par troncon non-piste qui en part : la marche
+    signcapture.walk(g, noeud, troncon) (sans limite d'angle), ses points jusqu'au dernier dont l'abscisse cumulee depuis le noeud
+    est de TRACE_MAX_M au plus. {'aeroway': 'taxiway', 'ref': nom, 'pts': [[lat, lon], ...]}, points (x, z) passes en lat/lon."""
+    import signcapture as sc
     by_id = {gr[0]: gr for gr in groups}
     ways = []
     for e in exits:
         if not e['nom']:
             continue
-        seen = set()
         for nid in by_id[e['id']]:
             for sid in g.r.nodes[nid].ports:
-                if g.runway[sid] or sid in seen:
+                if g.runway[sid]:
                     continue
-                seen.add(sid)
+                w = sc.walk(g, nid, sid, None)
+                n = max(i for i, c in enumerate(w.cum) if c <= TRACE_MAX_M) + 1
                 pts = []
-                for x, z in g.line[sid]:
+                for x, z in w.pts[:n]:
                     lat, lon = proj.to_latlon(x, z)
                     pts.append([round(lat, LAT_LON_DECIMALES), round(lon, LAT_LON_DECIMALES)])
                 if len(pts) >= 2:

@@ -320,7 +320,7 @@ def _exit_graph():
     return sc.Graph(mk(nodes, segs))
 
 
-def test_game_ways_one_per_named_exit_and_per_non_runway_segment():
+def test_game_ways_one_walk_per_named_exit_node_and_non_runway_segment():
     g = _exit_graph()
     groups = sc.bretelles(g)
     assert groups == [[0], [3]]
@@ -328,22 +328,45 @@ def test_game_ways_one_per_named_exit_and_per_non_runway_segment():
              {'id': 3, 'noeuds': [3], 'nom': None, 'lettres': [], 'conflit': False}]
     ways = sa.game_ways(g, groups, exits, _Proj())
     assert [(w['aeroway'], w['ref']) for w in ways] == [('taxiway', 'B'), ('taxiway', 'B')]
-    assert ways[0]['pts'] == [[50.0, 8.00005], [50.0, 8.0005], [50.0, 8.00095]]
-    assert [w['pts'][0] for w in ways] == [[50.0, 8.00005], [50.0, 7.99995]]
+    # la marche part du noeud (0, 0) puis suit la ligne du troncon sans son premier point
+    assert ways[0]['pts'] == [[50.0, 8.0], [50.0, 8.0005], [50.0, 8.00095]]
+    assert ways[1]['pts'] == [[50.0, 8.0], [50.0, 7.9995], [50.0, 7.99905]]
     exits[1]['nom'] = 'D'
     ways = sa.game_ways(g, groups, exits, _Proj())
     assert [w['ref'] for w in ways] == ['B', 'B', 'D']
 
 
-def test_game_ways_do_not_repeat_a_segment_joining_two_nodes_of_the_same_exit():
-    nodes = [('runway_taxiway_t', 0, 0), ('runway_taxiway_t', 60, 0), ('taxiway_end_a', 30, 100), ('rwy_point_takeoff_landing', 300, 0)]
-    segs = [('runway_45m', 0, 3, [(0, 0), (300, 0)]), ('runway_45m', 1, 3, [(60, 0), (300, 0)]),
-            ('taxiway_15m', 0, 1, [(0, 5), (30, 40), (60, 5)]), ('taxiway_15m', 1, 2, [(60, 5), (30, 95)])]
+def _long_exit(step, n):
+    """Une sortie dont le troncon taxiway suit z = step, 2 step, ... n step depuis le noeud (0, 0)."""
+    nodes = [('runway_taxiway_t', 0, 0), ('taxiway_end_a', 0, n * step + 10), ('rwy_point_takeoff_landing', 300, 0)]
+    segs = [('runway_45m', 0, 2, [(0, 0), (300, 0)]),
+            ('taxiway_15m', 0, 1, [(0, 10)] + [(0, k * step) for k in range(1, n + 1)])]
     g = sc.Graph(mk(nodes, segs))
     groups = sc.bretelles(g)
-    assert groups == [[0, 1]]
-    ways = sa.game_ways(g, groups, [{'id': 0, 'noeuds': [0, 1], 'nom': 'K', 'lettres': ['K'], 'conflit': False}], _Proj())
-    assert len(ways) == 2
+    ex = [{'id': 0, 'noeuds': [0], 'nom': 'K', 'lettres': ['K'], 'conflit': False}]
+    return sa.game_ways(g, groups, ex, _Proj())
+
+
+def test_a_game_way_stops_at_the_last_point_within_300_m_of_the_node():
+    assert sa.TRACE_MAX_M == 300.0
+    ways = _long_exit(100.0, 8)                      # points a 100, 200, 300, 400... m : on garde jusqu'a 300 m inclus
+    assert len(ways) == 1
+    assert [round((p[1] - 8.0) * 1e5) for p in ways[0]['pts']] == [0, 100, 200, 300]
+    ways = _long_exit(110.0, 8)                      # 110, 220, 330... : 330 m est de trop
+    assert [round((p[1] - 8.0) * 1e5) for p in ways[0]['pts']] == [0, 110, 220]
+    ways = _long_exit(50.0, 4)                       # toute la marche (200 m) quand elle est plus courte
+    assert [round((p[1] - 8.0) * 1e5) for p in ways[0]['pts']] == [0, 50, 100, 150, 200]
+
+
+def test_a_game_way_follows_the_walk_through_pass_nodes_without_an_angle_limit():
+    nodes = [('runway_taxiway_t', 0, 0), ('auto__a__b', 0, 100), ('taxiway_end_a', 100, 100), ('rwy_point_takeoff_landing', 300, 0)]
+    segs = [('runway_45m', 0, 3, [(0, 0), (300, 0)]),
+            ('taxiway_15m', 0, 1, [(0, 10), (0, 50), (0, 90)]),
+            ('taxiway_15m', 1, 2, [(10, 100), (50, 100), (90, 100)])]          # un virage a 90 degres
+    g = sc.Graph(mk(nodes, segs))
+    ways = sa.game_ways(g, sc.bretelles(g), [{'id': 0, 'noeuds': [0], 'nom': 'K', 'lettres': ['K'], 'conflit': False}], _Proj())
+    assert len(ways) == 1 and len(ways[0]['pts']) == 1 + 2 + 2     # le noeud, puis 2 points par troncon (le premier de chacun est ecarte)
+    assert ways[0]['pts'][-1] == [50.0009, 8.001]
 
 
 # ---------- la commande, de bout en bout, sur un graphe synthetique ----------
