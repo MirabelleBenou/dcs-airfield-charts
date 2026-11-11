@@ -25,6 +25,10 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - `capture/f10capture.py capture <Theatre> <Base> --marge <m>` captures the F10 map over the airfield's extent plus `<m>` metres on each side, into `out/<theatre>/contexte/<Base>/`, without touching the captures the charts are rendered from. The published charts do not change.
 
+**Taxiway names read in DCS.**
+
+- New command `capture/signcapture.py attribuer`: the letters read on the taxiway signs at the runway exits are placed on the ground and given to their exit, into `taxiways_dcs/<theatre>/<Base>.json`. When that file exists for an airfield, its chart takes the taxiway names from the game instead of OpenStreetMap. The published charts do not change until such files are produced.
+
 ## AC-V1.6.0 — 7 November 2026
 
 **Magnetic headings now match the cockpit compass.**

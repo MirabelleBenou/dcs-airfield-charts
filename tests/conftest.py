@@ -46,6 +46,19 @@ def work(samples, tmp_path_factory):
     return cfg
 
 
+@pytest.fixture
+def fresh_work(samples, tmp_path):
+    """Comme `work`, mais un dossier neuf par test (on peut y ecrire : taxiways_dcs/...). Retourne la Config."""
+    import config
+    w = tmp_path / 'work'
+    _link(samples / 'syria', w / 'out' / 'syria')
+    _link(samples / 'syria' / 'osm', w / 'osm' / 'syria')
+    cfg_path = tmp_path / 'config.json'
+    cfg_path.write_text(json.dumps({'work_dir': str(w), 'dcs_install': str(samples / 'dcs_install')}), encoding='utf-8')
+    cfg, _ = config.load_config(['x', '--config', str(cfg_path)])
+    return cfg
+
+
 @pytest.fixture(scope='session')
 def charts(work):
     """Analyse et pages (SVG) des trois bases, 1985 : {base: (ChartData, [PageOut])}."""

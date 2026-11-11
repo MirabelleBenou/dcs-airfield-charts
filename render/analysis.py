@@ -222,13 +222,25 @@ def shelter_flags(parkings_xz, bld, g):
     return shares
 
 
-def read_osm(path, proj, pav, g, mpp):
+def game_taxiways_path(cfg, theatre, base):
+    """Fichier de noms de taxiways tire du jeu (commande `attribuer`) : <work_dir>/taxiways_dcs/<theatre en minuscules>/<Base>.json."""
+    return Path(cfg.work_dir) / 'taxiways_dcs' / theatre.lower() / f'{base}.json'
+
+
+def read_osm(path, proj, pav, g, mpp, ways_path=None):
     """Fichier OSM de la base -> (icao, [taxiways gardes]). Garde un `taxiway` si ref [A-Z]{1,2}[0-9]{0,2} et
-    >= 80 % de sa longueur sur le revetement elargi de 5 m."""
-    d = json.loads(Path(path).read_text(encoding='utf-8'))
+    >= 80 % de sa longueur sur le revetement elargi de 5 m. `ways_path` : un fichier du jeu dont les `ways` remplacent ceux du
+    fichier OSM (meme format, meme filtre) ; l'ICAO reste celui du fichier OSM (`path` peut alors etre None : pas d'ICAO)."""
+    d = json.loads(Path(path).read_text(encoding='utf-8')) if path is not None else {}
+    src = d
+    if ways_path is not None:
+        try:
+            src = json.loads(Path(ways_path).read_text(encoding='utf-8'))
+        except (ValueError, OSError) as e:
+            raise ChartError(f'fichier de taxiways du jeu illisible : {ways_path} ({e})')
     ways = []
     grown = None
-    for w in d.get('ways', []):
+    for w in src.get('ways', []):
         if w.get('aeroway') != 'taxiway' or not OSM_TAXIWAY_REF.match(w.get('ref', '')):
             continue
         pts = np.array([proj.to_xz(lat, lon) for lat, lon in w['pts']], float)
@@ -372,8 +384,16 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
 
     osm_icao, osm_ways = None, []
     osm = Path(osm_path) if osm_path else Path(osm_dir or Path(cfg.work_dir) / 'osm') / theatre.lower() / f'{base}.json'
-    if osm.is_file():
-        osm_icao, osm_ways = read_osm(osm, proj, pav, g, g.mpp)
+    game = None if osm_path else game_taxiways_path(cfg, theatre, base)       # le jeu prime, base par base (sans --osm)
+    if game is not None and not game.is_file():
+        game = None
+    if osm.is_file() or game is not None:
+        osm_icao, osm_ways = read_osm(osm if osm.is_file() else None, proj, pav, g, g.mpp, ways_path=game)
+    if not osm_path:
+        if game is not None:
+            log(f'taxiways : jeu ({game})')
+        elif osm.is_file():
+            log(f'taxiways : OSM ({osm})')
     code = icao or osm_icao or base
     icao_known = bool(icao or osm_icao)
 
