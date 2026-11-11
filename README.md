@@ -99,6 +99,16 @@ The file is looked up in this order: the `--config <path>` command-line option, 
 
 **Taxiway signs (work in progress).** `python -I capture/signcapture.py visee <Theatre> [<Base>…]` reads the taxiway network of each airfield from its `.rn5` file and plans where to look for the taxiway signs (runway exits and holding points, taxiway intersections); `capture <Theatre> <Base>…` then takes these views in DCS with the free camera (F11 view, DCS in the foreground; the hook must be the version of this repository). Images go to `<work_dir>/panneaux/<theatre>/<Base>/`. `lire <Theatre> <Base>…` reads the location signs (yellow letter on black) on these images, with templates taken at run time from the game's own sign textures (nothing from the game is stored in this repository), and writes `lecture.json` next to them. `attribuer <Theatre> <Base>…` places each letter read on the ground (the free camera's 90° field of view, signs 0.7 m above the ground, a sign seen twice is triangulated) and gives it to the nearest runway exit (a taxiway that ends on the runway centreline without a runway node counts as an exit when it is at least 100 m from the other exits) when no other exit is close; it writes `<work_dir>/taxiways_dcs/<theatre>/<Base>.json`, which the charts then use instead of OpenStreetMap for that airfield's taxiway names. Taxiway intersections are not named yet.
 
+## Unattended night captures (Windows, work in progress)
+
+`capture/autonome/nuit.py` plays a queue of captures written in advance, with nobody at the PC: F10 captures for the charts, wider F10 context captures (`--marge`) and taxiway sign views. The queue is a JSON file (`nuit.py verifier <nuit.json>` checks it and lists the commands, without DCS).
+
+1. Copy `capture/hook/ChartsAutonome-hook.lua` into `Saved Games\<DCS folder>\Scripts\Hooks\` and set `DOSSIER` on its first line to the folder `<work_dir>\autonome\`.
+2. Write the queue and arm the hook: `<work_dir>\autonome\file.lua` returns a table with `arme_le` (os.time()), `budget_s`, `attente_s`, `eteindre_au_budget` and `lancer`, the command that starts `nuit.py jouer <nuit.json>` (it must begin with `start`). An armed file older than 12 hours is ignored; `return false` keeps the hook silent.
+3. Start a mission and fly. The hook starts the queue, switches between the F10 map and the free camera when asked, and closes DCS at the end of the queue or of its time budget.
+
+The files written during the night are packed into zip files with a `bilan.json` report, under `<work_dir>\autonome\nuits\`. When the queue names a GitHub repository and a token file, they are also uploaded as the assets of a release of that repository, replaced every night. The PC can then shut down.
+
 ## Rendering charts
 
 Dependencies: Python 3.12+ and `pip install -r requirements.txt`. The game facts (airfield, runway headings, parking slots, tower frequencies) are read with [pydcs](https://github.com/pydcs/dcs), pinned to one commit and imported as a library; the navaids are read from `<dcs_install>/Mods/terrains/<Theatre>/beacons.lua`. [CairoSVG](https://cairosvg.org/) needs the Cairo library: on Linux and macOS it comes with the system packages; on Windows install the GTK runtime, or run the renderer under WSL.

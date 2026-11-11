@@ -7,6 +7,12 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Unreleased
 
+**Unattended night captures (Windows).**
+
+- New tool `capture/autonome/nuit.py`: a queue of captures written in advance (F10 captures for the charts, wider F10 context captures, taxiway sign views) runs with nobody at the PC once the mission is flying, within a time budget. The new GUI hook `capture/hook/ChartsAutonome-hook.lua` switches between the F10 map and the free camera, starts the queue and closes DCS at the end.
+- The files of the night are packed into zip files with a report, optionally uploaded as the assets of a release of a private GitHub repository; the PC can then shut down.
+- The published charts do not change.
+
 **An approach page for every ILS runway in DCS.**
 
 - New page `11-1`, `11-2`… after the airfield pages, one per runway end with an ILS in DCS: localizer frequency and course as read on the cockpit compass, threshold elevation, a plan view of the final approach over 10 NM (game north up), a 3° profile and a distance and altitude table, with the distances read on the nearest DME. It is not a real approach chart: DCS gives no procedure and no minima.
