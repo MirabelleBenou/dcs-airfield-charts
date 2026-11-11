@@ -761,7 +761,7 @@ def main(argv, cfg):
     elif cmd == 'lire':
         import signread
         try:
-            signread.cmd_lire(cfg, theatre, bases, panneaux_dir, find_base)
+            signread.cmd_lire(cfg, theatre, bases, panneaux_dir)
         except signread.ReadError as e:
             raise Stop(f'ARRET : {e}')
     else:

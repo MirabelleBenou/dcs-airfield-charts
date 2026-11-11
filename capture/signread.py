@@ -58,18 +58,29 @@ CHROMA_MIN = 22                   # min(R, G) - B
 CHROMA_REL = 0.50                 # ... et au moins la moitie de max(R, G) : jaune relatif, pas absolu
 LUMA_MIN = 30
 CHROMA_FULL = 160.0
+RING_MARGIN = 0.0                 # marge exterieure sombre (herbe, piste)
+RING_MARGIN_BAR = 0.5             # marge neutre : la tuile est dans un panneau de direction jaune
+BAR_BLUR = 21
+BAR_MIN_CROP = 130
+BAR_DENSE = 0.45
 RING_SIZES = (8, 10, 12, 14, 17)
 RING_SIZES_L0 = (8, 10, 12, 14)
 RING_LEVELS = 4
 RING_THRESHOLD = 0.30
 RING_GUARD = 0.02                 # fenetre sans energie : correlation sans objet
 RING_PER_SIZE = 40
-MAX_PROPOSALS = 48
+MAX_PROPOSALS = 32
 FAIR_RIVAL = False
+DISC_THRESHOLDS = (0.30, 0.12, 0.08)   # ecart de gabarit qui fait un pixel discriminant
+DISC_MIN_PIXELS = 8
+INDISC_GAP = 0.10                 # un rival a moins de 0,10 de score, sans pixel discriminant : on ne tranche pas
 SECOND_GAP = 0.02                 # ecart minimal entre le meilleur glyphe et le suivant
 COARSE_MIN = 0.65                 # correlation entiere minimale d'un glyphe pour l'affiner
 DOUBT_MIN = 0.85                 # score au-dela duquel une tuile non decidee est quand meme signalee (`?`)
-NEIGHBOUR_SCORE, NEIGHBOUR_GAP, NEIGHBOUR_FULL, NEIGHBOUR_H = 0.90, 0.08, 0.48, 11
+NEIGHBOUR_SCORE, NEIGHBOUR_GAP, NEIGHBOUR_FULL, NEIGHBOUR_H, NEIGHBOUR_DEPART = 0.90, 0.08, 0.48, 13, 0.60
+FULL_MARGIN = 0.02                # marge au-dessus du seuil du glyphe entier
+FULL_GAP = -0.06                  # le glyphe entier du rival ne doit pas battre le notre de plus de 0,06 (non-inferiorite)
+MIN_TILE_READ = 9                 # au-dessous de 9 px de haut : jamais lue
 MIN_TILE = 8                      # tuile la plus petite lue (px de haut)
 PIX_THR = 8                       # pixel qui differe : ecart de plus de 8/255 sur un canal
 FROZEN_FRAC = 1e-4                # moins de 0,01 % des pixels differents : image figee
@@ -191,9 +202,9 @@ def yellow_map(bgr):
     return soft, mn
 
 
-def _ring_template(s):
+def _ring_template(s, margin=None):
     """Cadre s x s : anneau clair, bande interieure sombre, centre moyen, marge exterieure sombre de 2 px."""
-    t = np.zeros((s + 4, s + 4), np.float32)
+    t = np.full((s + 4, s + 4), RING_MARGIN if margin is None else margin, np.float32)
     o = 2
     th = max(1, int(round(0.09 * s)))
     t[o:o + s, o:o + s] = 0.35
@@ -211,9 +222,10 @@ def _ring_template(s):
 
 
 _RING = {s: _ring_template(s) for s in RING_SIZES}
+_RING_BAR = {s: _ring_template(s, RING_MARGIN_BAR) for s in RING_SIZES}
 
 
-def ring_proposals(soft):
+def ring_proposals(soft, rings=None):
     """Cadres candidats : [(score, x, y, cote)] triees, apres fusion des quasi-doublons. Pyramide : les memes gabarits a pleine
     resolution, a la moitie, au quart, au huitieme (cotes de 8 a ~136 px)."""
     props = []
@@ -224,7 +236,7 @@ def ring_proposals(soft):
             break
         ii = cv2.integral(cur * cur, sdepth=cv2.CV_64F)       # energie d'une fenetre : somme par image integrale
         for s in (RING_SIZES_L0 if level == 0 else RING_SIZES):
-            res = cv2.matchTemplate(cur, _RING[s], cv2.TM_CCOEFF_NORMED)
+            res = cv2.matchTemplate(cur, (rings or _RING)[s], cv2.TM_CCOEFF_NORMED)
             w = s + 4
             energy = ii[w:, w:] - ii[:-w, w:] - ii[w:, :-w] + ii[:-w, :-w]
             ys, xs = np.where((res > RING_THRESHOLD) & (energy > RING_GUARD * (s + 4) * (s + 4)))
@@ -253,6 +265,27 @@ def ring_proposals(soft):
     return out
 
 
+def bar_proposals(soft):
+    """Cadres candidats a l'interieur ou au bout d'un panneau de direction (grand aplat jaune) : la marge exterieure du cadre
+    n'y est pas sombre. Recherche limitee aux zones de jaune dense, avec le gabarit a marge neutre."""
+    dense = (cv2.blur(soft, (BAR_BLUR, BAR_BLUR)) > BAR_DENSE).astype(np.uint8)
+    if not dense.any():
+        return []
+    dense = cv2.dilate(dense, np.ones((9, 9), np.uint8))
+    n, lab, st, _ = cv2.connectedComponentsWithStats(dense, 8)
+    H, W = soft.shape
+    out = []
+    for i in range(1, n):
+        x, y, w, h, a = (int(v) for v in st[i])
+        px_, py_ = max(6, (BAR_MIN_CROP - w) // 2), max(6, (BAR_MIN_CROP - h) // 2)   # assez de place pour la pyramide
+        x0, y0, x1, y1 = max(0, x - px_), max(0, y - py_), min(W, x + w + px_), min(H, y + h + py_)
+        if min(x1 - x0, y1 - y0) < 24:
+            continue
+        for sc, px, py, s in ring_proposals(np.ascontiguousarray(soft[y0:y1, x0:x1]), _RING_BAR):
+            out.append((sc, px + x0, py + y0, s))
+    return out
+
+
 # ---------- reconnaissance ----------
 def _ncc(a, b):
     a = a - a.mean()
@@ -261,13 +294,28 @@ def _ncc(a, b):
     return float((a * b).sum() / d) if d > 1e-6 else 0.0
 
 
+_BLUR_CACHE = {}
+
+
+def _blurred(src, sig):
+    key = (id(src), round(sig, 2))
+    v = _BLUR_CACHE.get(key)
+    if v is None or v[0] is not src:
+        if len(_BLUR_CACHE) > 4000:
+            _BLUR_CACHE.clear()
+        v = (src, cv2.GaussianBlur(src, (0, 0), sig))
+        _BLUR_CACHE[key] = v
+    return v[1]
+
+
 def _render(src, x0, y0, tw, th, X0, Y0, X1, Y1, blur=0.45):
     """Rend le glyphe src (flou a l'echelle) dans la fenetre [X0:X1, Y0:Y1] de l'image, coin haut-gauche flottant (x0, y0),
     taille flottante (tw, th) : le sous-pixel."""
     h, w = src.shape
     sx, sy = tw / w, th / h
     sig = max(0.0, blur / min(sx, sy))
-    s = cv2.GaussianBlur(src, (0, 0), sig) if sig > 0.3 else src
+    sig = round(sig / 0.05) * 0.05                        # flou quantifie : la source floue se met en cache
+    s = _blurred(src, sig) if sig > 0.3 else src
     mat = np.array([[sx, 0, x0 - X0 + 0.5 * sx - 0.5], [0, sy, y0 - Y0 + 0.5 * sy - 0.5]], np.float32)
     return cv2.warpAffine(s, mat, (X1 - X0, Y1 - Y0), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
 
@@ -358,9 +406,15 @@ def _discriminate(m, tpl, win, box, first, rival, box_rival=None):
     x0, y0, tw, th = box
     t1 = _render(tpl.core[first], x0, y0, tw, th, X0, Y0, X1, Y1)
     t2 = _render(tpl.core[rival], x0, y0, tw, th, X0, Y0, X1, Y1)
-    diff = np.abs(t1 - t2) > 0.30
-    if int(diff.sum()) < 4:
-        return None
+    ad = np.abs(t1 - t2)
+    diff = None
+    for thr in DISC_THRESHOLDS:           # on elargit tant qu'il y a trop peu de pixels pour une correlation qui veuille dire quelque chose
+        d = ad > thr
+        if int(d.sum()) >= DISC_MIN_PIXELS:
+            diff = d
+            break
+    if diff is None:
+        return None                       # rival indiscernable
     obs = m[Y0:Y1, X0:X1]
     pr = _ncc(obs[diff], t2[diff])
     if box_rival is not None:
@@ -390,21 +444,47 @@ def recognize(m, tpl, cx, cy, s, rivals=3):
     s1, ch1, box1, win1 = refined[0]
     full, tile = _refine_full(m, tpl.tile[ch1], _tile_of_core(box1))
     p1, pr = 1.0, -1.0
+    indisc = False
     for s2, ch2, box2, _ in refined[1:]:
         d = _discriminate(m, tpl, win1, box1, ch1, ch2, box2 if FAIR_RIVAL else None)
         if d is None:
+            if s1 - s2 < INDISC_GAP:
+                indisc = True             # un rival proche que rien ne separe : jamais decide au seul score
             continue
         p1, pr = min(p1, d[0]), max(pr, d[1])
     if pr < -0.99:
         p1, pr = (_ncc(m[win1[1]:win1[3], win1[0]:win1[2]], _render(tpl.core[ch1], *box1, *win1)), 0.0)
     second = refined[1][0] if len(refined) > 1 else 0.0
+    full2 = -1.0
+    if len(refined) > 1:                  # le glyphe entier du rival, a son propre alignement
+        full2 = _refine_full(m, tpl.tile[refined[1][1]], _tile_of_core(refined[1][2]))[0]
     return {'car': ch1, 'score': s1, 'second': second, 'depart': p1, 'ecart': p1 - pr, 'core': box1,
-            'full': full, 'tile': tile if tile is not None else _tile_of_core(box1)}
+            'full': full, 'full2': full2, 'indisc': indisc, 'tile': tile if tile is not None else _tile_of_core(box1)}
 
 
-def decide(r, attached=False):
-    """Le caractere rendu, ou '?' : jamais devine. Les seuils durcissent avec la petitesse de la tuile."""
-    if r is None:
+def recognize_twice(m, tpl, cx, cy, s):
+    """recognize, puis a d'autres echelles (celle que la premiere lecture a trouvee, et 0,85 de la proposition) : le cadre
+    propose est approximatif et le departage doit se faire a l'alignement du glyphe, pas a celui de la proposition. On garde,
+    parmi les lectures du meme caractere dont le score est a 0,02 du meilleur, celle dont l'ecart au rival est le plus grand."""
+    r = recognize(m, tpl, cx, cy, s)
+    if r is None or r['score'] < 0.85 or decide(r) != '?':
+        return r                          # rien a ameliorer : douteuse trop basse, ou deja decidee
+    tx, ty, tw, th = r['tile']
+    runs = [r]
+    for s2 in ((tw + th) / 2, 0.85 * s):
+        if abs(s2 - s) >= 0.04 * s:
+            r2 = recognize(m, tpl, tx + tw / 2, ty + th / 2, s2)
+            if r2 is not None:
+                runs.append(r2)
+    best = max(x['score'] for x in runs)
+    same = [x for x in runs if x['car'] == max(runs, key=lambda x: x['score'])['car'] and x['score'] >= best - 0.02]
+    return max(same, key=lambda x: (not x['indisc'], x['ecart']))
+
+
+def decide(r, attached=False, ring_h=0.0):
+    """Le caractere rendu, ou '?' : jamais devine, jamais decide sans departage. Les seuils durcissent avec la petitesse de la
+    tuile ; ring_h : hauteur du cadre propose (pour la tuile voisine d'un panneau d'attente)."""
+    if r is None or r.get('indisc') or round(r['tile'][3]) < MIN_TILE_READ:
         return '?'
     h = r['tile'][3]
     if h >= 20:
@@ -413,11 +493,14 @@ def decide(r, attached=False):
         smin, fmin, dmin, gmin = 0.84, 0.64, 0.45, 0.35
     else:
         smin, fmin, dmin, gmin = 0.88, 0.68, 0.50, 0.40
-    ok = r['score'] >= smin and r['full'] >= fmin and r['depart'] >= dmin and r['ecart'] >= gmin
+    ok = r['score'] >= smin and r['full'] >= fmin + FULL_MARGIN and r['depart'] >= dmin and r['ecart'] >= gmin
     ok = ok and r['score'] - r['second'] >= SECOND_GAP      # deux glyphes a egalite (B/8) : on ne tranche pas
-    if not ok and attached and r['score'] >= NEIGHBOUR_SCORE and r['score'] - r['second'] >= NEIGHBOUR_GAP \
-            and r['full'] >= NEIGHBOUR_FULL and h >= NEIGHBOUR_H:
-        ok = True                         # tuile voisine d'un panneau d'attente : le contexte confirme le cadre, le glyphe domine nettement
+    strong = r['depart'] >= 0.85 and r['ecart'] >= 1.0
+    ok = ok and (strong or r['full'] - r.get('full2', -1.0) >= FULL_GAP)   # sinon le glyphe entier ne doit pas perdre face au rival
+    if not ok and attached and max(h, ring_h) >= NEIGHBOUR_H and r['score'] >= NEIGHBOUR_SCORE \
+            and r['score'] - r['second'] >= NEIGHBOUR_GAP and r['full'] >= NEIGHBOUR_FULL \
+            and r['depart'] >= NEIGHBOUR_DEPART and r['ecart'] > 0:
+        ok = True                         # voisine d'un panneau d'attente : le contexte confirme le cadre, mais le departage reste exige
     return r['car'] if ok else '?'
 
 
@@ -427,7 +510,8 @@ def find_window(bgr):
     Retourne [x, y, w, h] ou None."""
     H, W = bgr.shape[:2]
     probe = min(WINDOW_PROBE, W)
-    m = bgr.min(axis=2) >= 250
+    m = np.zeros(bgr.shape[:2], bool)
+    m[:, W - probe:] = bgr[:, W - probe:].min(axis=2) >= 250      # seule la bande du bord droit est examinee
     zone = m[:, W - probe:]
     runs = np.zeros(zone.shape[1], int)
     start = np.zeros(zone.shape[1], int)
@@ -508,40 +592,130 @@ def _cut_beside_panels(soft, panels, tiles, W):
                 continue
             if any(abs(t['y'] + t['h'] / 2 - (py + ph / 2)) < ph and t['x'] < x1 and t['x'] + t['w'] > x0 for t in tiles):
                 continue
-            out.append({'x': int(x0), 'y': int(py), 'w': int(x1 - x0), 'h': int(ph), 'car': '?', 'score': 0.0, 'depart': 0.0,
-                        'ecart': 0.0, 'attente': True, 'coupee': True})
+            out.append({'x': int(x0), 'y': int(py), 'w': int(x1 - x0), 'h': int(ph), 'car': '?', 'score': 0.0, 'depart': None,
+                        'ecart': None, 'attente': True, 'coupee': True})
     return out
 
 
 # ---------- lecture d'une image ----------
+def _runs(col):
+    """Les plages (debut, fin exclue) de True d'un vecteur booleen."""
+    d = np.diff(np.concatenate([[0], col.astype(np.int8), [0]]))
+    return list(zip(np.where(d == 1)[0], np.where(d == -1)[0]))
+
+
+def _frame_cut_right(yel, row_lo=0, row_hi=None):
+    """Cadres jaunes coupes par le bord droit d'une carte booleenne : les deux barres horizontales du cadre touchent la
+    derniere colonne (meme epaisseur, separees par le noir de la tuile) et la barre verticale gauche les relie. Retourne des
+    boites (x, y, w, h). row_lo, row_hi : plage de rangees admise (bord d'une fenetre)."""
+    H, W = yel.shape
+    out = []
+    if W < 12:
+        return out
+    col = yel[:, W - 2] | yel[:, W - 3]
+    runs = [r for r in _runs(col) if 1 <= r[1] - r[0] <= 14 and r[0] >= row_lo and (row_hi is None or r[1] <= row_hi)]
+    pairs = [(runs[i], runs[j]) for i in range(len(runs)) for j in range(i + 1, min(len(runs), i + 7))]
+    for (a0, a1), (b0, b1) in pairs:   # toutes les paires : un bout de lettre peut s'intercaler entre les deux barres
+        ta, tb, g = a1 - a0, b1 - b0, b0 - a1
+        if abs(ta - tb) > max(1, 0.4 * max(ta, tb)) or g < 6 or g < 2.0 * max(ta, tb) or g > 160:
+            continue
+        y0, y1 = a0, b1
+        side = yel[y0:y1, max(0, W - 130):W - 2]
+        frac = side.mean(axis=0)
+        # la barre verticale gauche : colonne presque entierement jaune, la plus proche du bord
+        cand = [j for j in range(len(frac)) if frac[j] >= 0.75]
+        if not cand:
+            continue
+        xb = max(0, W - 130) + max(cand)
+        if W - xb < 8:
+            continue
+        top = yel[a0:a1, xb:W - 1].mean()
+        bot = yel[b0:b1, xb:W - 1].mean()
+        if top < 0.8 or bot < 0.8:
+            continue
+        out.append((int(xb), int(y0), int(W - xb), int(y1 - y0)))
+    return out
+
+
+def frame_cuts(soft, window=None):
+    """Tuiles coupees par un bord de l'image (ou par la fenetre parasite) : cadre jaune qui sort, vu par ses deux barres. Sans
+    panneau d'attente necessaire. Retourne des boites (x, y, w, h)."""
+    yel = soft > 0.5
+    H, W = yel.shape
+    out = []
+    out += _frame_cut_right(yel)
+    for x, y, w, h in _frame_cut_right(yel[:, ::-1]):
+        out.append((W - x - w, y, w, h))
+    for x, y, w, h in _frame_cut_right(yel.T):
+        out.append((y, x, h, w))
+    for x, y, w, h in _frame_cut_right(yel.T[:, ::-1]):
+        out.append((y, H - x - w, h, w))
+    if window:
+        wx, wy, ww, wh = window
+        for x, y, w, h in _frame_cut_right(yel[:, :wx], wy - 4, wy + wh + 4):
+            out.append((x, y, w, h))
+        for x, y, w, h in _frame_cut_right(yel[:, wx + ww:][:, ::-1], wy - 4, wy + wh + 4):
+            out.append((W - x - w, y, w, h))
+    return out
+
+
+def _touches(box, W, H, window):
+    """La boite (x, y, w, h) touche un bord de l'image ou la fenetre parasite : la tuile est coupee."""
+    x, y, w, h = box
+    if x <= 1 or y <= 1 or x + w >= W - 1 or y + h >= H - 1:
+        return True
+    if window:
+        wx, wy, ww, wh = window
+        if x + w >= wx - 1 and x <= wx + ww + 1 and y + h >= wy - 1 and y <= wy + wh + 1:
+            return True
+    return False
+
+
+def _same_tile(a, b):
+    """Deux boites (x, y, w, h) qui designent la meme tuile : centres proches, tailles voisines."""
+    return (abs((a[0] + a[2] / 2) - (b[0] + b[2] / 2)) < 0.5 * max(a[2], b[2])
+            and abs((a[1] + a[3] / 2) - (b[1] + b[3] / 2)) < 0.5 * max(a[3], b[3]))
+
+
 def read_image(bgr, tpl, timings=None, debug=None):
-    """Lit une image (BGR, n'importe quelle taille). Retourne {'fenetre': [x, y, w, h] | None, 'tuiles': [...]} ; par tuile :
-    x, y, w, h (boite de la tuile entiere dans l'image), car (lettre ou `?`), score, depart, ecart, attente (panneau d'attente
-    accole), coupee (tuile coupee par le bord de l'image : jamais lue)."""
+    """Lit une image (BGR, n'importe quelle taille). Retourne {'fenetre': [x, y, w, h] | None, 'saturee': bool, 'tuiles': [...]} ;
+    par tuile : x, y, w, h (boite de la tuile entiere dans l'image), car (lettre ou `?`), score, depart, ecart (None si aucun
+    pixel ne separe du rival), attente (panneau d'attente accole), coupee (tuile coupee par le bord de l'image ou de la fenetre
+    parasite : signalee, jamais lue). `saturee` : plus de MAX_PROPOSALS cadres candidats, les moins bons (`ecartees`) n'ont pas ete lus."""
     H, W = bgr.shape[:2]
     t0 = time.perf_counter()
     window = find_window(bgr)
     soft, m = yellow_map(bgr)
+    soft0 = soft.copy() if window else soft      # carte avant exclusion de la fenetre : sa bordure fait des tuiles coupees
     if window:
-        soft[:, window[0]:] = 0           # ce qui tombe dans la fenetre parasite est ecarte
+        wx, wy, ww, wh = window
+        soft[wy:wy + wh, wx:wx + ww] = 0  # ce qui tombe dans le rectangle de la fenetre parasite est ecarte, rien d'autre
+        m[wy:wy + wh, wx:wx + ww] = 0
     t1 = time.perf_counter()
-    props = ring_proposals(soft)[:MAX_PROPOSALS]
+    allprops = sorted(ring_proposals(soft) + bar_proposals(soft), reverse=True)
+    big = [p for p in allprops if p[3] >= MIN_TILE]
+    dropped = max(0, len(big) - MAX_PROPOSALS)
+    saturated = dropped > 0
+    props = big[:MAX_PROPOSALS]
     t2 = time.perf_counter()
-    cands = []
+    cands, cuts = [], []
     for score, x, y, s in props:
         if s < MIN_TILE:
             continue
-        r = recognize(m, tpl, x + s / 2, y + s / 2, s)
+        if _touches((x, y, s, s), W, H, window):
+            cuts.append({'x': int(x), 'y': int(y), 'w': int(s), 'h': int(s), 'car': '?', 'score': round(float(score), 3),
+                         'depart': None, 'ecart': None, 'attente': False, 'coupee': True})
+            continue
+        r = recognize_twice(m, tpl, x + s / 2, y + s / 2, s)
         if r is not None:
             r['ring'] = score
+            r['ring_h'] = s
             cands.append(r)
     t3 = time.perf_counter()
     cands.sort(key=lambda r: -(r['full'] + r['score']))
     kept = []
     for r in cands:
-        tx, ty, tw, th = r['tile']
-        if any(abs((tx + tw / 2) - (k['tile'][0] + k['tile'][2] / 2)) < 0.5 * max(tw, k['tile'][2])
-               and abs((ty + th / 2) - (k['tile'][1] + k['tile'][3] / 2)) < 0.5 * max(th, k['tile'][3]) for k in kept):
+        if any(_same_tile(r['tile'], k['tile']) for k in kept):
             continue
         kept.append(r)
     if debug is not None:
@@ -551,20 +725,23 @@ def read_image(bgr, tpl, timings=None, debug=None):
     for r in kept:
         tx, ty, tw, th = r['tile']
         box = [int(round(tx)), int(round(ty)), int(round(tw)), int(round(th))]
+        cut = _touches(box, W, H, window)
         att = _attached(box, panels)
-        car = decide(r, att)
-        cut = box[0] <= 1 or box[1] <= 1 or box[0] + box[2] >= W - 1 or box[1] + box[3] >= H - 1
-        if cut and r['score'] < DOUBT_MIN:
-            continue
-        if car == '?' and r['score'] < DOUBT_MIN:
+        car = '?' if cut else decide(r, att, r.get('ring_h', 0.0))
+        if car == '?' and not cut and r['score'] < DOUBT_MIN:
             continue                      # rien qui ressemble a une lettre : pas de tuile
-        tiles.append({'x': box[0], 'y': box[1], 'w': box[2], 'h': box[3], 'car': '?' if cut else car,
-                      'score': round(r['score'], 3), 'depart': round(r['depart'], 2), 'ecart': round(r['ecart'], 2),
-                      'attente': att, 'coupee': bool(cut)})
-    tiles.extend(_cut_beside_panels(soft, panels, tiles, W))
+        tiles.append({'x': box[0], 'y': box[1], 'w': box[2], 'h': box[3], 'car': car,
+                      'score': round(r['score'], 3), 'depart': None if r.get('indisc') else round(r['depart'], 2),
+                      'ecart': None if r.get('indisc') else round(r['ecart'], 2), 'attente': att, 'coupee': bool(cut)})
+    for bx, by, bw, bh in frame_cuts(soft0, window):
+        cuts.append({'x': int(bx), 'y': int(by), 'w': int(bw), 'h': int(bh), 'car': '?', 'score': 0.0, 'depart': None,
+                     'ecart': None, 'attente': False, 'coupee': True})
+    for c in cuts + _cut_beside_panels(soft, panels, tiles, W):
+        if not any(_same_tile((c['x'], c['y'], c['w'], c['h']), (t['x'], t['y'], t['w'], t['h'])) for t in tiles):
+            tiles.append(c)
     if timings is not None:
         timings.update({'cartes': t1 - t0, 'cadres': t2 - t1, 'lecture': t3 - t2, 'total': time.perf_counter() - t0})
-    return {'fenetre': window, 'tuiles': tiles}
+    return {'fenetre': window, 'saturee': bool(saturated), 'ecartees': int(dropped), 'tuiles': tiles}
 
 
 # ---------- image figee ----------
@@ -580,8 +757,31 @@ def frozen(prev, cur):
 TSV_HEAD = ('base', 'vue', 'x', 'y', 'w', 'h', 'car', 'score', 'depart', 'ecart', 'attente', 'coupee')
 
 
+def _atomic(path, data):
+    """Ecriture binaire et atomique (fichier temporaire, puis remplacement), comme signcapture._write."""
+    path = Path(path)
+    tmp = path.with_name(path.name + '.tmp')
+    tmp.write_bytes(data)
+    tmp.replace(path)
+
+
+def load_index(path):
+    """index.json d'une prise de vues : dict avec une liste `vues`. Sinon ReadError qui nomme le fichier."""
+    path = Path(path)
+    if not path.is_file():
+        raise ReadError(f'index.json introuvable : {path}')
+    try:
+        doc = json.loads(path.read_bytes().decode('utf-8'))
+    except (ValueError, OSError) as e:
+        raise ReadError(f'index.json illisible : {path} ({e})')
+    if not isinstance(doc, dict) or not isinstance(doc.get('vues'), list) or \
+            not all(isinstance(v, dict) and isinstance(v.get('numero'), int) for v in doc['vues']):
+        raise ReadError(f'index.json sans liste de vues : {path}')
+    return doc
+
+
 def read_base(images_dir, index, tpl, base='', log=print):
-    """Lit les vues `faite` ou `instable` d'un index : liste de dicts par vue (numero, image, fenetre, tuiles)."""
+    """Lit les vues `faite` ou `instable` d'un index : liste de dicts par vue (numero, image, fenetre, saturee, tuiles)."""
     views, prev = [], None
     for e in index['vues']:
         if e.get('statut') not in ('faite', 'instable'):
@@ -590,51 +790,62 @@ def read_base(images_dir, index, tpl, base='', log=print):
         path = Path(images_dir) / (e.get('img') or f'img/{n:03d}.png')
         img = cv2.imread(str(path), cv2.IMREAD_COLOR) if path.is_file() else None
         if img is None:
-            views.append({'vue': n, 'image': 'absente', 'fenetre': None, 'tuiles': []})
+            views.append({'vue': n, 'image': 'absente', 'fenetre': None, 'saturee': False, 'tuiles': []})
             log(f'{base} vue {n:03d} : absente')
             continue
         t0 = time.perf_counter()
         if frozen(prev, img):
-            views.append({'vue': n, 'image': 'figee', 'fenetre': None, 'tuiles': []})
+            views.append({'vue': n, 'image': 'figee', 'fenetre': None, 'saturee': False, 'tuiles': []})
             log(f'{base} vue {n:03d} : figee')
         else:
             r = read_image(img, tpl)
-            views.append({'vue': n, 'image': 'lue', 'fenetre': r['fenetre'], 'tuiles': r['tuiles']})
+            views.append({'vue': n, 'image': 'lue', 'fenetre': r['fenetre'], 'saturee': r['saturee'],
+                          'ecartees': r['ecartees'], 'tuiles': r['tuiles']})
             lettres = ''.join(t['car'] for t in r['tuiles'])
             log(f'{base} vue {n:03d} : {len(r["tuiles"])} tuile(s) {lettres}'
-                f'{" fenetre parasite" if r["fenetre"] else ""} ({time.perf_counter() - t0:.2f} s)')
+                f'{" fenetre parasite" if r["fenetre"] else ""}{" propositions saturees" if r["saturee"] else ""}'
+                f' ({time.perf_counter() - t0:.2f} s)')
         prev = img
     return views
 
 
 def write_lecture(out_dir, base, theatre, views):
-    """Ecrit lecture.json et lecture.tsv dans out_dir (rien d'autre)."""
+    """Ecrit lecture.json et lecture.tsv dans out_dir (rien d'autre), en binaire et de facon atomique."""
     out = Path(out_dir)
     doc = {'theatre': theatre, 'base': base,
            'vues': [{'vue': v['vue'], 'image': v['image'], 'fenetre_parasite': bool(v['fenetre']), 'fenetre': v['fenetre'],
-                     'tuiles': v['tuiles']} for v in views]}
-    (out / 'lecture.json').write_text(json.dumps(doc, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
+                     'propositions_saturees': bool(v.get('saturee')),
+                     'propositions_ecartees': int(v.get('ecartees', 0)), 'tuiles': v['tuiles']} for v in views]}
+    _atomic(out / 'lecture.json', (json.dumps(doc, ensure_ascii=False, indent=1) + '\n').encode('utf-8'))
     lines = ['\t'.join(TSV_HEAD)]
     for v in views:
         for t in v['tuiles']:
-            lines.append('\t'.join(str(x) for x in (base, v['vue'], t['x'], t['y'], t['w'], t['h'], t['car'], t['score'],
-                                                     t['depart'], t['ecart'], 'oui' if t['attente'] else 'non',
-                                                     'oui' if t['coupee'] else 'non')))
-    (out / 'lecture.tsv').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+            cells = (base, v['vue'], t['x'], t['y'], t['w'], t['h'], t['car'], t['score'], t['depart'], t['ecart'],
+                     'oui' if t['attente'] else 'non', 'oui' if t['coupee'] else 'non')
+            lines.append('\t'.join('' if c is None else str(c) for c in cells))
+    _atomic(out / 'lecture.tsv', ('\n'.join(lines) + '\n').encode('utf-8'))
 
 
-def cmd_lire(cfg, theatre, bases, panneaux_dir, find_base, log=print):
+def find_base_dir(root, base):
+    """Le dossier <root>/<Base> d'une prise de vues (casse ignoree) : la lecture n'a pas besoin du .rn5."""
+    root = Path(root)
+    if (root / base).is_dir():
+        return root / base
+    if root.is_dir():
+        for q in sorted(root.iterdir()):
+            if q.is_dir() and q.name.lower() == base.lower():
+                return q
+    raise ReadError(f'dossier de prise de vues introuvable : {root / base}')
+
+
+def cmd_lire(cfg, theatre, bases, panneaux_dir, log=print):
     """lire <Theatre> <Base> [...] : lecture des images d'une prise de vues (index.json) ; ecrit lecture.json et lecture.tsv."""
     tpl = load_templates(cfg.dcs_install, theatre)
     for b in bases:
-        name, _ = find_base(cfg, theatre, b)
-        d = panneaux_dir(cfg, theatre) / name
-        ipath = d / 'index.json'
-        if not ipath.is_file():
-            raise ReadError(f'index.json introuvable : {ipath}')
-        index = json.loads(ipath.read_text(encoding='utf-8'))
+        d = find_base_dir(panneaux_dir(cfg, theatre), b)
+        index = load_index(d / 'index.json')
         t0 = time.perf_counter()
-        views = read_base(d, index, tpl, name, log)
-        write_lecture(d, name, theatre, views)
+        views = read_base(d, index, tpl, d.name, log)
+        write_lecture(d, d.name, theatre, views)
         nt = sum(len(v['tuiles']) for v in views)
-        log(f'lire {theatre}/{name} : {len(views)} vue(s), {nt} tuile(s) en {time.perf_counter() - t0:.1f} s')
+        log(f'lire {theatre}/{d.name} : {len(views)} vue(s), {nt} tuile(s) en {time.perf_counter() - t0:.1f} s')
