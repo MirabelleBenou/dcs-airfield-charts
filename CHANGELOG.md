@@ -7,6 +7,12 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Unreleased
 
+**A page showing the airfield in its surroundings.**
+
+- New page `10-8`, placed before the `10-9`, for every airfield with a wider F10 capture (`capture/f10capture.py capture --marge`): the F10 map around the airfield, lightened, with the runways, their headings, the radio beacons and the taxiway names, without parking. Towns less than 20 km from the airfield are marked at the edge of the frame with their distance, or by name when they are inside it.
+- On every page drawn over the F10 map, text has a white halo.
+- The charts of Cold War Germany get their `10-8` at the next release.
+
 **Unattended night captures (Windows).**
 
 - New tool `capture/autonome/nuit.py`: a queue of captures written in advance (F10 captures for the charts, wider F10 context captures, taxiway sign views) runs with nobody at the PC once the mission is flying, within a time budget. The new GUI hook `capture/hook/ChartsAutonome-hook.lua` switches between the F10 map and the free camera, starts the queue and closes DCS at the end.
