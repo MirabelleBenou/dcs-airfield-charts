@@ -24,6 +24,8 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
      entre dans le recueil de la chart, apres les pages 10-9* (ordre naturel des suffixes). `--ajouter <dossier>` ajoute au zip les
      pages 11-x d'un dossier (la sortie, a plat, de `build_chart.py --approches-seulement` ; les autres fichiers du dossier sont ignores et
      comptes au resume) : voir `find_added_pages`.
+  7. la page des abords `<stem>_10-8` (lot ac-variante-contexte) : acceptee et recopiee telle quelle (SVG, PNG et PDF a l'octet, aucune
+     retouche, aucune reexportation) ; son PDF ouvre le recueil de la chart (ordre naturel des suffixes : 10-8, 10-9, 10-9A..., 11-x).
 Chaque page 10-9* est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
 recueil `pdf/<stem>_charts.pdf` de chaque chart est refait. Sortie : un nouveau zip, memes entrees dans le meme ordre ; les
 entrees hors charts sont recopiees a l'octet, sauf, pour 5, les JPEG des pages touchees et le PDF du repertoire (un zip sans page de
@@ -54,8 +56,9 @@ from render.svgdoc import INK, INK2, f                                # noqa: E4
 from render.update_coords import ROW_Y, UpdateError, _PAGE_NAME, _PAGE_SVG, _TEXT, _Y   # noqa: E402
 
 RepublishError = UpdateError
-_PAGE_NAME_ANY = re.compile(r'^(?P<stem>.+)_(?P<suffix>10-9[A-Z]*|11-\d+)$')       # lot ac-approche-ils : `update_coords._PAGE_NAME` + les pages 11-x
+_PAGE_NAME_ANY = re.compile(r'^(?P<stem>.+)_(?P<suffix>10-8|10-9[A-Z]*|11-\d+)$')       # `update_coords._PAGE_NAME` + les pages 11-x (lot ac-approche-ils) + la page 10-8 (lot ac-variante-contexte)
 _APPROACH = re.compile(r'^11-\d+$')
+_VICINITY = re.compile(r'^10-8$')                                                  # lot ac-variante-contexte : page des abords, recopiee telle quelle
 BAR_WIDTH = '0.35'
 _LINE = re.compile(r'<line\b([^>]*?)/>')
 _ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
@@ -877,6 +880,7 @@ class Result:
     north: dict = field(default_factory=dict)         # {page: details de retouch_north_and_caps} : pages 10-9
     directory: DirectoryResult = field(default_factory=lambda: DirectoryResult())   # repertoire des heliports (zip *helicopters*)
     approach: list = field(default_factory=list)     # noms des pages 11-x du zip, recopiees telles quelles
+    vicinity: list = field(default_factory=list)     # noms des pages 10-8 du zip, recopiees telles quelles (lot ac-variante-contexte)
     added: dict = field(default_factory=dict)        # {stem: [pages 11-x ajoutees]} (`--ajouter`)
     ignored: list = field(default_factory=list)      # noms des fichiers du dossier `--ajouter` qui ne sont pas des pages 11-x
 
@@ -930,11 +934,11 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
             pages.append((m['dir'], m['page'], pm['stem'], pm['suffix']))
         new = {}                                   # nom d'entree -> fichier temporaire
         for n, (d, name, _, suffix) in enumerate(pages):
-            if _APPROACH.match(suffix):                  # page d'approche : recopiee telle quelle
+            if _APPROACH.match(suffix) or _VICINITY.match(suffix):      # page d'approche 11-x ou page 10-8 des abords : recopiee telle quelle
                 for sub, ext in (('png', 'png'), ('pdf', 'pdf')):
                     if f'{d}{sub}/{name}.{ext}' not in names:
                         raise RepublishError(f'{name} : entree {d}{sub}/{name}.{ext} absente du zip')
-                res.approach.append(name)
+                (res.vicinity if _VICINITY.match(suffix) else res.approach).append(name)
                 continue
             svg_old = zin.read(f'{d}svg/{name}.svg').decode('utf-8')
             svg_new, det = retouch_page(svg_old, name, suffix, index)
@@ -959,7 +963,7 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
             if det['north']:
                 res.north[name] = det['north']
             res.unplaced.extend((name, u) for u in det['unplaced'])
-        res.pages = len(pages) - len(res.approach)
+        res.pages = len(pages) - len(res.approach) - len(res.vicinity)
         charts = {}
         for n, (d, name, stem, suffix) in enumerate(pages):
             charts.setdefault((d, stem), []).append((suffix, n))
@@ -991,7 +995,7 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
             for _, n in members:
                 if isinstance(n, str):                 # page ajoutee : son PDF du dossier
                     sources.append(added[n]['pdf'])
-                elif _APPROACH.match(pages[n][3]):     # page 11-x du zip : son PDF, tel quel
+                elif _APPROACH.match(pages[n][3]) or _VICINITY.match(pages[n][3]):     # page 11-x ou 10-8 du zip : son PDF, tel quel
                     pdf_p = tmp / f'approach{n}.pdf'
                     pdf_p.write_bytes(zin.read(f'{d}pdf/{pages[n][1]}.pdf'))
                     sources.append(pdf_p)
@@ -1080,6 +1084,8 @@ def main(argv):
     print(f"graduations glissees : {len(slid)} ; retirees : {len(grads) - len(slid)} (sur {len({m[0] for m in grads})} pages)")
     print(f"pages a fond F10 : {len(res.f10)}" + ''.join(f'\n  {n}' for n in res.f10))
     print(f'recueils refaits : {res.charts}')
+    if res.vicinity:
+        print(f"pages 10-8 (abords) : {len(res.vicinity)} recopiees telles quelles, en tete du recueil")
     if res.approach or res.added or res.ignored:
         print(f"pages d'approche 11-x : {len(res.approach)} recopiees telles quelles ; {sum(len(v) for v in res.added.values())} ajoutees")
         for stem, names in res.added.items():
@@ -1095,7 +1101,7 @@ def main(argv):
     else:
         print('repertoire des heliports : aucun dans ce zip')
     print(f'entrees recopiees telles quelles : {res.copied}')
-    if not res.pages and not res.approach:
+    if not res.pages and not res.approach and not res.vicinity:
         print('aucune page de chart dans ce zip : toutes les entrees sont recopiees telles quelles')
     return 0
 

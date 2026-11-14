@@ -1,8 +1,10 @@
-"""Rendu d'un chart d'aerodrome A5 (10-9, pages de parkings et pages d'approche 11-x) a partir d'une base capturee.
+"""Rendu d'un chart d'aerodrome A5 (10-8 des abords, 10-9, pages de parkings et pages d'approche 11-x) a partir d'une base capturee.
 
 Usage : python -I render/build_chart.py <Theatre> <Base> [--annee 1985] [--icao LTAN] [--osm <fichier>]
                                          [--out <dossier>] [--config <chemin>] [--approches-seulement]
-`--approches-seulement` n'ecrit que les pages d'approche 11-x (ni 10-9, ni recueil).
+`--approches-seulement` n'ecrit que les pages d'approche 11-x (ni 10-8, ni 10-9, ni recueil).
+La page 10-8 « VICINITY » (premiere page du recueil) est ecrite si la base a sa capture elargie
+(`<work_dir>/out/<theatre>/contexte/<Base>/` : base.json et mosaic.png).
 """
 import argparse
 import sys
@@ -12,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))      # python -I
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'capture'))
 
 import config as capture_config                                       # noqa: E402
-from render import analysis, approach, compose, export                           # noqa: E402
+from render import analysis, approach, compose, export, vicinity                 # noqa: E402
 
 
 def parse_args(argv):
@@ -23,7 +25,7 @@ def parse_args(argv):
     ap.add_argument('--icao')
     ap.add_argument('--osm', help='fichier OSM (defaut : <osm_dir>/<theatre>/<Base>.json)')
     ap.add_argument('--out', help='dossier de sortie (defaut : <work_dir>/charts)')
-    ap.add_argument('--approches-seulement', action='store_true', help="n'ecrit que les pages d'approche 11-x (ni 10-9, ni recueil)")
+    ap.add_argument('--approches-seulement', action='store_true', help="n'ecrit que les pages d'approche 11-x (ni 10-8, ni 10-9, ni recueil)")
     return ap.parse_args(argv)
 
 
@@ -35,6 +37,10 @@ def main(argv):
     out_root = Path(args.out) if args.out else Path(cfg.work_dir) / 'charts'
     data = analysis.analyze(cfg, args.theatre, args.base, year, args.icao, args.osm, osm_dir, log=print)
     pages = approach.build_approach_pages(data, log=print) if args.approches_seulement else compose.build_pages(data, log=print)
+    if not args.approches_seulement:                      # lot ac-variante-contexte : la 10-8 des abords, en tete, si la capture elargie existe
+        ctx = vicinity.context_folder(cfg, args.theatre, args.base)
+        if ctx is not None:
+            pages.insert(0, vicinity.build_vicinity_page(data, pages[0].info['frame'], ctx, log=print))
     folder = out_root / args.theatre.lower()
     stem = f'{data.icao}_{args.base}'
     pdfs = []

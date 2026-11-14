@@ -9,7 +9,7 @@ PAVE, BUILD, BAND, TAXI = '#CCCCCC', '#4D4D4D', '#F2F2F2', '#FFCC00'
 NS_INKSCAPE = 'http://www.inkscape.org/namespaces/inkscape'
 
 LAYERS = ['Background', 'F10 map', 'Pavement', 'Runways', 'Runway markings', 'Buildings', 'Navaids', 'Parking', 'Parking numbers',
-          'Runway bearings', 'Taxiway labels', 'Insets', 'Frame & grid', 'Header', 'Runway table', 'Footer']
+          'Runway bearings', 'Taxiway labels', 'Towns', 'Insets', 'Frame & grid', 'Header', 'Runway table', 'Footer']
 CLIPPED = set(LAYERS[1:11])          # `F10 map` (lot heliports-fond, 4.3) et les calques Pavement a Taxiway labels : decoupes au cadre du plan
 
 
@@ -36,6 +36,24 @@ def text(x, y, s, size, weight='regular', fill=INK, anchor='start', spacing=0.0,
         elif anchor == 'end':
             x += spacing
     return f'<text x="{f(x)}" y="{f(y)}" {attrs}{(" " + extra) if extra else ""}>{escape(s)}</text>'
+
+
+HALO_ATTRS = 'stroke="#FFFFFF" stroke-width="0.7" stroke-linejoin="round" class="halo"'
+_TEXT_ELEM = re.compile(r'<text\b[^>]*>.*?</text>', re.S)
+
+
+def _halo_text(t):
+    """Copie d'un element <text> en halo : remplissage et trait blancs de 0,7 mm, jonctions rondes (pas de `paint-order`, que
+    CairoSVG ignore)."""
+    head, sep, tail = t.partition('>')
+    head = re.sub(r'\bfill="[^"]*"', 'fill="#FFFFFF"', head, count=1)
+    return f'{head} {HALO_ATTRS}{sep}{tail}'
+
+
+def with_halo(s):
+    """Le texte `s` (un <text>, ou un <g transform> qui contient un <text>, comme un cap de piste) precede de son halo blanc : le
+    halo est une copie du texte juste avant lui (dans le meme <g> pour un cap)."""
+    return _TEXT_ELEM.sub(lambda m: _halo_text(m.group(0)) + m.group(0), s)
 
 
 def rect(x, y, w, h, fill='none', stroke=None, sw=0.25, extra=''):

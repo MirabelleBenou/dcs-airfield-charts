@@ -28,7 +28,7 @@ ROW_Y = '21.2'
 _TEXT = re.compile(r'<text\b([^>]*)>(.*?)</text>', re.S)
 _Y = re.compile(r'\sy="([^"]*)"')
 _PAGE_SVG = re.compile(r'^(?P<dir>(?:.*/)?)svg/(?P<page>[^/]+)\.svg$')
-_PAGE_NAME = re.compile(r'^(?P<stem>.+)_(?P<suffix>10-9[A-Z]*)$')
+_PAGE_NAME = re.compile(r'^(?P<stem>.+)_(?P<suffix>10-8|10-9[A-Z]*)$')          # lot ac-variante-contexte : la page 10-8 des abords a le meme en-tete
 
 
 class UpdateError(Exception):

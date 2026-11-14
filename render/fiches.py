@@ -92,7 +92,7 @@ def nearest_airfield(lat, lon, airfields):
     return name, d0
 
 
-_CHART_PNG = re.compile(r'^(?P<stem>.+)_(?P<suffix>10-9[A-Z]*|11-\d+)\.png$')      # 10-9* puis, lot ac-approche-ils, les pages d'approche 11-x
+_CHART_PNG = re.compile(r'^(?P<stem>.+)_(?P<suffix>10-8|10-9[A-Z]*|11-\d+)\.png$')      # 10-8 (lot ac-variante-contexte), 10-9* puis, lot ac-approche-ils, les pages d'approche 11-x
 
 
 def page_suffix_key(suffix):
@@ -101,7 +101,7 @@ def page_suffix_key(suffix):
 
 def chart_pages(zips):
     """Pages de charts des zips : {stem: [(suffixe, (zip, chemin dans le zip))]} dans l'ordre naturel des suffixes.
-    Un PNG de `png/` qui n'a pas le nom `<stem>_10-9[A-Z]*.png` ni `<stem>_11-<n>.png` ou qui est dans deux zips : FichesError."""
+    Un PNG de `png/` qui n'a pas le nom `<stem>_10-8.png`, `<stem>_10-9[A-Z]*.png` ni `<stem>_11-<n>.png` ou qui est dans deux zips : FichesError."""
     charts, seen = {}, {}
     for zpath in zips:
         with zipfile.ZipFile(zpath) as z:

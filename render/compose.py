@@ -15,7 +15,7 @@ from .page import (BEARING_SIZE, CapEnd, GradLabel, GRAD_SIZE, grad_blockers, FO
                    footer, header, legend, north_block, number_elems, rot_box, rw_axes, runway_table, runway_polygon, scale_block, scale_plan,
                    elem_geom, elems_geom, grad_element, navaid_groups, navaid_label_elems, place_caps, place_graduations, place_navaid_labels,
                    cap_element)
-from .svgdoc import BAND, INK, INK2, TAXI, Doc, circle, f, line, rect, slug, text
+from .svgdoc import BAND, INK, INK2, TAXI, Doc, circle, f, line, rect, slug, text, with_halo
 
 NORTH_WH = (16.0, 20.0)
 SCALE_H = 10.0
@@ -151,9 +151,10 @@ def graticule_specs(view, frame, proj):
     return out
 
 
-def graticule(doc, view, frame, proj, obstacles=None, specs=None):
+def graticule(doc, view, frame, proj, obstacles=None, specs=None, halo=False):
     """Traits et libelles des graduations ; les libelles passent par `page.place_graduations` (cadrage 2.3). Retourne la liste
-    des resultats (un par libelle) pour le resume du moteur."""
+    des resultats (un par libelle) pour le resume du moteur. `halo` (lot ac-variante-contexte, 2.5) : chaque libelle est precede de
+    son halo blanc (plan sur le fond F10)."""
     L = 'Frame & grid'
     specs = specs if specs is not None else graticule_specs(view, frame, proj)
     res = place_graduations([lab for _, lab in specs if lab], frame, obstacles or {})
@@ -163,7 +164,7 @@ def graticule(doc, view, frame, proj, obstacles=None, specs=None):
         if lab:
             x, y, reason = next(it)
             if x is not None:
-                doc.add(L, grad_element(lab, x, y))
+                doc.add(L, with_halo(grad_element(lab, x, y)) if halo else grad_element(lab, x, y))
     return res
 
 
@@ -209,10 +210,11 @@ def navaid_geoms(shown, groups, label_elems):
     return syms + [elems_geom(e) for e in label_elems]
 
 
-def navaids(doc, view, frame, data, runways=(), caps=()):
+def navaids(doc, view, frame, data, runways=(), caps=(), halo=False):
     """Symboles et libelles des balises du plan ; les libelles passent par `page.place_navaid_labels` (cadrage 2.2) : a droite
     du symbole, ou a gauche, dessous, dessus s'ils touchent une piste (`runways`) ou un cap (`caps`, geometries shapely).
-    Retourne (geometries des symboles et des libelles, [(groupe, position, libre)])."""
+    Retourne (geometries des symboles et des libelles, [(groupe, position, libre)]). `halo` (lot ac-variante-contexte, 2.5) : chaque
+    ligne de libelle est precedee de son halo blanc (plan sur le fond F10)."""
     L = 'Navaids'
     shown, groups = navaid_plan(view, frame, data)
     placed = place_navaid_labels([(g['lines'], g['xs'], g['ys']) for g in groups], frame, runways, caps)
@@ -222,7 +224,7 @@ def navaids(doc, view, frame, data, runways=(), caps=()):
             doc.add(L, e)
         if i in first:
             for e in placed[first[i]][1]:
-                doc.add(L, e)
+                doc.add(L, with_halo(e) if halo else e)
     return navaid_geoms(shown, groups, [p[1] for p in placed]), [(g, p[0], p[2]) for g, p in zip(groups, placed)]
 
 
@@ -267,6 +269,40 @@ def draw_inset(doc, box, data, parkings_all, clip_prefix='clip-inset'):
     out.append('</g>')
     doc.add('Insets', '\n'.join(out))
     return len(members)
+
+
+def taxiway_labels(doc, data, view, frame, corners, extra_forbidden, park_xy, log):
+    """Etiquettes de taxiways (jeu ou OSM) du plan : une etiquette jaune par nom, posee sur la plus longue ligne de ce nom, hors des
+    coins (`corners` : les rectangles du nord et de l'echelle, agrandis de 1,5 mm), des geometries `extra_forbidden` (encarts, caps)
+    et des pistes prolongees. Ecrit le calque `Taxiway labels`, journalise comme le moteur. Partagee par la 10-9 et la 10-8
+    (lot ac-variante-contexte). Retourne ({nom: (cx, cy)}, [rectangles SVG])."""
+    fx, fy, fw, fh = frame
+    placed = {}
+    taxi_rects = []
+    if data.osm_ways:
+        size = pt(6.0)
+        ways = []
+        for w in data.osm_ways:
+            ways.append((w['ref'], view.pts(w['pts_xz']), w['length']))
+        forbidden = [(r[0] - 1.5, r[1] - 1.5, r[2] + 1.5, r[3] + 1.5) for r in corners] + list(extra_forbidden)
+        for rw in data.runways:
+            u, n, L = rw_axes(rw)
+            P0, P1 = np.array(rw.p0) - u * RW_EXT_M, np.array(rw.p1) + u * RW_EXT_M
+            h = rw.width / 2 + RW_EXT_W / 2
+            forbidden.append(Polygon([view.pt(*q) for q in (P0 + n * h, P1 + n * h, P1 - n * h, P0 - n * h)]))
+        bounds = (fx + 0.5, fy + 0.5, fx + fw - 0.5, fy + fh - 0.5)
+        placed = layout.place_labels(ways, lambda nm: (text_width(nm, 'bold', size) + LABEL_PAD, LABEL_H), forbidden,
+                                     park_xy, 0.6, bounds)
+        for nm, (cx, cy) in placed.items():
+            w = text_width(nm, 'bold', size) + LABEL_PAD
+            taxi_rects.append(rect(cx - w / 2, cy - LABEL_H / 2, w, LABEL_H, TAXI, INK, 0.2))
+            doc.add('Taxiway labels', taxi_rects[-1])
+            doc.add('Taxiway labels', text(cx, cy + size * CAP_HEIGHT / 2, nm, size, 'bold', INK, 'middle'))
+        log(f'taxiways OSM gardes : {data.osm_kept}')
+        log(f'etiquettes placees : {len(placed)}/{len(data.osm_kept)}')
+    else:
+        log('taxiways OSM gardes : []')
+    return placed, taxi_rects
 
 
 def build_pages(data, log=print):
@@ -376,10 +412,11 @@ def build_pages(data, log=print):
                       grad_blockers([lab for _, lab in grad_specs if lab]))      # les taxiways, posees apres, evitent les caps
     bear_boxes = []
     for e, ce, (cx, cy, rot, poly, moved) in zip(data.ends, cap_ends, caps):
-        doc.add('Runway bearings', cap_element(ce.label, cx, cy, rot, BEARING_SIZE))
+        cap_svg = cap_element(ce.label, cx, cy, rot, BEARING_SIZE)
+        doc.add('Runway bearings', with_halo(cap_svg) if data.on_f10 else cap_svg)
         bear_boxes.append((e.name, rot_box(cx, cy, text_width(ce.label, 'bold', BEARING_SIZE), BEARING_SIZE * CAP_HEIGHT, rot)))
     cap_polys = [c[3] for c in caps]
-    nav_geoms, nav_info = navaids(doc, view, frame, data, runway_geoms, cap_polys)
+    nav_geoms, nav_info = navaids(doc, view, frame, data, runway_geoms, cap_polys, halo=data.on_f10)
 
     # ---- encarts sur le plan
     inset_rects = []
@@ -393,31 +430,7 @@ def build_pages(data, log=print):
             doc.add('Insets', text(X, Y + pt(6.5) * CAP_HEIGHT / 2, z.label, pt(6.5), 'bold', INK, 'middle'))
 
     # ---- etiquettes de taxiways
-    placed = {}
-    taxi_rects = []
-    if data.osm_ways:
-        size = pt(6.0)
-        ways = []
-        for w in data.osm_ways:
-            ways.append((w['ref'], view.pts(w['pts_xz']), w['length']))
-        forbidden = [(r[0] - 1.5, r[1] - 1.5, r[2] + 1.5, r[3] + 1.5) for r in (rn, rs)] + inset_rects + cap_polys
-        for rw in data.runways:
-            u, n, L = rw_axes(rw)
-            P0, P1 = np.array(rw.p0) - u * RW_EXT_M, np.array(rw.p1) + u * RW_EXT_M
-            h = rw.width / 2 + RW_EXT_W / 2
-            forbidden.append(Polygon([view.pt(*q) for q in (P0 + n * h, P1 + n * h, P1 - n * h, P0 - n * h)]))
-        bounds = (fx + 0.5, fy + 0.5, fx + fw - 0.5, fy + fh - 0.5)
-        placed = layout.place_labels(ways, lambda nm: (text_width(nm, 'bold', size) + LABEL_PAD, LABEL_H), forbidden,
-                                     park_xy, 0.6, bounds)
-        for nm, (cx, cy) in placed.items():
-            w = text_width(nm, 'bold', size) + LABEL_PAD
-            taxi_rects.append(rect(cx - w / 2, cy - LABEL_H / 2, w, LABEL_H, TAXI, INK, 0.2))
-            doc.add('Taxiway labels', taxi_rects[-1])
-            doc.add('Taxiway labels', text(cx, cy + size * CAP_HEIGHT / 2, nm, size, 'bold', INK, 'middle'))
-        log(f'taxiways OSM gardes : {data.osm_kept}')
-        log(f'etiquettes placees : {len(placed)}/{len(data.osm_kept)}')
-    else:
-        log('taxiways OSM gardes : []')
+    placed, taxi_rects = taxiway_labels(doc, data, view, frame, (rn, rs), inset_rects + cap_polys, park_xy, log)
 
     # ---- cadre, grille, nord, echelle
     nx0 = (rn[0] + rn[2]) / 2
@@ -426,7 +439,7 @@ def build_pages(data, log=print):
     doc.add('Frame & grid', rect(fx, fy, fw, fh, 'none', INK, 0.35))
     grad_res = graticule(doc, view, frame, data.projection,
                          {'encart': inset_covers, 'nord': [elems_geom(north_elems)], 'echelle': [elems_geom(sb)], 'cap': cap_polys,
-                          'balise': nav_geoms, 'taxi': [elem_geom(r) for r in taxi_rects]}, grad_specs)
+                          'balise': nav_geoms, 'taxi': [elem_geom(r) for r in taxi_rects]}, grad_specs, halo=data.on_f10)
     if data.on_f10:                                  # lot heliports-fond (4.5) : un rectangle blanc sous chacun des deux blocs
         doc.add('Frame & grid', rect(rn[0] - 1, rn[1] - 1, rn[2] - rn[0] + 2, rn[3] - rn[1] + 2, '#FFFFFF',
                                      extra='rx="1" fill-opacity="0.85"'))
