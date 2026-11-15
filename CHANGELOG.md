@@ -7,6 +7,10 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Unreleased
 
+**Terrain survey during unattended nights.**
+
+- New queue step `relief` for `capture/autonome/nuit.py`: the hook reads the ground elevation (and optionally the surface type) of DCS on a square grid and writes it to a CSV file, with the reading speed. The published charts do not change.
+
 **Finished branches are deleted by a workflow.**
 
 - New workflow `.github/workflows/menage-branches.yml` with `tools/menage_branches.py`: once a day, a branch whose last commit is at least 7 days old is deleted if it is finished — its whole content is already in `main`, its release tag exists, or it is a release trial. Every other branch is kept, and every decision is listed on the run page. Run by hand, the workflow only lists its decisions. The published charts do not change.

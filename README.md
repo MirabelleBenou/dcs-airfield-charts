@@ -107,6 +107,8 @@ The file is looked up in this order: the `--config <path>` command-line option, 
 2. Write the queue and arm the hook: `<work_dir>\autonome\file.lua` returns a table with `arme_le` (os.time()), `budget_s`, `attente_s`, `eteindre_au_budget` and `lancer`, the command that starts `nuit.py jouer <nuit.json>` (it must begin with `start`). An armed file older than 12 hours is ignored; `return false` keeps the hook silent.
 3. Start a mission and fly. The hook starts the queue, switches between the F10 map and the free camera when asked, and closes DCS at the end of the queue or of its time budget.
 
+**Terrain survey (work in progress).** A queue step of type `relief` asks the hook itself to read the ground elevation on a square grid around a point (`zones`: `nom`, `lat`, `lon`, `cote_m`; `pas_m`, the grid step in metres). With `"methode": "export"` (default) the hook calls `LoGetAltitude`; with `"methode": "mission"` it reads batches of points in the mission environment (`land.getHeight`, and `land.getSurfaceType` with `"surface": true`). Each survey writes `<work_dir>/out/relief/<theatre>/<nom>_<pas>m_<methode>.csv` (DCS `x`, `z` and elevation, in metres) and a `.json` with its speed. `budget_image_ms` (default 40) is the time spent reading points in each frame.
+
 The files written during the night are packed into zip files with a `bilan.json` report, under `<work_dir>\autonome\nuits\`. When the queue names a GitHub repository and a token file, they are also uploaded as the assets of a release of that repository, replaced every night. The PC can then shut down.
 
 ## Rendering charts
