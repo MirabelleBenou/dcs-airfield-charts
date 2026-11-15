@@ -9,7 +9,7 @@ What changed in the published charts, version by version. Each version is a GitH
 
 **Releases are published by a workflow.**
 
-- New workflow `.github/workflows/release.yml` with `tools/release.py`: pushing a branch `release/AC-V<x.y.z>` with the release text, the zips and a manifest creates the release and its tag, with the zips attached. The published charts do not change.
+- New workflow `.github/workflows/release.yml` with `tools/release.py`: pushing a branch `release/AC-V<x.y.z>` with the release text, the zips and a manifest creates the release and its tag, with the zips attached. A zip larger than a git push allows is pushed in numbered parts and joined by the workflow. The published charts do not change.
 
 **Charts in English.**
 

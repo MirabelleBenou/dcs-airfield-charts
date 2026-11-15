@@ -356,3 +356,135 @@ def test_workflow():
     assert usages == ['actions/checkout@v4']
     assert all(j['runs-on'] == 'ubuntu-latest' and 'permissions' not in j for j in w['jobs'].values())
     assert any('tools/release.py' in s.get('run', '') for j in w['jobs'].values() for s in j['steps'])
+
+
+# ------------------------------------------------------------------ zips en morceaux
+
+GROS = b'PK\x03\x04' + bytes(range(256)) * 40 + b'tail'
+NOM_GROS = 'DCS_Airfield_Charts_Germany.zip'
+
+
+def _en_morceaux(data, n=3):
+    t = -(-len(data) // n)
+    return [data[i:i + t] for i in range(0, len(data), t)]
+
+
+def monte_morceaux(tmp_path, monkeypatch, parts=None, entier=None, sha=None, extra=None, **kw):
+    """Depot avec le zip NOM_GROS en morceaux ; le manifeste decrit le fichier entier."""
+    rt = tmp_path / 'runner_temp'
+    rt.mkdir()
+    monkeypatch.setenv('RUNNER_TEMP', str(rt))
+    deps, api, origin, c, br = monte(tmp_path / 'r', assets={'DCS_Airfield_Charts_Caucasus.zip': ZIP}, **kw)
+    # on ajoute les morceaux au depot de l'action, puis on met a jour le manifeste (sur la branche, localement)
+    rel = deps.root / '.release'
+    man = json.loads((rel / 'manifest.json').read_text(encoding='utf-8'))
+    man['assets'].append({'name': NOM_GROS, 'size': len(GROS), 'sha256': sha or hashlib.sha256(GROS).hexdigest()})
+    (rel / 'manifest.json').write_text(json.dumps(man), encoding='utf-8')
+    morceaux = _en_morceaux(GROS) if parts is None else parts
+    for i, d in enumerate(morceaux, 1):
+        (rel / 'assets' / f'{NOM_GROS}.part{i:03d}').write_bytes(d)
+    if entier:
+        (rel / 'assets' / NOM_GROS).write_bytes(GROS)
+    for nom in (extra or []):
+        (rel / 'assets' / nom).write_bytes(b'x')
+    return deps, api, origin, br, rt
+
+
+class FakeApiCapture(FakeApi):
+    def __init__(self):
+        super().__init__()
+        self.recus = {}
+
+    def request(self, methode, chemin, corps=None, fichier=None):
+        if methode == 'POST' and chemin.startswith('https://uploads.github.com/'):
+            self.recus[chemin.split('name=')[1]] = Path(fichier).read_bytes()
+        return super().request(methode, chemin, corps=corps, fichier=fichier)
+
+
+def test_publication_en_trois_morceaux(tmp_path, monkeypatch):
+    deps, api, origin, br, rt = monte_morceaux(tmp_path, monkeypatch)
+    deps.api = FakeApiCapture()
+    api = deps.api
+    assert len(_en_morceaux(GROS)) == 3
+    assert release.run(deps, br) == 0
+    assert api.recus[NOM_GROS] == GROS and api.recus['DCS_Airfield_Charts_Caucasus.zip'] == ZIP
+    assert not any(NOM_GROS + '.part' in n for n in api.recus)
+    assert api.assets[101] and sorted(a['name'] for a in api.assets[101]) == sorted([NOM_GROS, 'DCS_Airfield_Charts_Caucasus.zip'])
+    assert api.releases[101]['draft'] is False
+    assert list(rt.iterdir()) == []
+
+
+def _echec(tmp_path, monkeypatch, attendu, **kw):
+    deps, api, origin, br, rt = monte_morceaux(tmp_path, monkeypatch, **kw)
+    assert release.run(deps, br) == 1
+    assert api.writes == []
+    f = deps.root / '.release' / 'FAILED.md'
+    texte = f.read_text(encoding='utf-8')
+    assert 'Control or step: 5' in texte and attendu in texte
+    assert list(rt.iterdir()) == []
+    return texte
+
+
+def test_morceaux_avec_un_trou(tmp_path, monkeypatch):
+    deps, api, origin, br, rt = monte_morceaux(tmp_path, monkeypatch)
+    (deps.root / '.release' / 'assets' / f'{NOM_GROS}.part002').rename(deps.root / '.release' / 'assets' / f'{NOM_GROS}.part004')
+    assert release.run(deps, br) == 1
+    t = (deps.root / '.release' / 'FAILED.md').read_text(encoding='utf-8')
+    assert NOM_GROS in t and 'continuous' in t and api.writes == []
+    assert list(rt.iterdir()) == []
+
+
+def test_morceaux_part001_part003(tmp_path, monkeypatch):
+    deps, api, origin, br, rt = monte_morceaux(tmp_path, monkeypatch, parts=[GROS[:100], GROS[100:]])
+    a = deps.root / '.release' / 'assets'
+    (a / f'{NOM_GROS}.part002').rename(a / f'{NOM_GROS}.part003')
+    assert release.run(deps, br) == 1
+    assert f'{NOM_GROS}.part003' in (deps.root / '.release' / 'FAILED.md').read_text(encoding='utf-8')
+    assert api.writes == []
+
+
+def test_morceaux_et_entier_ensemble(tmp_path, monkeypatch):
+    _echec(tmp_path, monkeypatch, f'asset {NOM_GROS} is present both whole and in parts', entier=True)
+
+
+def test_morceau_de_trop_sans_nom(tmp_path, monkeypatch):
+    _echec(tmp_path, monkeypatch, 'DCS_Airfield_Charts_Autre.zip.part001', extra=['DCS_Airfield_Charts_Autre.zip.part001'])
+
+
+def test_sha_faux_apres_jonction(tmp_path, monkeypatch):
+    _echec(tmp_path, monkeypatch, f'asset {NOM_GROS}: SHA-256 differs', sha='0' * 64)
+
+
+def test_taille_fausse_apres_jonction(tmp_path, monkeypatch):
+    _echec(tmp_path, monkeypatch, f'asset {NOM_GROS}: size', parts=_en_morceaux(GROS[:-1]))
+
+
+def test_essai_avec_morceaux(tmp_path, monkeypatch):
+    deps, api, origin, br, rt = monte_morceaux(tmp_path, monkeypatch, branche='release/essai-un')
+    br = 'release/essai-un'
+    assert release.run(deps, br) == 0
+    assert api.writes == []
+    lignes = (deps.root / '.release' / 'CHECK.md').read_text(encoding='utf-8').strip().splitlines()
+    assert len(lignes) == 6 and all(' OK ' in l for l in lignes)
+    assert '5. OK' in lignes[4] and 'joined from parts' in lignes[4]
+    assert list(rt.iterdir()) == []
+
+
+def test_jonction_sans_runner_temp(tmp_path, monkeypatch):
+    monkeypatch.delenv('RUNNER_TEMP', raising=False)
+    monkeypatch.setattr(release.tempfile, 'tempdir', str(tmp_path))
+    deps, api, origin, br, rt = monte_morceaux(tmp_path, monkeypatch)
+    monkeypatch.delenv('RUNNER_TEMP', raising=False)
+    cree = []
+    orig = release.Deps.dossier_temp
+    monkeypatch.setattr(release.Deps, 'dossier_temp', lambda self: cree.append(orig(self)) or cree[-1])
+    assert release.run(deps, br) == 0
+    assert cree and not cree[0].exists() and not str(cree[0]).startswith(str(deps.root))
+
+
+def test_joints_supprimes_apres_echec_au_televersement(tmp_path, monkeypatch):
+    deps, api, origin, br, rt = monte_morceaux(tmp_path, monkeypatch)
+    api.fail[('POST', 'uploads.github.com')] = (500, {'message': 'boom'})
+    assert release.run(deps, br) == 1
+    assert [m for m, _ in api.writes] == ['POST', 'POST', 'DELETE']
+    assert list(rt.iterdir()) == [] and deps.joints == {}

@@ -4,6 +4,7 @@
   python3 tools/release.py        lit GITHUB_REPOSITORY, GITHUB_REF_NAME, GITHUB_TOKEN ; code 0 si tout va bien, 1 sinon
 
 Branche release/AC-V<x.y.z> : publication. Branche release/essai-<nom> : les memes controles, rien n'est cree.
+Un zip trop gros pour un push arrive en morceaux <nom>.part001, .part002... : ils sont joints hors du depot, le fichier joint est controle puis televerse.
 Sans .release/manifest.json sur la branche : rien n'est fait. Le git et l'API passent par l'objet Deps, que les tests remplacent.
 Le jeton n'est jamais ecrit : tout texte sorti (journal, FAILED.md, CHECK.md) passe par Deps.scrub.
 """
@@ -12,8 +13,10 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -100,6 +103,20 @@ class Deps:
         self.token = token
         self.now = now
         self.root = Path(git.cwd)
+        self.joints = {}        # nom d'asset -> fichier joint (temporaire, hors du depot)
+        self.tmp = None
+
+    def dossier_temp(self):
+        if self.tmp is None:
+            self.tmp = Path(tempfile.mkdtemp(prefix='release-', dir=os.environ.get('RUNNER_TEMP') or None))
+        return self.tmp
+
+    def nettoyer(self):
+        """Supprime les fichiers joints (reussite ou echec)."""
+        if self.tmp is not None:
+            shutil.rmtree(self.tmp, ignore_errors=True)
+        self.tmp = None
+        self.joints = {}
 
     def scrub(self, texte):
         texte = str(texte)
@@ -226,6 +243,27 @@ def _sha256(chemin):
     return h.hexdigest()
 
 
+def _morceaux(dossier, nom):
+    """Les morceaux `<nom>.partNNN` presents : liste triee de (numero, chemin)."""
+    re_p = re.compile(re.escape(nom) + r'\.part(\d{3})')
+    trouves = []
+    if dossier.is_dir():
+        for p in dossier.iterdir():
+            mo = re_p.fullmatch(p.name)
+            if mo and p.is_file():
+                trouves.append((int(mo.group(1)), p))
+    return sorted(trouves)
+
+
+def _joindre(deps, nom, morceaux):
+    cible = deps.dossier_temp() / nom
+    with open(cible, 'wb') as out:
+        for _, p in morceaux:
+            with open(p, 'rb') as f:
+                shutil.copyfileobj(f, out, 1 << 20)
+    return cible
+
+
 def _controle_assets(deps, m):
     dossier = deps.root / RELEASE_DIR / 'assets'
     assets = m['assets']
@@ -234,13 +272,28 @@ def _controle_assets(deps, m):
     noms = [a['name'] for a in assets]
     if len(set(noms)) != len(noms):
         raise Echec('5', 'an asset is listed twice')
+    attendus = set(noms)
+    en_parts = 0
     for a in assets:
         n = a['name']
         if not n.endswith('.zip') or not RE_ASSET.fullmatch(n[:-4]):
             raise Echec('5', f'asset name "{n}" does not match DCS_Airfield_Charts_<letters, digits, _>.zip')
         f = dossier / n
-        if not f.is_file():
+        morceaux = _morceaux(dossier, n)
+        if f.is_file() and morceaux:
+            raise Echec('5', f'asset {n} is present both whole and in parts ({morceaux[0][1].name}...)')
+        if morceaux:
+            for i, (num, p) in enumerate(morceaux, 1):
+                if num != i:
+                    raise Echec('5', f'asset {n}: the parts are not a continuous run from part001 (expected {n}.part{i:03d}, found {p.name})')
+                attendus.add(p.name)
+            f = _joindre(deps, n, morceaux)
+            deps.joints[n] = f
+            en_parts += 1
+        elif not f.is_file():
             raise Echec('5', f'asset {n} is not in {RELEASE_DIR}/assets/')
+        else:
+            attendus.add(n)
         taille = f.stat().st_size
         if taille != a['size']:
             raise Echec('5', f'asset {n}: size {taille} differs from the manifest ({a["size"]})')
@@ -248,10 +301,10 @@ def _controle_assets(deps, m):
             raise Echec('5', f'asset {n} is 2 GiB or more')
         if _sha256(f) != a['sha256']:
             raise Echec('5', f'asset {n}: SHA-256 differs from the manifest')
-    en_trop = sorted(p.name for p in dossier.iterdir() if p.name not in noms) if dossier.is_dir() else []
+    en_trop = sorted(p.name for p in dossier.iterdir() if p.name not in attendus) if dossier.is_dir() else []
     if en_trop:
         raise Echec('5', f'files in {RELEASE_DIR}/assets/ not listed in the manifest: {", ".join(en_trop[:5])}')
-    return f'{len(assets)} asset(s) match the manifest'
+    return f'{len(assets)} asset(s) match the manifest' + (f' ({en_parts} joined from parts)' if en_parts else '')
 
 
 def _controle_notes(deps):
@@ -315,7 +368,7 @@ def publier(deps, branche, m, etat):
     haut = (rel.get('upload_url') or '').split('{')[0] or f'https://uploads.github.com/repos/{repo}/releases/{rid}/assets'
     for a in m['assets']:
         _appel(deps, f'step 2 (upload {a["name"]})', 'POST', f'{haut}?name={urllib.parse.quote(a["name"])}',
-               fichier=deps.root / RELEASE_DIR / 'assets' / a['name'])
+               fichier=deps.joints.get(a['name']) or deps.root / RELEASE_DIR / 'assets' / a['name'])
     _, lst = _appel(deps, 'step 2 (read back the files)', 'GET', f'/repos/{repo}/releases/{rid}/assets?per_page=100', ok=(200,))
     vus = sorted((x.get('name'), x.get('size')) for x in (lst or []))
     voulus = sorted((a['name'], a['size']) for a in m['assets'])
@@ -353,7 +406,14 @@ def _tenter_pousser(deps, branche, nom, texte, message):
 
 
 def run(deps, branche):
-    """Code de sortie : 0 ou 1."""
+    """Code de sortie : 0 ou 1. Les fichiers joints sont supprimes a la fin, reussite ou echec."""
+    try:
+        return _run(deps, branche)
+    finally:
+        deps.nettoyer()
+
+
+def _run(deps, branche):
     manifeste = deps.root / RELEASE_DIR / 'manifest.json'
     if not manifeste.is_file():
         deps.log('Waiting for the manifest (.release/manifest.json): nothing to do.')
