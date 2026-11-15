@@ -7,6 +7,10 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Unreleased
 
+**Releases are published by a workflow.**
+
+- New workflow `.github/workflows/release.yml` with `tools/release.py`: pushing a branch `release/AC-V<x.y.z>` with the release text, the zips and a manifest creates the release and its tag, with the zips attached. The published charts do not change.
+
 **Charts in English.**
 
 - Every text on the pages is now in English: headers, runway table, legends, footer, approach pages and heliport directory, with the abbreviations of real-world charts (RWY, THR ELEV, MAG HDG, CRS, GP, NAVAIDS, ELEV). Decimals use a point; thousands have no separator.

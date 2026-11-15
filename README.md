@@ -161,6 +161,12 @@ Tests: `python -m pytest` (see the table above for the tests that need samples).
 
 Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [OurAirports](https://github.com/davidmegginson/ourairports-data) (public domain) for the ICAO codes in `downloads/navaids/`; [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports.
 
+## Publishing a release (maintainers)
+
+Releases are created by the workflow `.github/workflows/release.yml`, not by hand. On `main`, the `Unreleased` section of the CHANGELOG is first renamed to the new version. Then a branch `release/AC-V<x.y.z>` is pushed: that `main` commit plus files under `.release/` only — `notes.md` (the release text), the zips under `assets/` (under 100 MB each, the limit of a git push), and last `manifest.json` (tag, title, `main` commit, and the name, size and SHA-256 of each zip).
+
+The workflow checks all of it, creates the release with its zips, publishes it as the latest release (which creates the tag on the `main` commit) and deletes the branch. If anything fails, nothing stays published and the branch gets `.release/FAILED.md` with the reason. A branch `release/essai-<name>` runs the same checks without publishing anything and writes `.release/CHECK.md`.
+
 ## What we measured
 
 - Image aligned with the DCS grid (deviation < 0.01°), seams between images ≤ 1 px, about 1 s per image.
