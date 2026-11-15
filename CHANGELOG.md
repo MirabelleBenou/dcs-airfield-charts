@@ -5,7 +5,7 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
-## Unreleased
+## AC-V9.9.9 — workflow check, not a release
 
 **Releases are published by a workflow.**
 
