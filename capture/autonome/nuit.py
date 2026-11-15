@@ -8,6 +8,9 @@ outils existants (f10capture.py, signcapture.py) sans les modifier, demande au c
 vue_demande.txt / vue_faite.txt), surveille son pouls (battement.txt), rassemble les fichiers de la nuit en zips, les depose en option
 comme fichiers d'une release GitHub, puis dit au crochet de fermer DCS (fin.txt).
 
+Une etape `relief` n'a pas d'outil externe : le pilote ecrit releve_demande.lua (une zone, un pas, une methode), attend la reponse du
+crochet dans releve_fait.txt (`ok`, `annule` ou `erreur <raison>`) en surveillant le pouls, et range le .json du releve au bilan.
+
 Tout ce qui est propre a Windows (veille, ecran, arbre de processus, arret du PC), le lancement des outils, l'horloge, les attentes et
 la racine de l'API passent par l'objet Deps, que les tests remplacent. Ce module s'importe sous Linux sans erreur.
 """
