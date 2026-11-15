@@ -5,6 +5,12 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
+## Unreleased
+
+**Finished branches are deleted by a workflow.**
+
+- New workflow `.github/workflows/menage-branches.yml` with `tools/menage_branches.py`: once a day, a branch whose last commit is at least 7 days old is deleted if it is finished — its whole content is already in `main`, its release tag exists, or it is a release trial. Every other branch is kept, and every decision is listed on the run page. Run by hand, the workflow only lists its decisions. The published charts do not change.
+
 ## AC-V1.7.0 — 15 November 2026
 
 **Releases are published by a workflow.**
