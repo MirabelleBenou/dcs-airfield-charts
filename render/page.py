@@ -460,16 +460,17 @@ def legend(doc, y, x_left=None, x_right=None, note=None, sym_r=SYM_PLAN_R, heli=
         doc.add(L, text(X1, y, note, size, 'regular', INK2, 'end'))
 
 
-def runway_table(doc, data, frame_bottom_unused, head_y, rows_y):
+def runway_table(doc, data, frame_bottom_unused, head_y, rows_y, parking_count=True):
     L = 'Runway table'
     cols = [6.0, 20.0, 40.0, 68.0, 94.0]
     heads = ['PISTE', 'CAP MAG', 'LONGUEUR × LARGEUR', 'ÉLÉV. SEUIL', 'ILS']
     if data.runways:                                   # lot heliports (4.2) : sans piste, ni tableau ni en-tetes
         for x, h in zip(cols, heads):
             doc.add(L, text(x, head_y, h, pt(5.2), 'semibold', INK2, spacing=0.4))
-    n_total, n_shel = len(data.parkings), data.n_shelter
-    count = f'AIRES : {n_total}' if data.heli_mode else f'PARKINGS : {n_total} DONT {n_shel} EN ABRI'
-    doc.add(L, text(X1, head_y, count, pt(6.6), 'bold', INK, 'end'))
+    if parking_count:                                  # la 10-8 ne dessine pas de parkings : pas de decompte
+        n_total, n_shel = len(data.parkings), data.n_shelter
+        count = f'AIRES : {n_total}' if data.heli_mode else f'PARKINGS : {n_total} DONT {n_shel} EN ABRI'
+        doc.add(L, text(X1, head_y, count, pt(6.6), 'bold', INK, 'end'))
     for e, y in zip(data.ends, rows_y):
         rw = data.runways[e.rw]
         Lm, Wm = rw.length, rw.width

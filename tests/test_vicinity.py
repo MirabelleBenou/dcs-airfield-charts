@@ -304,6 +304,19 @@ def test_header_legend_footer_and_runway_table(built):
     assert re.search(r'<polygon points="[^"]*" fill="#1A1A1A"/>', legend)               # le triangle du renvoi
 
 
+def test_the_10_8_runway_table_has_no_parking_count_but_the_default_table_keeps_it(built):
+    data, _, pg, _, _ = built
+    assert 'PARKINGS' not in pg.svg and 'EN ABRI' not in pg.svg and 'AIRES :' not in pg.svg
+    rows = layers_of(pg.svg)['Runway table']
+    assert 'PISTE' in rows and 'CAP MAG' in rows                                      # le reste du tableau ne bouge pas
+    doc = Doc()
+    page.runway_table(doc, data, 0.0, 10.0, [14.0] * len(data.ends))
+    assert 'PARKINGS : ' in doc.render()
+    doc2 = Doc()
+    page.runway_table(doc2, data, 0.0, 10.0, [14.0] * len(data.ends), parking_count=False)
+    assert 'PARKINGS' not in doc2.render()
+
+
 def test_north_and_scale_sit_on_their_white_rectangles(built):
     _, _, pg, _, _ = built
     grid = layers_of(pg.svg)['Frame & grid']

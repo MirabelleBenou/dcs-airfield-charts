@@ -402,7 +402,7 @@ def build_vicinity_page(data, frame, folder, log=print, towns=None):
     first_row = LAST_ROW_Y - (n_rows - 1) * ROW_PITCH
     head_y = first_row - 3.8
     rows_y = [first_row + i * ROW_PITCH for i in range(n_rows)]
-    runway_table(doc, data, fy + fh, head_y, rows_y)
+    runway_table(doc, data, fy + fh, head_y, rows_y, parking_count=False)
     legend(doc, LEGEND_Y)
     footer(doc, data, bool(data.osm_ways))
     info = {'scale': s, 'frame': frame, 'corners': (cn, cs), 'labels': placed, 'towns': town_info, 'positions': positions,
