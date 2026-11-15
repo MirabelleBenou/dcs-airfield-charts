@@ -1,0 +1,8 @@
+name: sonde
+on: workflow_dispatch
+permissions: {}
+jobs:
+  rien:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
