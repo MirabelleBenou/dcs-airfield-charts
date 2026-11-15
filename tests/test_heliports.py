@@ -37,10 +37,10 @@ def test_helicopter_mode_der_salman(heli):
     assert data.heli_mode and not data.icao_known
     svg = pages[0].svg
     t = texts(svg)
-    assert "BASE D'HÉLICOPTÈRES" in t and 'AÉRODROME' not in t
-    assert 'AIRES : 20' in t and not any(x.startswith('PARKINGS') for x in t)
-    assert "AIRE D'HÉLICOPTÈRE (NUMÉRO DCS)" in t
-    assert not any(x in ('OUVERT', 'HÉLICOPTÈRE SEUL') or x.startswith('ABRI') for x in t)
+    assert 'HELICOPTER BASE' in t and 'AIRFIELD' not in t
+    assert 'HELIPADS: 20' in t and not any(x.startswith('PARKING') for x in t)
+    assert 'HELIPAD (DCS NUMBER)' in t
+    assert not any(x in ('OPEN', 'HELICOPTER ONLY') or x.startswith('SHELTER') for x in t)
     assert 'Der_Salman' not in t                                    # le coin gauche reste vide
     assert [e.name for e in data.ends] == ['09', '27'] and len(data.runways) == 1
     assert data.runways[0].length == pytest.approx(202, abs=10)
@@ -64,10 +64,10 @@ def test_kharab_ishk_has_no_runway_table(heli):
     data, pages = heli['Kharab_Ishk']
     assert data.runways == [] and data.ends == []
     t = texts(pages[0].svg)
-    for head in ('PISTE', 'CAP MAG', 'LONGUEUR × LARGEUR', 'ÉLÉV. SEUIL', 'ILS'):
+    for head in ('RWY', 'MAG HDG', 'LENGTH × WIDTH', 'THR ELEV', 'ILS'):
         assert head not in t
     assert not any(re.fullmatch(r'\d{3}\.\d°', x) for x in t)         # aucune etiquette de cap
-    assert 'AIRES : 11' in t and "BASE D'HÉLICOPTÈRES" in t
+    assert 'HELIPADS: 11' in t and 'HELICOPTER BASE' in t
 
 
 def test_heliport_without_radio_is_refused(work):
@@ -183,8 +183,8 @@ def test_series_and_order():
 
 # ---------- repertoire : villes ----------
 def test_nearest_town_two_known_points(sites):
-    assert sites['HMed01'].town == '0,3 km SW de Xylofagou'
-    assert sites['HI14'].town == '6,5 km N de Nazareth'
+    assert sites['HMed01'].town == '0.3 km SW of Xylofagou'
+    assert sites['HI14'].town == '6.5 km N of Nazareth'
 
 
 def test_direction8():
@@ -274,7 +274,7 @@ def test_corner_blocks_sit_on_white_rectangles(heli):
 def test_der_salman_is_not_on_f10_background(heli):
     data, pages = heli['Der_Salman']
     assert not data.on_f10 and data.f10_img is None
-    assert 'F10 map' not in pages[0].svg and '#AA2323' not in pages[0].svg
+    assert 'inkscape:label="F10 map"' not in pages[0].svg and '#AA2323' not in pages[0].svg
 
 
 def test_f10_background_has_no_blue_cluster_near_the_airport(heli):

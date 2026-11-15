@@ -99,8 +99,8 @@ def make_zones(parkings):
 
 
 def ratio_text(s):
-    """1:6 600 pour 0,1515 mm/m (1 m = s mm  ->  1 : 1000 / s)."""
-    return '1:' + f'{int(round(1000.0 / s)):,}'.replace(',', ' ')
+    """1:6600 pour 0,1515 mm/m (1 m = s mm  ->  1 : 1000 / s), sans separateur des milliers."""
+    return f'1:{int(round(1000.0 / s))}'
 
 
 @dataclass
@@ -124,6 +124,8 @@ def make_inset(zone, f, max_w=None, max_h=None, k_own=1.0):
     gx = zone.x1 - zone.x0 + 2 * INSET_PAD_M
     gz = zone.z1 - zone.z0 + 2 * INSET_PAD_M
     w, h = gz * s, gx * s
+    # estimation de largeur volontairement gardee a '1:100 000' (avec espace) : le texte de page n'a plus de separateur, mais la
+    # mise en page des encarts ne doit pas bouger
     min_w = (fonts.text_width(zone.title, 'bold', fonts.pt(6.4)) + fonts.text_width('1:100 000', 'regular', fonts.pt(5.4))
              + 3.0)
     w = max(w, min_w)                  # le cadre doit porter son titre et son echelle numerique

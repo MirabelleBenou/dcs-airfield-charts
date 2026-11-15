@@ -63,6 +63,9 @@ def arp_index(theatre):
 def rewrite_page(svg_text, page_name, index):
     """(nouveau SVG, [cinq champs]) : les trois textes remplaces par `page.header_row`, le reste identique a l'octet."""
     (s0, e0, elev), (s1, e1, arp), (s2, e2, var) = row_elements(svg_text, page_name)
+    problem = page.elevation_text_problem(elev)
+    if problem:
+        raise UpdateError(f'{page_name} : {problem}')
     sep1, sep2 = svg_text[e0:s1], svg_text[e1:s2]
     if sep1 != sep2 or sep1.strip():
         raise UpdateError(f'{page_name} : les trois textes de la ligne ne sont pas separes de la meme facon '

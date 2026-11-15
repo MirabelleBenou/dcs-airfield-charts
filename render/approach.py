@@ -37,8 +37,8 @@ ROW_Y = (182.4, 188.4)
 
 
 def nm_text(metres):
-    """Distance en NM, au dixieme, virgule decimale."""
-    return f'{metres / NM:.1f}'.replace('.', ',')
+    """Distance en NM, au dixieme, point decimal."""
+    return f'{metres / NM:.1f}'
 
 
 def round_to(v, step):
@@ -193,14 +193,14 @@ def build_page(data, e, ant, s_gs, n, log=print):
     doc.add(L, rect(X0, ILS_BAND_Y, X1 - X0, BAND_H, BAND))
     doc.add(L, text(BAND_TEXT_X, 27.4, f'ILS {e.name}', pt(7.6), 'bold'))
     thr_s = f'{thr_ft} FT' if thr_ft is not None else '—'
-    ils_pairs = [('LOC', loc_text), ('CAP', f'{cap:03d}°'), ('SEUIL', thr_s), ('PENTE', f'{int(SLOPE_DEG)},0°'),
+    ils_pairs = [('LOC', loc_text), ('CRS', f'{cap:03d}°'), ('THR', thr_s), ('GP', f'{int(SLOPE_DEG)}.0°'),
                  ('TCH', f'{tch} FT')]
     page.pair_row(doc, L, ils_pairs, PAIRS_X, 27.4, X1 - PAIRS_X - 1.5)
     band_bottom = ILS_BAND_Y + BAND_H
-    bal_pairs = [(b.kind, f'{b.callsign} {b.text} · {nm_text(math.hypot(b.x - T[0], b.z - T[1]))} NM du seuil') for b in data.beacons]
+    bal_pairs = [(b.kind, f'{b.callsign} {b.text} · {nm_text(math.hypot(b.x - T[0], b.z - T[1]))} NM FROM THR') for b in data.beacons]
     if bal_pairs:
         doc.add(L, rect(X0, BAL_BAND_Y, X1 - X0, BAND_H, BAND))
-        doc.add(L, text(BAND_TEXT_X, 33.6, 'BALISES', pt(7.6), 'bold'))
+        doc.add(L, text(BAND_TEXT_X, 33.6, 'NAVAIDS', pt(7.6), 'bold'))
         page.pair_row(doc, L, bal_pairs, PAIRS_X, 33.6, X1 - PAIRS_X - 1.5)
         band_bottom = BAL_BAND_Y + BAND_H
 
@@ -265,7 +265,7 @@ def build_page(data, e, ant, s_gs, n, log=print):
         add('Frame & grid', line(xk, bar_y - 1.2, xk, bar_y + 1.2, INK, 0.3))
     sc_size = pt(5.6)
     add('Frame & grid', text(bx0 + bar_len + 1.5, bar_y + sc_size * CAP_HEIGHT / 2, f'{SCALE_BAR_NM} NM', sc_size, 'regular', INK2))
-    add('Frame & grid', text(fx + fw - 2.9, bar_y + sc_size * CAP_HEIGHT / 2, 'NORD GRILLE (NORD DU JEU) EN HAUT', pt(5.2), 'regular', INK2, 'end'))
+    add('Frame & grid', text(fx + fw - 2.9, bar_y + sc_size * CAP_HEIGHT / 2, 'GRID NORTH (GAME NORTH) UP', pt(5.2), 'regular', INK2, 'end'))
     # antennes : localizer (carre blanc de 2 mm) et glide (cercle blanc de 0,8 mm de rayon)
     lp, gp = P(ant['loc']), P(ant['gs'])
     # Les deux antennes sont dessinees (calque Runway bearings, au-dessus des symboles de balise) apres les libelles de balise, qui
@@ -324,7 +324,7 @@ def build_page(data, e, ant, s_gs, n, log=print):
     px0, pw = X0, X1 - X0
     doc.add('Frame & grid', rect(px0, PROFILE_TOP, pw, PROFILE_BOTTOM - PROFILE_TOP, 'none', INK, 0.35))
     R = 'Runway table'
-    doc.add(R, text(px0 + 2.0, PROFILE_TOP + 3.6, f'PROFIL — PLAN DE {int(SLOPE_DEG)},0°', pt(6.4), 'bold'))
+    doc.add(R, text(px0 + 2.0, PROFILE_TOP + 3.6, f'PROFILE — {int(SLOPE_DEG)}.0° GLIDE PATH', pt(6.4), 'bold'))
     xd = lambda d: PROFILE_X_THR - d * PROFILE_PITCH
     ay = PROFILE_AXIS_Y
     lab_y = ay + 3.3
@@ -334,7 +334,7 @@ def build_page(data, e, ant, s_gs, n, log=print):
         doc.add(R, line(xd(d), ay - 1.4, xd(d), ay + 1.4, INK2, 0.35))
         doc.add(R, text(xd(d), lab_y, str(d), pt(5.6), 'regular', INK2, 'middle'))
     doc.add(R, text(xd(10) - text_width('10', 'regular', pt(5.6)) / 2 - 1.2, lab_y, 'NM', pt(5.6), 'regular', INK2, 'end'))
-    doc.add(R, text(PROFILE_X_END, lab_y, f'SEUIL {e.name} {thr_s}', pt(5.6), 'regular', INK2, 'end'))
+    doc.add(R, text(PROFILE_X_END, lab_y, f'THR {e.name} {thr_s}', pt(5.6), 'regular', INK2, 'end'))
     base_ft = thr_ft if thr_ft is not None else 0
     alt10 = altitude_ft(base_ft, 10, s_gs)
     ky = (ay - PROFILE_TOP_PT_Y) / (alt10 - base_ft)
@@ -349,7 +349,7 @@ def build_page(data, e, ant, s_gs, n, log=print):
 
     # ---- tableau
     doc.add(R, rect(X0, TABLE_Y, X1 - X0, 5.0, BAND))
-    doc.add(R, text(8.0, TABLE_Y + 3.4, 'NM DU SEUIL', pt(5.6), 'regular', INK2))
+    doc.add(R, text(8.0, TABLE_Y + 3.4, 'NM FROM THR', pt(5.6), 'regular', INK2))
     table_alts, dme_dists = {}, {}
     for nm in range(10, 0, -1):
         x = COL_X0 + (10 - nm) * COL_PITCH
@@ -368,8 +368,8 @@ def build_page(data, e, ant, s_gs, n, log=print):
         rule_y = ROW_Y[1] + 2.2
     doc.add(R, line(X0, rule_y, X1, rule_y, INK, 0.35))
     year = f'{int(data.year)}'
-    m1 = f"Pas une carte d'approche r\u00e9elle : DCS ne donne ni proc\u00e9dure ni minima. Axe : cap au compas du cockpit (grille \u2212 d\u00e9clinaison {year})."
-    m2 = f"Plan de 3\u00b0 suppos\u00e9, depuis l'antenne de glide ({int(round(s_gs))} m apr\u00e8s le seuil) ; relief non repr\u00e9sent\u00e9. Donn\u00e9es : beacons.lua, pydcs."
+    m1 = f'Not a real approach chart: DCS gives no procedure and no minima. Course: cockpit compass heading (grid \u2212 {year} declination).'
+    m2 = f'3\u00b0 glide path assumed, from the glide slope antenna ({int(round(s_gs))} m past the threshold); terrain not shown. Data: beacons.lua, pydcs.'
     doc.add(R, text(X0, rule_y + 3.8, m1, pt(5.4), 'regular', INK2))
     doc.add(R, text(X0, rule_y + 7.0, m2, pt(5.4), 'regular', INK2))
     page.footer(doc, data, False)

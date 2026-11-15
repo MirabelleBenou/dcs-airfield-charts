@@ -294,27 +294,27 @@ def test_header_legend_footer_and_runway_table(built):
     data, _, pg, _, _ = built
     t = [html.unescape(x) for x in re.findall(r'<text[^>]*>([^<]*)</text>', pg.svg)]
     assert '10-8' in t and 'VICINITY' in t and '10-9' not in t
-    assert 'AÉRODROME' not in t and "BASE D'HÉLICOPTÈRES" not in t
+    assert 'AIRFIELD' not in t and 'HELICOPTER BASE' not in t
     assert 'TOWN WITHIN 20 KM: DISTANCE FROM ARP · BACKGROUND: F10 MAP' in t
-    assert not any('FOND : CARTE F10' in x or 'OUVERT' in x for x in t)               # ni la légende des parkings ni celle des héliports
-    assert page.footer_text(data, True) in t and 'PAS POUR LA NAVIGATION RÉELLE' in t
-    assert 'TESTBASE TOWER' in t and 'BALISES' in t
-    assert 'PISTE' in t and 'CAP MAG' in t                                            # le tableau des pistes
+    assert not any('HELIPAD' in x or 'OPEN' in x for x in t)               # ni la légende des parkings ni celle des héliports
+    assert page.footer_text(data, True) in t and 'NOT FOR REAL-WORLD NAVIGATION' in t
+    assert 'TESTBASE TOWER' in t and 'NAVAIDS' in t
+    assert 'RWY' in t and 'MAG HDG' in t                                            # le tableau des pistes
     legend = layers_of(pg.svg)['Runway table']
     assert re.search(r'<polygon points="[^"]*" fill="#1A1A1A"/>', legend)               # le triangle du renvoi
 
 
 def test_the_10_8_runway_table_has_no_parking_count_but_the_default_table_keeps_it(built):
     data, _, pg, _, _ = built
-    assert 'PARKINGS' not in pg.svg and 'EN ABRI' not in pg.svg and 'AIRES :' not in pg.svg
+    assert 'PARKING' not in pg.svg and 'SHELTERED' not in pg.svg and 'HELIPADS:' not in pg.svg
     rows = layers_of(pg.svg)['Runway table']
-    assert 'PISTE' in rows and 'CAP MAG' in rows                                      # le reste du tableau ne bouge pas
+    assert 'RWY' in rows and 'MAG HDG' in rows                                      # le reste du tableau ne bouge pas
     doc = Doc()
     page.runway_table(doc, data, 0.0, 10.0, [14.0] * len(data.ends))
-    assert 'PARKINGS : ' in doc.render()
+    assert 'PARKING: ' in doc.render()
     doc2 = Doc()
     page.runway_table(doc2, data, 0.0, 10.0, [14.0] * len(data.ends), parking_count=False)
-    assert 'PARKINGS' not in doc2.render()
+    assert 'PARKING' not in doc2.render()
 
 
 def test_north_and_scale_sit_on_their_white_rectangles(built):
@@ -597,7 +597,7 @@ RULE = '<line x1="6" y1="22.8" x2="142" y2="22.8" stroke="#1A1A1A" stroke-width=
 def three_fields(svg, lat, lon, var_field):
     """Le même SVG avec les cinq textes de la ligne d'en-tête (y = 21,2) remplacés par les trois de la version AC-V1.4.1."""
     t = lambda x, s_: svgdoc.text(x, 21.2, s_, pt(7.2), 'bold')
-    row = '\n'.join([t(6, 'ÉLÉV. 3392 FT'), t(51.3, geo.arp_text(lat, lon)), t(96.7, var_field)])
+    row = '\n'.join([t(6, 'ELEV 3392 FT'), t(51.3, geo.arp_text(lat, lon)), t(96.7, var_field)])
     spans = [m.span() for m in re.finditer(r'<text [^>]* y="21.2"[^>]*>.*?</text>', svg)]
     return svg[:spans[0][0]] + row + svg[spans[-1][1]:]
 
@@ -619,7 +619,7 @@ def vicinity_zip(tmp_path, three=False):
                    + '\n'.join([*page.north_arrows(21.0, 156.6, 0.0, 3.29), svgdoc.text(21.0, 160.0, var, pt(5.9), 'bold', svgdoc.INK, 'middle'),
                                svgdoc.text(21.0, 162.6, yl, pt(5.4), 'regular', svgdoc.INK2, 'middle')]) + '\n</g>')
     var_field = f'{var} {yl}'
-    svg9 = doc_svg('<rect x="1" y="1" width="2" height="2"/>', *page.header_row('ÉLÉV. 3392 FT', lat, lon, var_field), RULE,
+    svg9 = doc_svg('<rect x="1" y="1" width="2" height="2"/>', *page.header_row('ELEV 3392 FT', lat, lon, var_field), RULE,
                    *bar, frame_layer)
     if three:                                                                    # AC-V1.4.1 : trois champs, la forme que update_coords relit
         svg8, svg9 = (three_fields(v, lat, lon, var_field) for v in (svg8, svg9))

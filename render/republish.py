@@ -92,6 +92,9 @@ def check_or_rewrite_header(svg_text, name, index):
         new, fields = update_coords.rewrite_page(svg_text, name, index)
         return new, fields, 'reecrit'
     texts = [t for _, _, t in found]
+    problem = page.elevation_text_problem(texts[0])
+    if problem:
+        raise RepublishError(f'{name} : {problem}')
     if not texts[1].startswith('ARP '):
         raise RepublishError(f"{name} : le deuxieme texte de la ligne ne commence pas par « ARP » : {texts[1]!r}")
     hits = index.get(texts[1], [])
@@ -825,7 +828,8 @@ def retouch_directory(theatre, zin, infos, tmp):
                 res.already += 1
             else:
                 raise RepublishError(f'repertoire page {no}, {site} : la bande ne correspond ni a la ligne a 36 px '
-                                     f'(ecart {g36:.2f}) ni a celle a {size} px (ecart {gs:.2f}), seuil {DIR_PAIR_MAX}')
+                                     f'(ecart {g36:.2f}) ni a celle a {size} px (ecart {gs:.2f}), seuil {DIR_PAIR_MAX} : repertoire publie en francais '
+                                 f'(release anterieure) ou page modifiee ; cet outil ne relit que le repertoire en anglais')
             res.rows.append((no, site, town, size, g36, gs, decision))
         if d is not None:
             new_jpegs[no] = encode_like(work, original)
@@ -935,6 +939,10 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
         new = {}                                   # nom d'entree -> fichier temporaire
         for n, (d, name, _, suffix) in enumerate(pages):
             if _APPROACH.match(suffix) or _VICINITY.match(suffix):      # page d'approche 11-x ou page 10-8 des abords : recopiee telle quelle
+                elev = header_elements(zin.read(f'{d}svg/{name}.svg').decode('utf-8'), name)[0][2]       # recopiee, mais lue en anglais seulement
+                problem = page.elevation_text_problem(elev)
+                if problem:
+                    raise RepublishError(f'{name} : {problem}')
                 for sub, ext in (('png', 'png'), ('pdf', 'pdf')):
                     if f'{d}{sub}/{name}.{ext}' not in names:
                         raise RepublishError(f'{name} : entree {d}{sub}/{name}.{ext} absente du zip')

@@ -36,7 +36,7 @@ def test_formats():
     assert geo.dm(32.56149, 'E', 'W', 3) == "E032°33.7'"
     assert geo.var_text(3.29, 1985) == ('VAR 3°E', '(1985)')
     assert geo.var_text(-2.4, 1987.5) == ('VAR 2°W', '(1987.5)')
-    assert geo.thin(11089) == '11 089'
+    assert geo.thin(11089) == '11089'
 
 
 def test_declination_igrf14_values():

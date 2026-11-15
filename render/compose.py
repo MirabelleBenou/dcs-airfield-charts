@@ -314,7 +314,7 @@ def build_pages(data, log=print):
     # ---- page 10-9 : cadre
     doc = Doc()
     doc.add('Background', rect(0, 0, PAGE_W, PAGE_H, '#FFFFFF'))
-    bottom = header(doc, data, '10-9', "BASE D'HÉLICOPTÈRES" if data.heli_mode else 'AÉRODROME', bands=True)
+    bottom = header(doc, data, '10-9', 'HELICOPTER BASE' if data.heli_mode else 'AIRFIELD', bands=True)
     n_rows = len(data.ends)
     first_row = LAST_ROW_Y - (n_rows - 1) * ROW_PITCH
     head_y = first_row - 3.8
@@ -471,11 +471,11 @@ def build_pages(data, log=print):
             letter = chr(ord('A') + k)
             d2 = Doc()
             d2.add('Background', rect(0, 0, PAGE_W, PAGE_H, '#FFFFFF'))
-            header(d2, data, f'10-9{letter}', 'PARKINGS', bands=False)
+            header(d2, data, f'10-9{letter}', 'PARKING', bands=False)
             n = 0
             for b in pg:
                 n += draw_inset(d2, b, data, parkings)
-            legend(d2, 199.3, x_left=X0, note='NUMÉROS DE PARKING TELS QUE DANS DCS', sym_r=SYM_INSET_R, heli=data.heli_mode)
+            legend(d2, 199.3, x_left=X0, note='PARKING NUMBERS AS IN DCS', sym_r=SYM_INSET_R, heli=data.heli_mode)
             footer(d2, data, False)
             pages.append(PageOut(f'10-9{letter}', d2.render(), {'insets': [b.zone.label for b in pg], 'n_numbers': n,
                                                               'k': {b.zone.label: b.k for b in pg}}))

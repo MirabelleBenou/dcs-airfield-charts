@@ -70,7 +70,7 @@ def test_c3_konya_header_and_beacons(charts):
     t = texts(pages[0].svg)
     assert data.icao == 'LTAN'
     assert "ARP N37°58.7' E032°33.7'" in t
-    assert abs(data.elev_ft - 3407) <= 3 and f'ÉLÉV. {data.elev_ft} FT' in t
+    assert abs(data.elev_ft - 3407) <= 3 and f'ELEV {data.elev_ft} FT' in t
     assert data.tower == {'vhf': '132.400', 'uhf': '225.000', 'fm': '38.900', 'hf': '3.800'}
     for s in ('132.400', '225.000', '38.900', '3.800', 'KON 88X', 'KNY 111.20 CH49X', 'KNY 390', 'KONYA TOWER'):
         assert s in t, s

@@ -45,7 +45,7 @@ SCALE_100M_PX = 100.0 * PX_PER_M
 SIMPLE, WIDE, TALL, TWO = 'simple', 'double largeur', 'double hauteur', 'deux groupes'
 FORM_POSITIONS = {SIMPLE: (1, 2, 3, 4), WIDE: (1, 3), TWO: (1, 3), TALL: (1, 2)}
 CELL_RC = {1: (0, 0), 2: (0, 1), 3: (1, 0), 4: (1, 1)}
-OTHERS = 'AUTRES'
+OTHERS = 'OTHERS'
 COMPASS = ('N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW')
 
 
@@ -99,7 +99,7 @@ class Site:
 
 
 def series_of(name):
-    """Nom pydcs prive de ses chiffres finaux ; sans chiffres finaux : serie « AUTRES »."""
+    """Nom pydcs prive de ses chiffres finaux ; sans chiffres finaux : serie « OTHERS »."""
     s = re.sub(r'\d+$', '', name)
     return s if s != name else OTHERS
 
@@ -114,7 +114,7 @@ def load_towns(theatre):
 
 
 def nearest_town(lat, lon, towns):
-    """Ville la plus proche (cadrage 5.4) : « 6,5 km N de Nazareth » ; direction du site vue de la ville."""
+    """Ville la plus proche (cadrage 5.4) : « 6.5 km N of Nazareth » ; direction du site vue de la ville."""
     best = None
     for name, tlat, tlon in towns:
         dx = (lon - tlon) * 111.2 * math.cos(math.radians(lat))
@@ -123,11 +123,11 @@ def nearest_town(lat, lon, towns):
         if best is None or d < best[0]:
             best = (d, dx, dy, name)
     d, dx, dy, name = best
-    return f'{km_text(d)} {direction8(dx, dy)} de {name}'
+    return f'{km_text(d)} {direction8(dx, dy)} of {name}'
 
 
 def km_text(d):
-    return f'{d:.1f}'.replace('.', ',') + ' km'
+    return f'{d:.1f} km'
 
 
 def direction8(dx, dy):
@@ -436,7 +436,7 @@ def tile_box(form, pos):
 
 
 def aires_count_text(n):
-    return f'{n} AIRE' if n == 1 else f'{n} AIRES'
+    return f'{n} PAD' if n == 1 else f'{n} PADS'
 
 
 # ---- deuxieme ligne sous le plan : ville (a gauche) et dimensions des aires (a droite)
@@ -447,8 +447,8 @@ LINE2_DY = 108                              # ligne de base de la deuxieme ligne
 
 
 def dims_line(aires):
-    """Texte des dimensions : « AIRES 42×34 M »."""
-    return f'AIRES {dims_text(aires)} M'
+    """Texte des dimensions : « PADS 42×34 M »."""
+    return f'PADS {dims_text(aires)} M'
 
 
 def town_size(town, dims, w):
@@ -502,7 +502,7 @@ def draw_tile(page, d, site, pos, img, g, stats):
         plan_bottom = py0 + h_px
     base1, base2 = plan_bottom + 58, tile_base2(site.form, y)
     draw_text(d, (x + PLAN_DX, base1), f"{geo.dm(site.lat, 'N', 'S', 2)}  {geo.dm(site.lon, 'E', 'W', 3)}", 'bold', 39, INK, 'ls')
-    draw_text(d, (x + w - PLAN_DX, base1), f'ÉLÉV {geo.thin(site.elev_ft)} FT', 'bold', 39, INK, 'rs')
+    draw_text(d, (x + w - PLAN_DX, base1), f'ELEV {geo.thin(site.elev_ft)} FT', 'bold', 39, INK, 'rs')
     dims = dims_line(site.aires)
     draw_line2(d, x, w, base2, site.town, dims, town_size(site.town, dims, w))
     if site.form == TWO:
@@ -515,7 +515,7 @@ def draw_tile(page, d, site, pos, img, g, stats):
         la2, lo2 = proj.to_latlon(*c2)
         dx = (lo2 - lo1) * 111.2 * math.cos(math.radians(la2))
         dy = (la2 - la1) * 111.2
-        txt = f'{group_label(site.aires, g2)} à {km_text(math.hypot(dx, dy))} {direction8(dx, dy)} de {group_label(site.aires, g1)}'
+        txt = f'{group_label(site.aires, g2)} {km_text(math.hypot(dx, dy))} {direction8(dx, dy)} of {group_label(site.aires, g1)}'
         draw_text(d, (x + w / 2, base1), txt, 'bold', 35, GREY, 'ms')
 
 
@@ -525,7 +525,7 @@ def page_frame(theatre, right_bold, right_grey):
     d = ImageDraw.Draw(page)
     x0, x1 = MARGIN_X, PAGE_PX[0] - MARGIN_X + 1
     draw_text(d, (x0, 147), geo.theatre_display(theatre), 'bold', 56, INK, 'ls')
-    draw_text(d, (x0, 195), 'RÉPERTOIRE DES HÉLIPORTS', 'medium', 44, INK, 'ls')
+    draw_text(d, (x0, 195), 'HELIPORT DIRECTORY', 'medium', 44, INK, 'ls')
     draw_text(d, (x1, 155), right_bold, 'bold', 57, INK, 'rs')
     draw_text(d, (x1, 194), right_grey, 'regular', 35, GREY, 'rs')
     d.rectangle([x0, 219, x1 - 1, 222], fill=INK)
@@ -536,10 +536,11 @@ def page_frame(theatre, right_bold, right_grey):
 def footer(d, left):
     x1 = PAGE_PX[0] - MARGIN_X + 1
     draw_text(d, (MARGIN_X, 2379), left, 'medium', 29, GREY, 'ls')
-    draw_text(d, (x1, 2379), 'PAS POUR LA NAVIGATION RÉELLE', 'bold', 29, INK, 'rs')
+    draw_text(d, (x1, 2379), 'NOT FOR REAL-WORLD NAVIGATION', 'bold', 29, INK, 'rs')
 
 
-FOOT_LEFT = 'Tous les plans à la même échelle · aires et numéros : DCS (pydcs) · fond : carte F10 · WGS84'
+FOOT_LEFT = 'All plans at the same scale · pads and numbers: DCS (pydcs) · background: F10 map · WGS84'
+FOOT_INDEX = 'Page: page of the PDF collection · position: pydcs airfield · nearest town: towns.json list'
 INDEX_ROWS_PER_PAGE = 50
 INDEX_Y0, INDEX_PITCH = 300, 40
 
@@ -559,8 +560,8 @@ def draw_index_page(theatre, sites, k, n_pages):
     x1 = PAGE_PX[0] - MARGIN_X + 1
     cols = {'name': MARGIN_X, 'aires': 520, 'pos': 590, 'town': 960, 'page': x1}
     y = 262
-    for key, label, anchor in (('name', 'NOM', 'ls'), ('aires', 'AIRES', 'rs'), ('pos', 'POSITION', 'ls'),
-                               ('town', 'VILLE LA PLUS PROCHE', 'ls'), ('page', 'PAGE', 'rs')):
+    for key, label, anchor in (('name', 'NAME', 'ls'), ('aires', 'PADS', 'rs'), ('pos', 'POSITION', 'ls'),
+                               ('town', 'NEAREST TOWN', 'ls'), ('page', 'PAGE', 'rs')):
         draw_text(d, (cols[key], y), label, 'semibold', 26, GREY, anchor)
     d.rectangle([MARGIN_X, 272, x1 - 1, 273], fill=INK)
     for i, s in enumerate(chunk):
@@ -571,7 +572,7 @@ def draw_index_page(theatre, sites, k, n_pages):
         draw_text(d, (cols['town'], y), s.town, 'regular', 31, INK, 'ls')
         draw_text(d, (cols['page'], y), str(s.page), 'bold', 31, INK, 'rs')
         d.rectangle([MARGIN_X, y + 9, x1 - 1, y + 9], fill=(222, 222, 222))
-    footer(d, "Numéro de page : page du recueil (PDF) · position : aérodrome pydcs · ville : liste towns.json")
+    footer(d, FOOT_INDEX)
     return page
 
 

@@ -253,7 +253,7 @@ def test_end_with_unknown_threshold_elevation_is_dropped(six):
 def test_mentions_carry_the_whole_year(six):
     data = six['Adana'][0]
     (p,) = approach.build_approach_pages(dataclasses.replace(data, year=1985.5), log=lambda *a: None)
-    assert 'déclinaison 1985).' in html.unescape(p.svg) and p.info['mentions'][0].endswith('déclinaison 1985).')
+    assert '1985 declination).' in html.unescape(p.svg) and p.info['mentions'][0].endswith('1985 declination).')
 
 
 # ---------- 2.3 : la geometrie ----------
@@ -276,11 +276,11 @@ def test_slope_altitudes():
 def test_table_altitudes_and_dme_distances_of_adana_and_paphos(six):
     (a,) = six['Adana'][1]
     assert list(a.info['table_altitudes'].values()) == [3300, 2980, 2660, 2340, 2020, 1710, 1390, 1070, 750, 430]
-    assert list(a.info['dme_distances'].values()) == ['6,6', '5,6', '4,6', '3,6', '2,6', '1,6', '0,6', '0,4', '1,4', '2,4']
+    assert list(a.info['dme_distances'].values()) == ['6.6', '5.6', '4.6', '3.6', '2.6', '1.6', '0.6', '0.4', '1.4', '2.4']
     assert a.info['profile_altitudes'] == {10: 3300, 8: 2660, 6: 2020, 4: 1390, 2: 750}
     (p,) = six['Paphos'][1]
     assert list(p.info['table_altitudes'].values()) == [3320, 3000, 2690, 2370, 2050, 1730, 1410, 1090, 770, 460]
-    assert list(p.info['dme_distances'].values()) == ['9,6', '8,6', '7,6', '6,6', '5,6', '4,6', '3,6', '2,6', '1,6', '0,6']
+    assert list(p.info['dme_distances'].values()) == ['9.6', '8.6', '7.6', '6.6', '5.6', '4.6', '3.6', '2.6', '1.6', '0.6']
 
 
 def test_the_dme_is_the_nearest_dme_beacon_to_the_threshold(six):
@@ -299,21 +299,21 @@ def test_page_without_dme_has_two_table_rows(six):
     d2 = dataclasses.replace(data, beacons=[b for b in data.beacons if b.kind == 'NDB'])
     (p,) = approach.build_approach_pages(d2, log=lambda *a: None)
     assert p.info['dme'] is None and p.info['dme_distances'] == {}
-    assert 'NM DU SEUIL' in texts(p.svg) and 'ALTITUDE FT' in texts(p.svg) and texts(p.svg, 188.4) == [p.info['mentions'][0]]       # la mention remonte : plus de ligne DME
+    assert 'NM FROM THR' in texts(p.svg) and 'ALTITUDE FT' in texts(p.svg) and texts(p.svg, 188.4) == [p.info['mentions'][0]]       # la mention remonte : plus de ligne DME
 
 
 # ---------- 2.2, 2.6 : les textes ----------
 def test_bands_and_mentions_of_adana(six):
     (p,) = six['Adana'][1]
     row = texts(p.svg, 27.4)
-    assert row == ['ILS 05', 'LOC', 'IADA 108.70', 'CAP', '052°', 'SEUIL', '56 FT', 'PENTE', '3,0°', 'TCH', '55 FT']
+    assert row == ['ILS 05', 'LOC', 'IADA 108.70', 'CRS', '052°', 'THR', '56 FT', 'GP', '3.0°', 'TCH', '55 FT']
     bal = texts(p.svg, 33.6)
-    assert bal == ['BALISES', 'VOR/DME', 'ADA 112.70 · 3,4 NM du seuil', 'NDB', 'ADN 395 · 0,4 NM du seuil']
-    assert p.info['mentions'] == ("Pas une carte d'approche réelle : DCS ne donne ni procédure ni minima. Axe : cap au compas du cockpit (grille − déclinaison 1985).",
-                                  "Plan de 3° supposé, depuis l'antenne de glide (331 m après le seuil) ; relief non représenté. Données : beacons.lua, pydcs.")
+    assert bal == ['NAVAIDS', 'VOR/DME', 'ADA 112.70 · 3.4 NM FROM THR', 'NDB', 'ADN 395 · 0.4 NM FROM THR']
+    assert p.info['mentions'] == ("Not a real approach chart: DCS gives no procedure and no minima. Course: cockpit compass heading (grid − 1985 declination).",
+                                  "3° glide path assumed, from the glide slope antenna (331 m past the threshold); terrain not shown. Data: beacons.lua, pydcs.")
     allt = texts(p.svg)
     assert all(m in allt for m in p.info['mentions'])
-    assert 'PROFIL — PLAN DE 3,0°' in allt and 'SEUIL 05 56 FT' in allt and 'NORD GRILLE (NORD DU JEU) EN HAUT' in allt and '2 NM' in allt
+    assert 'PROFILE — 3.0° GLIDE PATH' in allt and 'THR 05 56 FT' in allt and 'GRID NORTH (GAME NORTH) UP' in allt and '2 NM' in allt
     assert 'ILS 05' in allt and any(t.startswith('052°  IADA 108.70') for t in allt)
     assert '11-1' in allt and 'v1' in allt
 

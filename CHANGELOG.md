@@ -7,6 +7,10 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Unreleased
 
+**Charts in English.**
+
+- Every text on the pages is now in English: headers, runway table, legends, footer, approach pages and heliport directory, with the abbreviations of real-world charts (RWY, THR ELEV, MAG HDG, CRS, GP, NAVAIDS, ELEV). Decimals use a point; thousands have no separator.
+
 **A page showing the airfield in its surroundings.**
 
 - New page `10-8`, placed before the `10-9`, for every airfield with a wider F10 capture (`capture/f10capture.py capture --marge`): the F10 map around the airfield, lightened, with the runways, their headings, the radio beacons and the taxiway names, without parking. Towns less than 20 km from the airfield are marked at the edge of the frame with their distance, or by name when they are inside it.

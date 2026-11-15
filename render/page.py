@@ -19,6 +19,7 @@ X0, X1 = MARGIN, PAGE_W - MARGIN
 FRAME_X, FRAME_W = 11.0, 126.0
 FT = 3.28084
 VERSION = 'v1'
+ELEV_PREFIX = 'ELEV '      # bandeau d'elevation : `ELEV 159 FT` (`update_coords` et `republish` refusent toute autre forme)
 PLAN_MARGIN_M = 80.0
 FOND_S_MAX = 0.2        # lot heliports-fond (4.2) : echelle maximale du plan sur fond F10 (mm/m, 1:5 000)
 FOND_PX_MM = 1748 / 148  # resolution du fond F10 = celle du PNG (px par mm)
@@ -330,6 +331,19 @@ HEADER_ROW_Y = 21.2
 HEADER_ROW_GAP_MIN = 4.0       # mm : ecart minimal entre deux champs de la ligne d'en-tete
 
 
+_ELEV_TEXT = re.compile(r'ELEV \d+ FT')
+
+
+def elevation_text_problem(elev_text):
+    """None si `elev_text` est une elevation de page telle que ce moteur l'ecrit (`ELEV 159 FT`), sinon la phrase qui dit pourquoi
+    une page ne se relit pas : les outils de relecture (`update_coords`, `republish`) ne lisent que l'anglais, pas les pages
+    publiees en francais (releases anterieures, `ÉLÉV. 159 FT`)."""
+    if _ELEV_TEXT.fullmatch(elev_text):
+        return None
+    return (f"l'elevation {elev_text!r} n'est pas de la forme « ELEV <n> FT » : page publiee en francais (release anterieure) ou "
+            f"illisible ; cet outil ne lit que les pages en anglais, redessiner la page avec cette version")
+
+
 def header_row(elev_text, lat, lon, var_text):
     """Les cinq champs de la ligne d'en-tete (elevation, ARP en degres et minutes decimales, degres-minutes-secondes, MGRS,
     declinaison), en elements SVG : le premier en X0, le dernier finissant en X1, les ecarts egaux (ValueError sous 4 mm)."""
@@ -380,7 +394,7 @@ def header(doc, data, index, kind, bands=True):
     doc.add(L, text(X1, 14.7, VERSION, pt(6.5), 'regular', INK2, 'end'))
     doc.add(L, line(X0, 17.1, X1, 17.1, INK, 0.5))
     var, yl = geo.var_text(data.decl, data.year)
-    for el in header_row(f'ÉLÉV. {data.elev_ft} FT', data.lat, data.lon, f'{var} {yl}'):
+    for el in header_row(f'{ELEV_PREFIX}{data.elev_ft} FT', data.lat, data.lon, f'{var} {yl}'):
         doc.add(L, el)
     doc.add(L, line(X0, 22.8, X1, 22.8, INK, 0.25))
     if not bands:
@@ -395,13 +409,13 @@ def header(doc, data, index, kind, bands=True):
     bottom = 29.0
     if data.beacons:
         doc.add(L, rect(X0, 30.0, X1 - X0, 5.2, BAND))
-        doc.add(L, text(7.5, 33.6, 'BALISES', pt(7.6), 'bold'))
+        doc.add(L, text(7.5, 33.6, 'NAVAIDS', pt(7.6), 'bold'))
         pair_row(doc, L, [(b.kind, f'{b.callsign} {b.text}') for b in data.beacons], 44.0, 33.6, X1 - 44.0 - 1.5)
         bottom = 35.2
     return bottom
 
 
-FOOTER_RIGHT = 'PAS POUR LA NAVIGATION RÉELLE'
+FOOTER_RIGHT = 'NOT FOR REAL-WORLD NAVIGATION'
 FOOTER_MARGIN_MM = 3.0   # espace minimal entre le texte de gauche et la mention de droite
 
 
@@ -409,10 +423,10 @@ def footer_text(data, osm):
     """Texte de gauche du pied de page : OpenStreetMap n'est credite que pour ce qui vient d'OSM. Noms d'OSM (`osm` : des
     taxiways gardes) : « taxiways © OpenStreetMap contributors » ; noms du jeu (data.taxiway_source == 'jeu', fichier taxiways_dcs,
     couverts par « fichiers de DCS World ») : « OACI © OpenStreetMap contributors » si l'OACI vient du fichier OSM, sinon rien."""
-    s = 'DCS AIRFIELD CHARTS · données : carte F10 et fichiers de DCS World (Eagle Dynamics), via pydcs'
+    s = 'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics), via pydcs'
     if getattr(data, 'taxiway_source', 'osm') == 'jeu':
         if data.osm_icao:
-            s += ' · OACI © OpenStreetMap contributors'
+            s += ' · ICAO © OpenStreetMap contributors'
     elif osm:
         s += ' · taxiways © OpenStreetMap contributors'
     return s
@@ -432,14 +446,14 @@ def legend(doc, y, x_left=None, x_right=None, note=None, sym_r=SYM_PLAN_R, heli=
     L = 'Runway table'
     size = pt(6.3)
     if fond:                                           # lot heliports-fond (4.6) : cercle rouge de 1,3 mm, aligne a droite sur x_right
-        t = "AIRE D'H\u00c9LICOPT\u00c8RE (NUM\u00c9RO DCS) \u00b7 FOND : CARTE F10"
+        t = 'HELIPAD (DCS NUMBER) \u00b7 BACKGROUND: F10 MAP'
         x = x_right - (4.6 + text_width(t, 'regular', size))
         doc.add(L, circle(x + 1.5, y - 1.0, 1.3, 'none', AIRE_RED, AIRE_STROKE))
         doc.add(L, text(x + 4.4, y, t, size, 'regular', INK2))
         return
-    items = [('open', 'OUVERT'), ('shelter', 'ABRI (HAS, HANGAR)'), ('heli', 'H\u00c9LICOPT\u00c8RE SEUL')]
+    items = [('open', 'OPEN'), ('shelter', 'SHELTER (HAS, HANGAR)'), ('heli', 'HELICOPTER ONLY')]
     if heli:
-        items, note = [('heli', "AIRE D'H\u00c9LICOPT\u00c8RE (NUM\u00c9RO DCS)")], None
+        items, note = [('heli', 'HELIPAD (DCS NUMBER)')], None
     widths = [3.8 + text_width(t, 'regular', size) for _, t in items]
     gap = 7.0
     total = sum(widths) + gap * (len(items) - 1)
@@ -463,24 +477,23 @@ def legend(doc, y, x_left=None, x_right=None, note=None, sym_r=SYM_PLAN_R, heli=
 def runway_table(doc, data, frame_bottom_unused, head_y, rows_y, parking_count=True):
     L = 'Runway table'
     cols = [6.0, 20.0, 40.0, 68.0, 94.0]
-    heads = ['PISTE', 'CAP MAG', 'LONGUEUR × LARGEUR', 'ÉLÉV. SEUIL', 'ILS']
+    heads = ['RWY', 'MAG HDG', 'LENGTH × WIDTH', 'THR ELEV', 'ILS']
     if data.runways:                                   # lot heliports (4.2) : sans piste, ni tableau ni en-tetes
         for x, h in zip(cols, heads):
             doc.add(L, text(x, head_y, h, pt(5.2), 'semibold', INK2, spacing=0.4))
     if parking_count:                                  # la 10-8 ne dessine pas de parkings : pas de decompte
         n_total, n_shel = len(data.parkings), data.n_shelter
-        count = f'AIRES : {n_total}' if data.heli_mode else f'PARKINGS : {n_total} DONT {n_shel} EN ABRI'
+        count = f'HELIPADS: {n_total}' if data.heli_mode else f'PARKING: {n_total} ({n_shel} SHELTERED)'
         doc.add(L, text(X1, head_y, count, pt(6.6), 'bold', INK, 'end'))
     for e, y in zip(data.ends, rows_y):
         rw = data.runways[e.rw]
         Lm, Wm = rw.length, rw.width
-        dims = f'{geo.thin(Lm * FT)} × {geo.thin(Wm * FT)} FT   ({int(round(Lm))} × {int(round(Wm))} M)'
         dims = f'{geo.thin(Lm * FT)} × {geo.thin(Wm * FT)} FT ({int(round(Lm))} × {int(round(Wm))} M)'
         doc.add(L, text(cols[0], y, e.name, pt(7.2), 'bold'))
         doc.add(L, text(cols[1], y, f'{e.mag:05.1f}°', pt(7.2), 'bold'))
         doc.add(L, text(cols[2], y, dims, pt(6.9), 'regular'))
         if rw.surface == 'herbe':
-            doc.add(L, text(X1, y, 'PISTE EN HERBE', pt(6.9), 'bold', INK, 'end'))
+            doc.add(L, text(X1, y, 'GRASS RUNWAY', pt(6.9), 'bold', INK, 'end'))
         thr = f'{e.thr_elev_ft} FT' if e.thr_elev_ft is not None else '—'
         doc.add(L, text(cols[3], y, thr, pt(6.9), 'regular'))
         doc.add(L, text(cols[4], y, e.ils if e.ils else '—', pt(7.2), 'bold' if e.ils else 'regular'))

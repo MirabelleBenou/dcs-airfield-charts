@@ -176,11 +176,11 @@ def test_konya_page_footer_credits_osm_only_for_the_icao_when_the_names_come_fro
     _write_game(fresh_work, _game_doc(fresh_work, ref))
     data = analysis.analyze(fresh_work, 'Syria', 'Konya', 1985, log=lambda *a: None)
     svg = compose.build_pages(data, log=lambda *a: None)[0].svg
-    assert 'via pydcs · OACI © OpenStreetMap contributors' in svg and 'taxiways ©' not in svg
+    assert 'via pydcs · ICAO © OpenStreetMap contributors' in svg and 'taxiways ©' not in svg
 
 
 # ---------- le pied de page : trois textes, trois marges ----------
-BASE_FOOTER = 'DCS AIRFIELD CHARTS · données : carte F10 et fichiers de DCS World (Eagle Dynamics), via pydcs'
+BASE_FOOTER = 'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics), via pydcs'
 
 
 def _data(source, icao):
@@ -189,8 +189,8 @@ def _data(source, icao):
 
 FOOTERS = [
     ('osm', 'LTAN', True, BASE_FOOTER + ' · taxiways © OpenStreetMap contributors'),          # noms d'OSM : inchange
-    ('jeu', 'LTAN', True, BASE_FOOTER + ' · OACI © OpenStreetMap contributors'),               # noms du jeu, OACI d'OSM
-    ('jeu', 'LTAN', False, BASE_FOOTER + ' · OACI © OpenStreetMap contributors'),              # idem, tous les ways du jeu ecartes
+    ('jeu', 'LTAN', True, BASE_FOOTER + ' · ICAO © OpenStreetMap contributors'),               # noms du jeu, OACI d'OSM
+    ('jeu', 'LTAN', False, BASE_FOOTER + ' · ICAO © OpenStreetMap contributors'),              # idem, tous les ways du jeu ecartes
     ('jeu', None, True, BASE_FOOTER),                                                          # noms du jeu, sans OACI d'OSM
     ('osm', None, False, BASE_FOOTER),                                                         # ni noms d'OSM, ni jeu : inchange
 ]
@@ -211,9 +211,9 @@ def test_footer_never_touches_the_right_hand_notice_and_keeps_3_mm(source, icao,
     margin = (page.X1 - right) - (page.X0 + left)
     assert margin >= page.FOOTER_MARGIN_MM == 3.0
     if expected.endswith('taxiways © OpenStreetMap contributors'):
-        assert margin == pytest.approx(7.18, abs=0.01)
-    elif expected.endswith('OACI © OpenStreetMap contributors'):
-        assert margin == pytest.approx(10.44, abs=0.01)
+        assert margin == pytest.approx(13.73, abs=0.01)
+    elif expected.endswith('ICAO © OpenStreetMap contributors'):
+        assert margin == pytest.approx(16.99, abs=0.01)
     print(f'marge {source}/{icao}/{osm} : {margin:.2f} mm')
 
 
@@ -223,4 +223,4 @@ def test_footer_draws_the_text_in_the_svg():
     d = Doc()
     page.footer(d, _data('jeu', 'LTAN'), True)
     svg = d.render()
-    assert 'via pydcs · OACI © OpenStreetMap contributors' in svg and 'PAS POUR LA NAVIGATION RÉELLE' in svg
+    assert 'via pydcs · ICAO © OpenStreetMap contributors' in svg and 'NOT FOR REAL-WORLD NAVIGATION' in svg

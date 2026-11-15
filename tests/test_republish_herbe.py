@@ -37,7 +37,7 @@ def test_retouch_labels_hard_page_is_unchanged(konya):
 def test_retouch_north_and_caps_accepts_a_grass_page(konya):
     svg = _page(konya, True)
     new, details = republish.retouch_north_and_caps(svg, 'X_10-9')
-    assert 'PISTE EN HERBE' in new
+    assert 'GRASS RUNWAY' in new
 
 
 def test_retouch_labels_still_refuses_any_other_runway_shape(konya):

@@ -214,12 +214,12 @@ def konya_latlon():
     return proj.to_latlon(ap.position.x, ap.position.y)
 
 
-def three_fields(lat, lon, elev='ÉLÉV. 3392 FT', var='VAR 3°E (1985)'):
+def three_fields(lat, lon, elev='ELEV 3392 FT', var='VAR 3°E (1985)'):
     t = lambda x, s: svgdoc.text(x, 21.2, s, pt(7.2), 'bold')
     return [t(6, elev), t(51.3, geo.arp_text(lat, lon)), t(96.7, var)]
 
 
-def five_fields(lat, lon, elev='ÉLÉV. 3392 FT', var='VAR 3°E (1985)'):
+def five_fields(lat, lon, elev='ELEV 3392 FT', var='VAR 3°E (1985)'):
     return page.header_row(elev, lat, lon, var)
 
 

@@ -77,13 +77,13 @@ def test_mgrs_band_limits():
 
 # ---------- page.header_row ----------
 def row_args(lat=52.38827901650516, lon=11.826442332722703):
-    return 'ÉLÉV. 159 FT', lat, lon, 'VAR 0°W (1985)'
+    return 'ELEV 159 FT', lat, lon, 'VAR 0°W (1985)'
 
 
 def test_header_row_order_and_content():
     els = page.header_row(*row_args())
     assert [html.unescape(TEXT.fullmatch(e).group(2)) for e in els] == [
-        'ÉLÉV. 159 FT', "ARP N52°23.3' E011°49.6'", "N52°23'18\" E011°49'35\"", 'MGRS 32U PD 9233 0798', 'VAR 0°W (1985)']
+        'ELEV 159 FT', "ARP N52°23.3' E011°49.6'", "N52°23'18\" E011°49'35\"", 'MGRS 32U PD 9233 0798', 'VAR 0°W (1985)']
     for e in els:
         assert ' y="21.2"' in e and 'font-weight="bold"' in e and f'font-size="{svgdoc.f(pt(7.2))}"' in e
         assert 'text-anchor' not in e
@@ -102,11 +102,11 @@ def test_header_row_equal_gaps_and_ends_at_x1():
 
 def test_header_row_too_wide_raises():
     with pytest.raises(ValueError):
-        page.header_row('ÉLÉV. ' + '8' * 40 + ' FT', *row_args()[1:])
+        page.header_row('ELEV ' + '8' * 40 + ' FT', *row_args()[1:])
 
 
 def test_header_row_gap_limit_is_four_mm(monkeypatch):
-    base = sum(text_width(s, 'bold', pt(7.2)) for s in ['ÉLÉV. 159 FT', "ARP N52°23.3' E011°49.6'",
+    base = sum(text_width(s, 'bold', pt(7.2)) for s in ['ELEV 159 FT', "ARP N52°23.3' E011°49.6'",
                                                          "N52°23'18\" E011°49'35\"", 'MGRS 32U PD 9233 0798', 'VAR 0°W (1985)'])
     monkeypatch.setattr(page, 'X1', page.X0 + base + 4 * 4.01)
     page.header_row(*row_args())
@@ -127,7 +127,7 @@ def test_page_header_writes_the_five_fields():
     page.header(doc, header_data(), '10-9', 'AÉRODROME', bands=False)
     got = texts_at(doc.render(), '21.2')
     assert len(got) == 5
-    assert got[:3] == ['ÉLÉV. 3392 FT', "ARP N37°58.7' E032°33.7'", "N37°58'40\" E032°33'41\""]
+    assert got[:3] == ['ELEV 3392 FT', "ARP N37°58.7' E032°33.7'", "N37°58'40\" E032°33'41\""]
     assert got[3] == 'MGRS ' + geo.mgrs(37.97775, 32.56149) and got[3].startswith('MGRS 36S ') and got[4] == 'VAR 3°E (1985)'
 
 
@@ -142,14 +142,14 @@ def test_page_header_and_update_coords_share_header_row(monkeypatch):
     monkeypatch.setattr(page, 'header_row', fake)
     doc = svgdoc.Doc()
     page.header(doc, header_data(), '10-9', 'AÉRODROME', bands=False)
-    assert len(calls) == 1 and calls[0][0] == 'ÉLÉV. 3392 FT'
+    assert len(calls) == 1 and calls[0][0] == 'ELEV 3392 FT'
     svg = svg_page("ARP N37°58.7' E032°33.7'")
     new, _ = update_coords.rewrite_page(svg, 'Konya_10-9', update_coords.arp_index('Syria'))
     assert len(calls) == 2 and texts_at(new, '21.2') == ['A'] * 5
 
 
 # ---------- update_coords ----------
-def svg_page(arp, elev='ÉLÉV. 3392 FT', var='VAR 3°E (1985)', body='<rect x="1" y="1" width="2" height="2"/>'):
+def svg_page(arp, elev='ELEV 3392 FT', var='VAR 3°E (1985)', body='<rect x="1" y="1" width="2" height="2"/>'):
     t = lambda x, s: svgdoc.text(x, 21.2, s, pt(7.2), 'bold')
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="148mm" height="210mm" '
             'viewBox="0 0 148 210">\n<g>\n' + body + '\n' + t(6, elev) + '\n' + t(51.3, arp) + '\n' + t(96.7, var) + '\n'
@@ -191,7 +191,7 @@ def test_update_coords_rewrites_pages_and_keeps_the_rest(old_zip, tmp_path, caps
     summary = capsys.readouterr().out
     assert 'pages mises a jour : 2' in summary and 'recueils refaits : 1' in summary
     assert 'entrees recopiees telles quelles : 2' in summary
-    assert "Konya_10-9 : ÉLÉV. 3392 FT | " + konya_arp() in summary and ' | MGRS 36S ' in summary
+    assert "Konya_10-9 : ELEV 3392 FT | " + konya_arp() in summary and ' | MGRS 36S ' in summary
     with zipfile.ZipFile(zin) as a, zipfile.ZipFile(out) as b:
         assert [i.filename for i in a.infolist()] == [i.filename for i in b.infolist()]
         assert [i.compress_type for i in a.infolist()] == [i.compress_type for i in b.infolist()]
@@ -200,7 +200,7 @@ def test_update_coords_rewrites_pages_and_keeps_the_rest(old_zip, tmp_path, caps
         for name, old in pages.items():
             new = b.read(f'pack/svg/{name}.svg').decode('utf-8')
             fields = texts_at(new, '21.2')
-            assert len(fields) == 5 and fields[0] == 'ÉLÉV. 3392 FT' and fields[1] == konya_arp() and fields[4] == 'VAR 3°E (1985)'
+            assert len(fields) == 5 and fields[0] == 'ELEV 3392 FT' and fields[1] == konya_arp() and fields[4] == 'VAR 3°E (1985)'
             assert fields[3].startswith('MGRS 36S ')
             # hors de la ligne, le SVG est identique a l'octet
             head, tail = old.index('<text x="6" y="21.2"'), old.index('<line x1="6" y1="22.8"')
@@ -251,7 +251,7 @@ def test_update_coords_arp_must_designate_one_airfield():
 def test_update_coords_gap_too_small_stops():
     index = update_coords.arp_index('Syria')
     with pytest.raises(update_coords.UpdateError, match='Konya_10-9'):
-        update_coords.rewrite_page(svg_page(konya_arp(), elev='ÉLÉV. ' + '8' * 40 + ' FT'), 'Konya_10-9', index)
+        update_coords.rewrite_page(svg_page(konya_arp(), elev='ELEV ' + '8' * 40 + ' FT'), 'Konya_10-9', index)
 
 
 def test_update_coords_second_text_must_be_the_arp():

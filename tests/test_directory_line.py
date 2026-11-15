@@ -11,9 +11,9 @@ from pypdf import PdfReader
 
 from render import directory, republish
 
-# Syria : les sept vignettes dont la ville, a 36 px, touchait les dimensions ou en etait a moins de 24 px
-SYRIA_SMALL = {'HS03': 33, 'HS07': 33, 'HS12': 35, 'HS13': 35.5, 'HS17': 34, 'HT02': 32, 'H_med_orig_09': 32}
-SYRIA_PAGES = [30, 31, 32, 33, 43, 46]
+# Syria : les cinq vignettes dont la ville, a 36 px, touche les dimensions ou en est a moins de 24 px (textes en anglais : `of`, `PADS`)
+SYRIA_SMALL = {'HS03': 34, 'HS07': 34, 'HS17': 34.5, 'HT02': 32.5, 'H_med_orig_09': 32.5}
+SYRIA_PAGES = [30, 31, 33, 43, 46]
 FOLDER = 'DCS_Airfield_Charts_Syria_1985_helicopters/'
 
 
@@ -24,10 +24,10 @@ def gap(town, dims, w, size):
         - (directory.PLAN_DX + directory.font('regular', size).getlength(town))
 
 
-@pytest.mark.parametrize('town', ['0,5 km NW de Al Safira Military Base', '6,5 km NE de Chemical Weapons Storage Area',
-                                  '0,8 km S de City Training and Research Hospital', '0,7 km SW de Army Vehicle Training Ground'])
+@pytest.mark.parametrize('town', ['0.5 km NW of Al Safira Military Base', '6.5 km NE of Chemical Weapons Storage Area',
+                                  '0.8 km S of City Training and Research Hospital', '0.7 km SW of Army Vehicle Training Ground'])
 def test_town_size_is_the_largest_step_leaving_24_px(town):
-    w, dims = directory.TILE_W, 'AIRES 42×34 M'
+    w, dims = directory.TILE_W, 'PADS 42×34 M'
     size = directory.town_size(town, dims, w)
     assert 0 < size <= 36 and size * 2 == int(size * 2)               # pas de 0,5 px
     assert gap(town, dims, w, size) >= 24
@@ -36,20 +36,20 @@ def test_town_size_is_the_largest_step_leaving_24_px(town):
 
 
 def test_town_that_fits_stays_at_36():
-    size = directory.town_size('0,5 km NW de Al Safira Military Base', 'AIRES 42×34 M', directory.TILE_W)
+    size = directory.town_size('0.5 km NW of Al Safira Military Base', 'PADS 42×34 M', directory.TILE_W)
     assert size == 36 and isinstance(size, int)
     assert directory.font('regular', 36.0) is directory.font('regular', 36)      # 36 et 36.0 : la meme police
 
 
 def test_town_size_wider_tile_gives_more_room():
-    town, dims = '0,8 km S de City Training and Research Hospital', 'AIRES 42×34 M'
+    town, dims = '0.8 km S of City Training and Research Hospital', 'PADS 42×34 M'
     wide = 2 * directory.TILE_W + directory.TILE_GAP
     assert directory.town_size(town, dims, directory.TILE_W) < 36 == directory.town_size(town, dims, wide)
 
 
 def test_town_size_stops_when_nothing_fits():
     with pytest.raises(directory.DirectoryError):
-        directory.town_size('0,5 km N de Nazareth', 'AIRES 42×34 M', 100)
+        directory.town_size('0.5 km N of Nazareth', 'PADS 42×34 M', 100)
 
 
 # ---------- le rejeu de Syria et de Germany ----------
@@ -58,7 +58,7 @@ def syria_tiles():
     return republish.directory_tiles('Syria')
 
 
-def test_syria_replay_gives_the_seven_sites(syria_tiles):
+def test_syria_replay_gives_the_five_sites(syria_tiles):
     tiles, n_index = syria_tiles
     assert n_index == 3 and len(tiles) == 141 and max(t[0] for t in tiles) == 47
     small = {t[1]: t[7] for t in tiles if t[7] < 36}
@@ -78,8 +78,8 @@ def test_germany_replay_has_no_small_town():
 def test_town_text_is_the_build_directory_one(syria_tiles):
     tiles, _ = syria_tiles
     towns = {t[1]: t[5] for t in tiles}
-    assert towns['HS03'] == '6,5 km NE de Chemical Weapons Storage Area'
-    assert towns['HT02'] == '0,8 km S de City Training and Research Hospital'
+    assert towns['HS03'] == '6.5 km NE of Chemical Weapons Storage Area'
+    assert towns['HT02'] == '0.8 km S of City Training and Research Hospital'
 
 
 # ---------- le moteur et la republication appellent la meme fonction ----------
@@ -99,7 +99,7 @@ def test_engine_and_republish_use_the_same_size_function(monkeypatch):
     sites, pages, _ = fiches.replay_directory('Syria')
     site = next(s for s in sites if s.name == 'HS03')
     pos = next(p for pg in pages for s, p in pg['entries'] if s is site)
-    site.town = '6,5 km NE de Chemical Weapons Storage Area'
+    site.town = '6.5 km NE of Chemical Weapons Storage Area'
     site.lat = site.lon = 0.0
     monkeypatch.setattr(directory, 'draw_plan', lambda site, img, g, c, w, h, first, stats: Image.new('RGB', (w, h), (222, 222, 222)))
     calls.clear()
@@ -114,7 +114,7 @@ def test_engine_draws_the_line_like_the_republication(monkeypatch):
     sites, pages, _ = fiches.replay_directory('Syria')
     site = next(s for s in sites if s.name == 'HT02')
     pos = next(p for pg in pages for s, p in pg['entries'] if s is site)
-    town = '0,8 km S de City Training and Research Hospital'
+    town = '0.8 km S of City Training and Research Hospital'
     site.town, site.lat, site.lon = town, 0.0, 0.0
     x, y, w, _ = directory.tile_box(site.form, pos)
     base2 = directory.tile_base2(site.form, y)
@@ -125,7 +125,7 @@ def test_engine_draws_the_line_like_the_republication(monkeypatch):
     band = np.asarray(page, dtype=np.int16)[y0:y1 + 1, x0:x1 + 1]
     dims = directory.dims_line(site.aires)
     size = directory.town_size(town, dims, w)
-    assert size == 32
+    assert size == 32.5
     assert np.array_equal(band, republish.line_band(x, w, base2, town, dims, size))
 
 
@@ -191,7 +191,7 @@ def _pdf_image_bytes(data):
 def test_republish_directory_counts(synth):
     _, _, _, res, _, _ = synth
     d = res.directory
-    assert (d.tiles, d.controlled, d.retouched, d.already, d.pages) == (141, 7, 7, 0, SYRIA_PAGES)
+    assert (d.tiles, d.controlled, d.retouched, d.already, d.pages) == (141, 5, 5, 0, SYRIA_PAGES)
     assert {r[1]: r[3] for r in d.rows} == SYRIA_SMALL
     assert all(r[4] <= 6 < r[5] for r in d.rows)
 
@@ -244,7 +244,7 @@ def test_republish_is_idempotent_on_the_directory(synth):
     again = root / 'again.zip'
     res = republish.republish_zip('Syria', out, again)
     d = res.directory
-    assert (d.controlled, d.retouched, d.already, d.pages) == (7, 0, 7, [])
+    assert (d.controlled, d.retouched, d.already, d.pages) == (5, 0, 5, [])
     with zipfile.ZipFile(out) as a, zipfile.ZipFile(again) as b:
         assert a.read(FOLDER + 'Syria_heliports_directory.pdf') == b.read(FOLDER + 'Syria_heliports_directory.pdf')
         assert all(a.read(n) == b.read(n) for n in a.namelist())
@@ -254,8 +254,8 @@ def test_republish_summary_line(synth, capsys):
     root, zin, _, _, _, _ = synth
     assert republish.main(['Syria', '--zip', str(zin), '--out', str(root / 'summary.zip')]) == 0
     out = capsys.readouterr().out
-    assert ('repertoire des heliports : 141 vignettes ; controlees (ville sous 36 px) : 7 ; retouchees : 7 ; '
-            'deja retouchees : 0 ; pages touchees : 6 p30 p31 p32 p33 p43 p46') in out
+    assert ('repertoire des heliports : 141 vignettes ; controlees (ville sous 36 px) : 5 ; retouchees : 5 ; '
+            'deja retouchees : 0 ; pages touchees : 5 p30 p31 p33 p43 p46') in out
 
 
 def test_republish_untouched_directory_is_copied_to_the_byte(tmp_path, syria_tiles):
@@ -269,7 +269,7 @@ def test_republish_untouched_directory_is_copied_to_the_byte(tmp_path, syria_til
     zin = make_zip(tmp_path / 'in.zip', pages)
     out = tmp_path / 'out.zip'
     res = republish.republish_zip('Syria', zin, out)
-    assert (res.directory.retouched, res.directory.already, res.directory.pages) == (0, 7, [])
+    assert (res.directory.retouched, res.directory.already, res.directory.pages) == (0, 5, [])
     with zipfile.ZipFile(zin) as a, zipfile.ZipFile(out) as b:
         assert all(a.read(n) == b.read(n) for n in a.namelist())
 

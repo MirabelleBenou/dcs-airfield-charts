@@ -177,16 +177,16 @@ def _table(surface):
 
 def test_table_says_grass_strip_on_each_row_right_aligned_on_x1():
     out = _table('herbe')
-    assert out.count('PISTE EN HERBE') == 2
+    assert out.count('GRASS RUNWAY') == 2
     import re
-    for m in re.finditer(r'<text[^>]*>PISTE EN HERBE</text>', out):
+    for m in re.finditer(r'<text[^>]*>GRASS RUNWAY</text>', out):
         tag = m.group(0)
         assert 'text-anchor="end"' in tag and f'x="{page.f(page.X1)}"' in tag
         assert 'font-weight="700"' in tag or 'bold' in tag
 
 
 def test_table_hard_runway_has_no_grass_text():
-    assert 'PISTE EN HERBE' not in _table('dur')
+    assert 'GRASS RUNWAY' not in _table('dur')
 
 
 # ---------- 2.4 le repli : seulement pour une base qui a une entree declaree ----------

@@ -46,7 +46,7 @@ Examples from Syria: three airfields, a helicopter base and a page of the helipo
 |---|---|
 | ![Adana 10-9](docs/examples/syria/LTAF_Adana_10-9.png) | ![Ramat David 10-9](docs/examples/syria/LLRD_Ramat_David_10-9.png) |
 
-**Helicopters.** A helicopter base with no runway is drawn on the softened F10 map, each pad circled in red at its real size with its DCS number. The heliport directory gives the other heliports four to a page, all at the same scale, with position, elevation, pad sizes and the nearest town (the charts are in French: « 1,2 km SW de Yarka » is 1.2 km south-west of Yarka).
+**Helicopters.** A helicopter base with no runway is drawn on the softened F10 map, each pad circled in red at its real size with its DCS number. The heliport directory gives the other heliports four to a page, all at the same scale, with position, elevation, pad sizes and the nearest town (for example `1.2 km SW of Yarka`).
 
 | Helicopter base | PDF | 10-9 |
 |---|---|---|

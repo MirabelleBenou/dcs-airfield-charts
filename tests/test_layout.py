@@ -34,7 +34,7 @@ def test_reading_scale_bounds_and_value():
     assert layout.reading_scale(pts) == pytest.approx(3.8 / 20)
     assert layout.reading_scale([(0, 0), (0, 2)]) == layout.READ_MAX
     assert layout.reading_scale([(0, 0), (0, 500)]) == layout.READ_MIN
-    assert layout.ratio_text(0.1515) == '1:6 601'
+    assert layout.ratio_text(0.1515) == '1:6601'
 
 
 # ---------- regle des pages (cadrage 4.5) ----------

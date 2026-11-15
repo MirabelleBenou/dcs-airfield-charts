@@ -177,5 +177,5 @@ def year_label(year):
 
 
 def thin(n):
-    """Entier groupe par espaces : 11 089."""
-    return f"{int(round(n)):,}".replace(',', ' ')
+    """Entier sans separateur des milliers (texte de page) : 11089."""
+    return str(int(round(n)))
