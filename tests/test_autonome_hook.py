@@ -446,7 +446,8 @@ def test_chaque_appel_a_dcs_est_sous_pcall():
 
 def test_aucun_appel_hors_liste():
     code = '\n'.join(c for _, c in lignes_de_code())
-    assert set(re.findall(r'\b(?:Sim|Export)\.(\w+)', code)) == {'getRealTime', 'getPause', 'exitProcess', 'LoSetCommand', 'setUserCallbacks'}
+    assert set(re.findall(r'\b(?:Sim|Export)\.(\w+)', code)) == {'getRealTime', 'getPause', 'exitProcess', 'LoSetCommand', 'setUserCallbacks',
+                                                                                'LoGetAltitude', 'LoGeoCoordinatesToLoCoordinates'}
     assert 'os.execute' in code and 'io.popen' not in code and 'require' not in code
 
 

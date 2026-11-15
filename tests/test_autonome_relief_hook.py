@@ -19,7 +19,7 @@ ALT_APPELS, NET_TAILLES, LAND_APPELS, SURF_APPELS = {}, {}, 0, 0
 function ALT_F(x, z) return 100 + x * 0.001 + z * 0.0002 end
 function SURF_F(x, z) return (math.floor(x / 100) + math.floor(z / 100)) % 4 + 1 end
 
-function LoGetAltitude(x, z)
+function FN_ALT(x, z)
   CLOCK.real = CLOCK.real + FAUX.cout_alt
   table.insert(ALT_APPELS, { x, z })
   local mode = FAUX.alt_echec[#ALT_APPELS]
@@ -30,16 +30,37 @@ function LoGetAltitude(x, z)
   return ALT_F(x, z)
 end
 
-function LoGeoCoordinatesToLoCoordinates(lon, lat)
+function FN_GEO(lon, lat)
   if FAUX.geo_echec == 'erreur' then error('geo en panne') end
   if FAUX.geo_echec then return nil end
   return { x = lat * 1000, z = lon * 1000 }
+end
+
+-- ce que le faux DCS offre : API = 'export' (seulement Export.*), 'globales' (seulement les globales), 'les_deux', ou
+-- 'centre_mission' (altitude d'export, aucune fonction pour le centre : seule la passerelle le donne), 'sans_altitude'
+function INSTALLER(api)
+  if api == 'export' or api == 'les_deux' or api == 'centre_mission' or api == 'sans_altitude' then
+    if api ~= 'sans_altitude' then Export.LoGetAltitude = FN_ALT end
+    if api ~= 'centre_mission' then Export.LoGeoCoordinatesToLoCoordinates = FN_GEO end
+  end
+  if api == 'globales' or api == 'les_deux' then
+    LoGetAltitude = FN_ALT
+    LoGeoCoordinatesToLoCoordinates = FN_GEO
+  end
 end
 
 net = {}
 function net.dostring_in(env, code)
   if FAUX.net_mode == 'erreur' then error('passerelle en panne') end
   if env ~= 'mission' then return 'mauvais environnement', true end
+  local coord = nil
+  if FAUX.coord ~= false then
+    coord = { LLtoLO = function(lat, lon)
+      if FAUX.coord == 'erreur' then error('coord en panne') end
+      if FAUX.coord == 'nil' then return nil end
+      return { x = lat * 1000, y = 0, z = lon * 1000 }
+    end }
+  end
   local land = {
     getHeight = function(v)
       LAND_APPELS = LAND_APPELS + 1
@@ -57,7 +78,7 @@ function net.dostring_in(env, code)
   local function a_do_script(chunk)               -- DCS 2.9.15+ : valeurs decalees d'un cran, la derniere est perdue
     local f, e = loadstring(chunk)
     if not f then return nil, 'erreur de syntaxe : ' .. tostring(e) end
-    setfenv(f, setmetatable({ land = land }, { __index = _G }))
+    setfenv(f, setmetatable({ land = land, coord = coord }, { __index = _G }))
     local a, b = f()
     return nil, a
   end
@@ -83,9 +104,10 @@ COUT = 0.015625              # 15,625 ms par appel de LoGetAltitude
 
 
 class HoteRelief(Hote):
-    def __init__(self, tmp_path, **kw):
+    def __init__(self, tmp_path, api='export', **kw):
         super().__init__(tmp_path, **kw)
         self.L.execute(FAUX_RELIEF)
+        self.L.execute(f"INSTALLER('{api}')")
 
     def demande(self, nom='z', **plus):
         d = {'id': f'01_{nom}', 'lat': 36.2, 'lon': 37.25, 'n': 5, 'pas_m': 100, 'methode': 'export', 'surface': False,
@@ -135,7 +157,9 @@ class HoteRelief(Hote):
 
 @pytest.fixture
 def h(tmp_path):
+    """Un faux DCS qui offre seulement Export.LoGetAltitude et Export.LoGeoCoordinatesToLoCoordinates (pas de globales)."""
     h = HoteRelief(tmp_path)
+    assert h.lua_val('type(LoGetAltitude)') == 'nil' and h.lua_val('type(LoGeoCoordinatesToLoCoordinates)') == 'nil'
     h.lancer_la_file()
     return h
 
@@ -181,9 +205,9 @@ def test_r3_export_json_complet(h):
     h.jusqu_a_fait()
     j = h.json()
     duree = 8 * DT + 25 * COUT                                         # 8 images de 1/4 s, puis 25 appels de 15,625 ms
-    assert list(j) == ['id', 'lat', 'lon', 'x0', 'z0', 'n', 'pas_m', 'methode', 'surface', 'budget_image_ms', 'points', 'erreurs',
+    assert list(j) == ['id', 'lat', 'lon', 'x0', 'z0', 'geo', 'n', 'pas_m', 'methode', 'surface', 'budget_image_ms', 'points', 'erreurs',
                        'duree_s', 'images', 'points_par_s', 'lot_max', 'fin']
-    assert j == {'id': '01_z', 'lat': 36.2, 'lon': 37.25, 'x0': 36.2 * 1000, 'z0': 37.25 * 1000, 'n': 5, 'pas_m': 100,
+    assert j == {'id': '01_z', 'lat': 36.2, 'lon': 37.25, 'x0': 36.2 * 1000, 'z0': 37.25 * 1000, 'geo': 'export', 'n': 5, 'pas_m': 100,
                  'methode': 'export', 'surface': False, 'budget_image_ms': 40, 'points': 25, 'erreurs': 0,
                  'duree_s': pytest.approx(duree, abs=0.0006), 'images': 9, 'points_par_s': pytest.approx(25 / duree, abs=0.006),
                  'lot_max': None, 'fin': 'complet'}
@@ -403,6 +427,126 @@ def test_r4_la_passerelle_est_appelee_dans_l_environnement_mission_avec_une_enve
     assert '%.17g' not in m.group(1)                                  # des nombres, pas du format
 
 
+# ------------------------------------------------------------------ addendum 1 : l'API d'export depuis le crochet du GUI
+
+GEO_PAR_API = {'export': 'export', 'globales': 'globale', 'les_deux': 'export', 'centre_mission': 'mission'}
+
+
+@pytest.fixture(params=sorted(GEO_PAR_API))
+def hapi(request, tmp_path):
+    h = HoteRelief(tmp_path, api=request.param)
+    h.lancer_la_file()
+    h.api = request.param
+    return h
+
+
+def test_a1_export_n5_et_json_pour_chaque_offre_de_l_environnement(hapi):
+    hapi.demande()
+    hapi.servir()
+    hapi.jusqu_a_fait()
+    assert hapi.csv() == attendu_csv() and hapi.fait == 'ok'
+    j = hapi.json()
+    assert j['geo'] == GEO_PAR_API[hapi.api] and j['points'] == 25 and j['erreurs'] == 0 and j['images'] == 9
+
+
+def test_a1_point_en_erreur_pour_chaque_offre(hapi):
+    hapi.faux("FAUX.alt_echec[7] = 'erreur'")
+    hapi.demande()
+    hapi.servir()
+    hapi.jusqu_a_fait()
+    assert hapi.csv() == attendu_csv(vides={6}) and hapi.json()['erreurs'] == 1
+
+
+def test_a1_mission_pour_chaque_offre(hapi):
+    hapi.demande(methode='mission', surface=True, budget_image_ms=1000)
+    hapi.servir()
+    hapi.jusqu_a_fait()
+    assert hapi.csv() == attendu_csv(surface=True) and hapi.json()['geo'] == GEO_PAR_API[hapi.api]
+
+
+def test_a1_annulation_et_fin_de_nuit_pour_chaque_offre(hapi):
+    hapi.demande(n=10)
+    hapi.servir()
+    hapi.images(2)
+    (hapi.dir / 'releve_annule.txt').write_text('x')
+    hapi.images(1)
+    assert hapi.fait == 'annule' and hapi.json()['fin'] == 'annule' and hapi.json()['geo'] == GEO_PAR_API[hapi.api]
+
+
+def test_a1_seulement_les_globales_geo_globale(tmp_path):
+    h = HoteRelief(tmp_path, api='globales')
+    h.lancer_la_file()
+    assert h.lua_val('type(Export.LoGetAltitude)') == 'nil' and h.lua_val('type(Export.LoGeoCoordinatesToLoCoordinates)') == 'nil'
+    h.demande()
+    h.servir()
+    h.jusqu_a_fait()
+    assert h.json()['geo'] == 'globale' and h.csv() == attendu_csv()
+
+
+def test_a1_l_export_passe_avant_les_globales(tmp_path):
+    h = HoteRelief(tmp_path, api='les_deux')
+    h.faux("LoGetAltitude = function() error('ne doit pas servir') end; LoGeoCoordinatesToLoCoordinates = function() error('non') end")
+    h.lancer_la_file()
+    h.demande()
+    h.servir()
+    h.jusqu_a_fait()
+    assert h.json()['geo'] == 'export' and h.csv() == attendu_csv()
+
+
+def test_a1_geo_export_en_echec_la_globale_prend_le_relais(tmp_path):
+    h = HoteRelief(tmp_path, api='les_deux')
+    h.faux("Export.LoGeoCoordinatesToLoCoordinates = function() return nil end")
+    h.lancer_la_file()
+    h.demande()
+    h.servir()
+    h.jusqu_a_fait()
+    assert h.json()['geo'] == 'globale' and h.csv() == attendu_csv()
+
+
+def test_a1_aucune_fonction_pour_le_centre_la_passerelle_donne_le_centre(tmp_path):
+    h = HoteRelief(tmp_path, api='centre_mission')
+    assert h.lua_val('type(Export.LoGeoCoordinatesToLoCoordinates)') == 'nil' and h.lua_val('type(LoGeoCoordinatesToLoCoordinates)') == 'nil'
+    h.faux("""
+      CODES = {}
+      local vrai = net.dostring_in
+      net.dostring_in = function(env, code) table.insert(CODES, { env, code }); return vrai(env, code) end
+    """)
+    h.lancer_la_file()
+    h.demande(n=4, budget_image_ms=1000)
+    h.servir()
+    h.jusqu_a_fait()
+    env, code = h.lua_val('CODES[1][1]'), h.lua_val('CODES[1][2]')
+    assert env == 'mission' and 'coord.LLtoLO' in code and 'a_do_script([====[' in code and h.lua_val('#CODES') == 1
+    m = re.search(r'local LAT, LON = ([^\n]*)\n', code)
+    assert [float(v) for v in m.group(1).split(', ')] == [36.2, 37.25]
+    j = h.json()
+    assert j['geo'] == 'mission' and j['x0'] == 36.2 * 1000 and j['z0'] == 37.25 * 1000
+    assert h.csv() == attendu_csv(n=4)
+
+
+def test_a1_aucune_altitude_d_export_erreur_export_absent(tmp_path):
+    h = HoteRelief(tmp_path, api='sans_altitude')
+    h.lancer_la_file()
+    h.demande()
+    h.servir()
+    assert h.fait == 'erreur export_absent' and h.fichier('z.csv') is None and h.sorties == 0
+    (h.dir / 'releve_fait.txt').unlink()
+    h.demande(nom='m', methode='mission', budget_image_ms=1000)       # `mission` n'en a pas besoin
+    h.servir()
+    h.jusqu_a_fait()
+    assert h.fait == 'ok' and h.json('m')['geo'] == 'export'
+
+
+def test_a1_l_altitude_est_choisie_une_fois_au_debut_du_releve(h):
+    h.demande(n=10)
+    h.servir()
+    h.images(2)
+    avant = h.appels_alt()
+    h.faux('Export.LoGetAltitude = nil')                               # en cours de releve : le releve garde sa fonction
+    h.jusqu_a_fait()
+    assert h.fait == 'ok' and h.appels_alt() == 100 and avant < 100
+
+
 # ------------------------------------------------------------------ R5 : les cas
 
 DEMANDES_FAUTIVES = [
@@ -480,25 +624,50 @@ def test_r5_releve_deja_en_cours(h):
     assert h.csv('a') == attendu_csv(n=10)
 
 
-def test_r5_geo_en_echec(h):
-    h.faux("FAUX.geo_echec = 'nil'")
+def test_r5_geo_en_echec_partout(h):
+    h.faux("FAUX.geo_echec = 'nil'; FAUX.coord = 'nil'")
     h.demande()
     h.servir()
     assert h.fait == 'erreur geo' and h.fichier('z.csv') is None and h.appels_alt() == 0
 
 
-def test_r5_geo_qui_leve_une_erreur(h):
-    h.faux("FAUX.geo_echec = 'erreur'")
+@pytest.mark.parametrize('geo_echec,coord', [('erreur', 'erreur'), ('nil', 'erreur'), ('erreur', False), ('nil', False)])
+def test_r5_geo_qui_leve_une_erreur_ou_rend_rien(h, geo_echec, coord):
+    h.faux(f"FAUX.geo_echec = '{geo_echec}'; FAUX.coord = " + (f"'{coord}'" if coord else 'false'))
     h.demande()
     h.servir()
     assert h.fait == 'erreur geo' and h.sorties == 0
 
 
-def test_r5_geo_absent_de_l_environnement(h):
-    h.faux('LoGeoCoordinatesToLoCoordinates = nil')
+def test_r5_geo_export_en_echec_la_passerelle_prend_le_relais(h):
+    h.faux("FAUX.geo_echec = 'erreur'")
+    h.demande()
+    h.servir()
+    h.jusqu_a_fait()
+    assert h.fait == 'ok' and h.json()['geo'] == 'mission' and h.csv() == attendu_csv()
+
+
+def test_r5_geo_absent_partout_et_pas_de_passerelle(h):
+    h.faux('Export.LoGeoCoordinatesToLoCoordinates = nil; FAUX.coord = false')
     h.demande()
     h.servir()
     assert h.fait == 'erreur geo'
+    h.faux('net = nil')
+    (h.dir / 'releve_fait.txt').unlink()
+    h.faux('FAUX.coord = true')
+    h.demande()
+    h.servir()
+    assert h.fait == 'erreur geo' and h.sorties == 0                  # net absent : pas de passerelle
+
+
+def test_r5_passerelle_muette_ou_incoherente_pour_le_centre(h):
+    h.faux('Export.LoGeoCoordinatesToLoCoordinates = nil')
+    for mode in ('sans_ok', 'muet', 'erreur'):
+        h.faux(f"FAUX.net_mode = '{mode}'")
+        h.demande()
+        h.servir()
+        assert h.fait == 'erreur geo', mode
+        (h.dir / 'releve_fait.txt').unlink()
 
 
 def test_r5_sortie_impossible(h):
@@ -507,12 +676,22 @@ def test_r5_sortie_impossible(h):
     assert h.fait == 'erreur sortie' and h.appels_alt() == 0
 
 
-def test_r5_altitude_absente_chaque_point_en_erreur_sans_arreter_dcs(h):
-    h.faux('LoGetAltitude = nil')
+def test_r5_aucune_altitude_d_export_erreur_export_absent(h):
+    h.faux('Export.LoGetAltitude = nil')
     h.demande()
     h.servir()
+    assert h.fait == 'erreur export_absent' and h.fichier('z.csv') is None and h.fichier('z.json') is None
+    assert h.sorties == 0 and h.appels_alt() == 0 and h.fichier('releve_demande.lua') is None
+    (h.dir / 'releve_fait.txt').unlink()
+    h.faux('Export.LoGetAltitude = 3; LoGetAltitude = "x"')            # ni fonction ni fonction
+    h.demande()
+    h.servir()
+    assert h.fait == 'erreur export_absent'
+    (h.dir / 'releve_fait.txt').unlink()
+    h.demande(nom='m', methode='mission', budget_image_ms=1000)        # la methode `mission` n'a pas besoin de l'altitude d'export
+    h.servir()
     h.jusqu_a_fait()
-    assert h.csv() == attendu_csv(vides=set(range(25))) and h.json()['erreurs'] == 25 and h.sorties == 0
+    assert h.fait == 'ok' and h.csv('m') == attendu_csv()
 
 
 def test_r5_releve_annule(h):
@@ -590,17 +769,37 @@ def test_r5_la_ligne_de_l_environnement_une_seule_fois_par_nuit(h):
     h.jusqu_a_fait()
     lignes = [l for l in h.journal().splitlines() if 'environnement du crochet' in l]
     assert len(lignes) == 1
-    assert lignes[0].endswith('LoGetAltitude=function, LoGeoCoordinatesToLoCoordinates=function, net=table, net.dostring_in=function, '
-                              'Terrain=nil, Terrain.GetHeight=nil, Terrain.GetSurfaceType=nil')
+    assert lignes[0].endswith('environnement du crochet : Export.LoGetAltitude=function, LoGetAltitude=nil, '
+                              'Export.LoGeoCoordinatesToLoCoordinates=function, LoGeoCoordinatesToLoCoordinates=nil, '
+                              'net=table, net.dostring_in=function, Terrain=nil, Terrain.GetHeight=nil, Terrain.GetSurfaceType=nil')
 
 
 def test_r5_la_ligne_de_l_environnement_dit_ce_qui_manque_et_ce_qui_est_la(tmp_path):
     h = HoteRelief(tmp_path)
-    h.faux("LoGetAltitude = nil; net = nil; Terrain = { GetHeight = function() end, GetSurfaceType = 3 }")
+    h.faux("Export.LoGetAltitude = nil; LoGetAltitude = 3; net = nil; Terrain = { GetHeight = function() end, GetSurfaceType = 3 }")
     h.lancer_la_file()
     ligne = [l for l in h.journal().splitlines() if 'environnement du crochet' in l]
-    assert len(ligne) == 1 and ligne[0].endswith('LoGetAltitude=nil, LoGeoCoordinatesToLoCoordinates=function, net=nil, net.dostring_in=nil, '
-                                                'Terrain=table, Terrain.GetHeight=function, Terrain.GetSurfaceType=number')
+    assert len(ligne) == 1 and ligne[0].endswith('environnement du crochet : Export.LoGetAltitude=nil, LoGetAltitude=number, '
+                                                'Export.LoGeoCoordinatesToLoCoordinates=function, LoGeoCoordinatesToLoCoordinates=nil, '
+                                                'net=nil, net.dostring_in=nil, Terrain=table, Terrain.GetHeight=function, '
+                                                'Terrain.GetSurfaceType=number')
+
+
+def test_r5_la_ligne_de_l_environnement_avec_des_globales(tmp_path):
+    h = HoteRelief(tmp_path, api='globales')
+    h.lancer_la_file()
+    ligne = [l for l in h.journal().splitlines() if 'environnement du crochet' in l]
+    assert ligne[0].endswith('Export.LoGetAltitude=nil, LoGetAltitude=function, Export.LoGeoCoordinatesToLoCoordinates=nil, '
+                             'LoGeoCoordinatesToLoCoordinates=function, net=table, net.dostring_in=function, Terrain=nil, '
+                             'Terrain.GetHeight=nil, Terrain.GetSurfaceType=nil')
+
+
+def test_r5_la_ligne_de_l_environnement_sans_export_du_tout(tmp_path):
+    h = HoteRelief(tmp_path, api='export')
+    h.faux('Export = nil')
+    h.lancer_la_file()
+    ligne = [l for l in h.journal().splitlines() if 'environnement du crochet' in l]
+    assert 'Export.LoGetAltitude=nil' in ligne[0] and 'Export.LoGeoCoordinatesToLoCoordinates=nil' in ligne[0]
 
 
 def test_r5_la_ligne_de_l_environnement_est_ecrite_au_lancement_pas_a_la_demande(tmp_path):
@@ -709,7 +908,8 @@ def test_r5_erreur_interne_dans_un_releve_finit_le_releve_jamais_la_nuit(h):
 
 # ------------------------------------------------------------------ R6 : le crochet, relu
 
-DCS_API = ('LoGetAltitude', 'LoGeoCoordinatesToLoCoordinates', 'net.dostring_in',
+DCS_API = ('Export.LoGetAltitude', 'LoGetAltitude', 'Export.LoGeoCoordinatesToLoCoordinates', 'LoGeoCoordinatesToLoCoordinates',
+           'net.dostring_in',
            'Sim.getRealTime', 'Sim.getPause', 'Sim.exitProcess', 'Sim.setUserCallbacks', 'Export.LoSetCommand')
 
 
@@ -776,7 +976,8 @@ def test_r6_chaque_appel_a_dcs_est_sous_pcall_table():
 
 def test_r6_aucun_appel_a_dcs_hors_liste():
     code = '\n'.join(c for _, c in corps_du_crochet())
-    assert set(re.findall(r'\b(?:Sim|Export)\.(\w+)', code)) == {'getRealTime', 'getPause', 'exitProcess', 'LoSetCommand', 'setUserCallbacks'}
+    assert set(re.findall(r'\b(?:Sim|Export)\.(\w+)', code)) == {'getRealTime', 'getPause', 'exitProcess', 'LoSetCommand', 'setUserCallbacks',
+                                                                  'LoGetAltitude', 'LoGeoCoordinatesToLoCoordinates'}
     assert not re.search(r'\bDCS\.|\bTerrain\.\w+\s*\(|\bland\.|\blfs\.|\bworld\.|\btrigger\.', code)
 
 

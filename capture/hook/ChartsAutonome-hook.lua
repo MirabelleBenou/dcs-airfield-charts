@@ -18,9 +18,11 @@ local DOSSIER = nil -- chemin de <work_dir>\autonome\ , par exemple [[D:\Capture
 -- journal, elle n'arrete pas DCS.
 -- Releve du relief (etape `relief` de la file) : a la seconde, si releve_demande.lua est la (ecrit par nuit.py sous un nom
 -- provisoire puis renomme), le crochet le lit, le supprime et lit l'altitude du sol sur une grille carree, a chaque image, jusqu'a
--- depenser budget_image_ms (Sim.getRealTime) : `export` par LoGetAltitude(x, z) ; `mission` par lots de points, un bout de Lua
+-- depenser budget_image_ms (Sim.getRealTime) : `export` par l'altitude d'export (Export.LoGetAltitude, sinon la globale
+-- LoGetAltitude ; aucune des deux : `erreur export_absent`) ; `mission` par lots de points, un bout de Lua
 -- execute dans l'environnement de la mission (net.dostring_in -> a_do_script : land.getHeight, et land.getSurfaceType si
--- `surface`). Sortie : le CSV de `sortie` et, a cote, un .json avec le debit ; puis releve_fait.txt = `ok`, `annule` ou
+-- `surface`). Le centre vient de Export.LoGeoCoordinatesToLoCoordinates, sinon de la globale, sinon de coord.LLtoLO par la
+-- passerelle (cle `geo` du .json : export, globale ou mission). Sortie : le CSV de `sortie` et, a cote, un .json avec le debit ; puis releve_fait.txt = `ok`, `annule` ou
 -- `erreur <raison>`. releve_annule.txt arrete le releve en cours. Un seul releve a la fois.
 
 if DOSSIER == nil then return end
@@ -122,7 +124,9 @@ local function journal_environnement()
         end)
         return ok and v or 'erreur'
     end
-    jlog('environnement du crochet : LoGetAltitude=' .. genre('LoGetAltitude')
+    jlog('environnement du crochet : Export.LoGetAltitude=' .. genre('Export', 'LoGetAltitude')
+        .. ', LoGetAltitude=' .. genre('LoGetAltitude')
+        .. ', Export.LoGeoCoordinatesToLoCoordinates=' .. genre('Export', 'LoGeoCoordinatesToLoCoordinates')
         .. ', LoGeoCoordinatesToLoCoordinates=' .. genre('LoGeoCoordinatesToLoCoordinates')
         .. ', net=' .. genre('net') .. ', net.dostring_in=' .. genre('net', 'dostring_in')
         .. ', Terrain=' .. genre('Terrain') .. ', Terrain.GetHeight=' .. genre('Terrain', 'GetHeight')
@@ -160,6 +164,7 @@ local function terminer_releve(fin, raison)
         f:write('{"id":' .. json_chaine(R.id)
             .. ',"lat":' .. string.format('%.12g', R.lat) .. ',"lon":' .. string.format('%.12g', R.lon)
             .. ',"x0":' .. string.format('%.12g', R.x0) .. ',"z0":' .. string.format('%.12g', R.z0)
+            .. ',"geo":' .. json_chaine(R.geo)
             .. ',"n":' .. string.format('%d', R.n) .. ',"pas_m":' .. string.format('%.12g', R.pas_m)
             .. ',"methode":' .. json_chaine(R.methode) .. ',"surface":' .. tostring(R.surface)
             .. ',"budget_image_ms":' .. string.format('%.12g', R.budget_image_ms)
@@ -203,6 +208,52 @@ local function controler_demande(q)
     return true
 end
 
+local ENVELOPPE_DEBUT = "return (function(a, b) if type(a) == 'string' and a ~= '' then return a end if type(b) == 'string' then return b end return '' end)(a_do_script([====["
+local ENVELOPPE_FIN = "]====]))"
+
+-- la passerelle : un bout de Lua execute dans l'environnement de la mission ; rend sa chaine, ou nil
+local function passerelle(code)
+    local ok, rep = pcall(function() return net.dostring_in('mission', ENVELOPPE_DEBUT .. code .. ENVELOPPE_FIN) end)
+    if ok and type(rep) == 'string' then return rep end
+    return nil
+end
+
+-- l'altitude d'export : Export.LoGetAltitude si c'est une fonction, sinon la globale LoGetAltitude ; nil si aucune des deux
+local function choisir_altitude()
+    local ok1, f1 = pcall(function() return type(Export) == 'table' and type(Export.LoGetAltitude) == 'function' and Export.LoGetAltitude end)
+    if ok1 and f1 then return f1, 'export' end
+    local ok2, f2 = pcall(function() return type(LoGetAltitude) == 'function' and LoGetAltitude end)
+    if ok2 and f2 then return f2, 'globale' end
+    return nil
+end
+
+local CHUNK_GEO = [==[
+local ok, p = pcall(function() return coord.LLtoLO(LAT, LON) end)
+if not ok or type(p) ~= 'table' or type(p.x) ~= 'number' or type(p.z) ~= 'number' then return 'ERR', 0 end
+return string.format('OK\n%.17g %.17g', p.x, p.z), 0
+]==]
+
+-- le centre en coordonnees de DCS : (x, z, chemin) ou nil. Export.LoGeoCoordinatesToLoCoordinates, sinon la globale, sinon
+-- coord.LLtoLO par la passerelle (x nord, z est) ; chacun est essaye a son tour s'il echoue.
+local function centre_geographique(lon, lat)
+    local candidats = {}
+    local ok1, f1 = pcall(function() return type(Export) == 'table' and type(Export.LoGeoCoordinatesToLoCoordinates) == 'function' and Export.LoGeoCoordinatesToLoCoordinates end)
+    if ok1 and f1 then candidats[#candidats + 1] = { 'export', f1 } end
+    local ok2, f2 = pcall(function() return type(LoGeoCoordinatesToLoCoordinates) == 'function' and LoGeoCoordinatesToLoCoordinates end)
+    if ok2 and f2 then candidats[#candidats + 1] = { 'globale', f2 } end
+    for _, c in ipairs(candidats) do
+        local ok, p = pcall(c[2], lon, lat)
+        if ok and type(p) == 'table' and nombre_fini(p.x) and nombre_fini(p.z) then return p.x, p.z, c[1] end
+    end
+    local rep = passerelle(string.format('local LAT, LON = %.17g, %.17g\n', lat, lon) .. CHUNK_GEO)
+    if rep then
+        local sx, sz = rep:match('^OK\n(%S+) (%S+)$')
+        local x, z = tonumber(sx), tonumber(sz)
+        if nombre_fini(x) and nombre_fini(z) then return x, z, 'mission' end
+    end
+    return nil
+end
+
 local function servir_releve()
     local brut = lire_texte('releve_demande.lua')
     if not brut or not brut:find('%S') then return end    -- absent ; ou vide : l'autre cote est en train de l'ecrire
@@ -220,8 +271,17 @@ local function servir_releve()
         return
     end
     local id = q.id or 'releve'
-    local okg, p = pcall(LoGeoCoordinatesToLoCoordinates, q.lon, q.lat)
-    if not okg or type(p) ~= 'table' or not nombre_fini(p.x) or not nombre_fini(p.z) then
+    local lire_alt = nil
+    if q.methode == 'export' then
+        lire_alt = choisir_altitude()                -- une fois, au debut du releve
+        if not lire_alt then
+            jlog('releve ' .. id .. ' : ni Export.LoGetAltitude ni LoGetAltitude')
+            repondre_releve('erreur export_absent')
+            return
+        end
+    end
+    local x0, z0, geo = centre_geographique(q.lon, q.lat)
+    if not x0 then
         jlog('releve ' .. id .. ' : conversion geographique impossible')
         repondre_releve('erreur geo')
         return
@@ -235,7 +295,7 @@ local function servir_releve()
         return
     end
     local base = q.sortie:gsub('%.[Cc][Ss][Vv]$', '')
-    E.releve = { id = id, lat = q.lat, lon = q.lon, x0 = p.x, z0 = p.z, n = q.n, pas_m = q.pas_m, methode = q.methode,
+    E.releve = { id = id, lat = q.lat, lon = q.lon, x0 = x0, z0 = z0, geo = geo, lire_alt = lire_alt, n = q.n, pas_m = q.pas_m, methode = q.methode,
                  surface = q.surface == true, budget_image_ms = q.budget_image_ms or 40, fh = fh, json = base .. '.json',
                  total = q.n * q.n, k = 0, points = 0, erreurs = 0, images = 0, buf = {}, lot = RELIEF_LOT_DEBUT, lot_max = nil,
                  t_premier = nil, t_dernier = nil }
@@ -252,7 +312,7 @@ end
 
 local function lire_point_export(R)
     local i, j, x, z = point_xz(R, R.k)
-    local ok, h = pcall(LoGetAltitude, x, z)
+    local ok, h = pcall(R.lire_alt, x, z)
     local alt = ''
     if ok and nombre_fini(h) then
         alt = string.format('%.2f', h)
@@ -286,9 +346,6 @@ end
 return table.concat(sortie), 0
 ]==]
 
-local ENVELOPPE_DEBUT = "return (function(a, b) if type(a) == 'string' and a ~= '' then return a end if type(b) == 'string' then return b end return '' end)(a_do_script([====["
-local ENVELOPPE_FIN = "]====]))"
-
 -- un lot de points par la passerelle ; rend nil, ou la raison de l'erreur
 local function lire_lot_mission(R)
     local nb = math.min(R.lot, R.total - R.k)
@@ -297,9 +354,9 @@ local function lire_lot_mission(R)
         R.x0, R.z0, R.pas_m, R.n, k0, k1, R.surface and 'true' or 'false') .. CHUNK_CORPS
     R.lot_max = math.max(R.lot_max or 0, R.lot)
     local t0 = maintenant()
-    local ok, rep = pcall(function() return net.dostring_in('mission', ENVELOPPE_DEBUT .. code .. ENVELOPPE_FIN) end)
+    local rep = passerelle(code)
     local t1 = maintenant()
-    if not ok or type(rep) ~= 'string' or rep:sub(1, 3) ~= 'OK\n' then return 'passerelle' end
+    if type(rep) ~= 'string' or rep:sub(1, 3) ~= 'OK\n' then return 'passerelle' end
     local corps = rep:sub(4)
     local lus, taille, lignes = 0, 0, {}
     for alt, surf in corps:gmatch('([^;\n]*);([^\n]*)\n') do
