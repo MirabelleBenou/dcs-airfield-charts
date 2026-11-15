@@ -5,7 +5,7 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
-## Unreleased
+## AC-V1.7.0 — 15 November 2026
 
 **Releases are published by a workflow.**
 
@@ -19,7 +19,7 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - New page `10-8`, placed before the `10-9`, for every airfield with a wider F10 capture (`capture/f10capture.py capture --marge`): the F10 map around the airfield, lightened, with the runways, their headings, the radio beacons and the taxiway names, without parking. Towns less than 20 km from the airfield are marked at the edge of the frame with their distance, or by name when they are inside it.
 - On every page drawn over the F10 map, text has a white halo.
-- The charts of Cold War Germany get their `10-8` at the next release.
+- The `10-8` is in this release for the 73 airfields of Syria and the 118 airfields of Cold War Germany, and for Landstuhl; not yet for the 8 helicopter bases of Syria.
 
 **Unattended night captures (Windows).**
 
@@ -34,7 +34,7 @@ What changed in the published charts, version by version. Each version is a GitH
 
 **Cold War Germany: the grass strips are charted.**
 
-- 24 grass strips that had no chart (the F10 map draws no runway there) now have one. Their runway is the one DCS declares for the airfield: centre, heading, length and width as the game gives them. It is drawn as an outline, without markings, and the runway table says « PISTE EN HERBE ».
+- 24 grass strips that had no chart (the F10 map draws no runway there) now have one. Their runway is the one DCS declares for the airfield: centre, heading, length and width as the game gives them. It is drawn as an outline, without markings, and the runway table says GRASS RUNWAY.
 - Landstuhl, whose declared runway is 10 m long, is charted as a helicopter base, on the F10 map background.
 
 **ICAO codes and radio beacons, airfield by airfield.**
