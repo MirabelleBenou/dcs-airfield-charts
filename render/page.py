@@ -331,7 +331,7 @@ HEADER_ROW_Y = 21.2
 HEADER_ROW_GAP_MIN = 4.0       # mm : ecart minimal entre deux champs de la ligne d'en-tete
 
 
-_ELEV_TEXT = re.compile(r'ELEV \d+ FT')
+_ELEV_TEXT = re.compile(r'ELEV -?\d+ FT')
 
 
 def elevation_text_problem(elev_text):

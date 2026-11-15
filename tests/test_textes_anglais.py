@@ -244,7 +244,7 @@ def test_p6_update_coords_reads_english_and_refuses_french():
 
 
 def test_p6_the_elevation_check():
-    assert page.elevation_text_problem('ELEV 159 FT') is None and page.elevation_text_problem('ELEV 0 FT') is None
+    assert page.elevation_text_problem('ELEV 159 FT') is None and page.elevation_text_problem('ELEV 0 FT') is None and page.elevation_text_problem('ELEV -12 FT') is None
     for bad in ('ÉLÉV. 159 FT', 'ELEV. 159 FT', 'ELEV 159 M', 'ELEV 1 159 FT', 'ELEV  159 FT', ''):
         assert 'page publiee en francais' in page.elevation_text_problem(bad), bad
 
