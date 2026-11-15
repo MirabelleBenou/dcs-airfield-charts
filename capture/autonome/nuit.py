@@ -15,6 +15,7 @@ import contextlib
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import subprocess
@@ -43,8 +44,16 @@ ESSAIS_TELEVERSEMENT = 3
 API_DEFAUT = 'https://api.github.com'
 
 TYPES = ('charts', 'contexte', 'panneaux')
+TYPE_RELIEF = 'relief'                 # l'etape servie par le crochet lui-meme (releve du relief), sans outil externe
+CLES_RELIEF = ('zones', 'pas_m', 'methode', 'surface', 'budget_image_ms')
+CLES_ZONE = ('nom', 'lat', 'lon', 'cote_m')
+METHODES = ('export', 'mission')
+BUDGET_IMAGE_DEFAUT_MS = 40
+BUDGET_IMAGE_MAX_MS = 1000
+POINTS_MAX = 4000000                   # n x n au plus, par zone
+RELIEF_ANNULE_ATTENTE_S = 30           # attente de la reponse du crochet apres releve_annule.txt
 CLES_FILE = ('etapes', 'budget_captures_s', 'delai_commande_s', 'eteindre', 'ecran_eteint', 'taille_zip_max_o', 'config', 'tampon')
-CLES_ETAPE = ('type', 'theatre', 'bases', 'marge')
+CLES_ETAPE = ('type', 'theatre', 'bases', 'marge') + CLES_RELIEF
 CLES_TAMPON = ('depot', 'jeton', 'release')
 
 
@@ -66,6 +75,86 @@ def _texte(valeur, nom):
     return valeur
 
 
+def _nombre_fini_positif(valeur, nom):
+    if isinstance(valeur, bool) or not isinstance(valeur, (int, float)) or not math.isfinite(valeur) or not valeur > 0:
+        raise FileErreur(f'"{nom}" doit etre un nombre fini superieur a 0')
+    return valeur
+
+
+def _nombre_dans(valeur, nom, bas, haut):
+    if isinstance(valeur, bool) or not isinstance(valeur, (int, float)) or not bas <= valeur <= haut:
+        raise FileErreur(f'"{nom}" doit etre un nombre de {bas} a {haut}')
+    return valeur
+
+
+def _points_par_cote(cote_m, pas_m):
+    return math.floor(cote_m / pas_m) + 1
+
+
+def _sortie_relief(theatre, nom, pas_m, methode):
+    """Chemin de sortie du CSV, relatif au work_dir, en elements : out/relief/<theatre>/<nom>_<pas>m_<methode>.csv."""
+    return ('out', 'relief', _nom_fichier(theatre), f'{nom}_{_marge_texte(pas_m)}m_{methode}.csv')
+
+
+def _valider_relief(e, theatre, sorties, nom_etape):
+    """Les champs propres a l'etape relief (section 2.1). Retourne l'etape validee ; sorties : cle de sortie -> premiere origine."""
+    if 'bases' in e:
+        raise FileErreur('"bases" interdite pour le type relief')
+    if 'marge' in e:
+        raise FileErreur('"marge" interdite pour le type relief')
+    zones = e.get('zones')
+    if not isinstance(zones, list) or not zones:
+        raise FileErreur('"zones" est obligatoire : une liste non vide')
+    if 'pas_m' not in e:
+        raise FileErreur('"pas_m" manquante pour le type relief')
+    pas_m = _nombre_fini_positif(e['pas_m'], 'pas_m')
+    methode = e.get('methode', 'export')
+    if methode not in METHODES:
+        raise FileErreur(f'"methode" doit etre {" ou ".join(METHODES)} (recu : {methode!r})')
+    surface = e.get('surface', False)
+    if not isinstance(surface, bool):
+        raise FileErreur('"surface" doit etre true ou false')
+    if surface and methode == 'export':
+        raise FileErreur('"surface" vrai est refuse avec "methode" export (le type de surface se lit avec "mission")')
+    budget_ms = e.get('budget_image_ms', BUDGET_IMAGE_DEFAUT_MS)
+    if (isinstance(budget_ms, bool) or not isinstance(budget_ms, (int, float)) or not math.isfinite(budget_ms)
+            or not 0 < budget_ms <= BUDGET_IMAGE_MAX_MS):
+        raise FileErreur(f'"budget_image_ms" doit etre un nombre superieur a 0 et au plus {BUDGET_IMAGE_MAX_MS}')
+    out_zones = []
+    for k, z in enumerate(zones):
+        nz = f'zones[{k}]'
+        try:
+            if not isinstance(z, dict):
+                raise FileErreur('doit etre un objet')
+            for cle in z:
+                if cle not in CLES_ZONE:
+                    raise FileErreur(f'cle inconnue : "{cle}"')
+            for cle in CLES_ZONE:
+                if cle not in z:
+                    raise FileErreur(f'"{cle}" manquante')
+            nom = z['nom']
+            if not isinstance(nom, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', nom):
+                raise FileErreur(f'"nom" doit correspondre a [A-Za-z0-9_-]+ (recu : {nom!r})')
+            lat = _nombre_dans(z['lat'], 'lat', -90, 90)
+            lon = _nombre_dans(z['lon'], 'lon', -180, 180)
+            cote_m = _nombre_fini_positif(z['cote_m'], 'cote_m')
+            n = _points_par_cote(cote_m, pas_m)
+            if n < 2:
+                raise FileErreur(f'n = {n} point par cote : il en faut au moins 2 (cote_m {_nombre_texte(cote_m)} pour un pas de {_nombre_texte(pas_m)} m)')
+            if n * n > POINTS_MAX:
+                raise FileErreur(f'n x n = {n} x {n} = {n * n} points : au plus {POINTS_MAX}')
+            sortie = _sortie_relief(theatre, nom, pas_m, methode)
+            cle_sortie = '/'.join(sortie).casefold()
+            if cle_sortie in sorties:
+                raise FileErreur(f'meme sortie que {sorties[cle_sortie]} : {"/".join(sortie)}')
+            sorties[cle_sortie] = f'{nom_etape} {nz}'
+        except FileErreur as err:
+            raise FileErreur(f'{nz} : {err}') from None
+        out_zones.append({'nom': nom, 'lat': lat, 'lon': lon, 'cote_m': cote_m})
+    return {'type': TYPE_RELIEF, 'theatre': theatre, 'zones': out_zones, 'pas_m': pas_m, 'methode': methode, 'surface': surface,
+            'budget_image_ms': budget_ms}
+
+
 def valider_file(data):
     """Valide la file lue du JSON (section 2.3). Retourne un dict complet, defauts compris. Leve FileErreur."""
     if not isinstance(data, dict):
@@ -77,6 +166,7 @@ def valider_file(data):
     if not isinstance(etapes, list) or not etapes:
         raise FileErreur('"etapes" est obligatoire : une liste non vide')
     out = {'etapes': []}
+    sorties = {}
     for i, e in enumerate(etapes):
         nom = f'etapes[{i}]'
         if not isinstance(e, dict):
@@ -85,10 +175,16 @@ def valider_file(data):
             if k not in CLES_ETAPE:
                 raise FileErreur(f'{nom} : cle inconnue : "{k}"')
         t = e.get('type')
-        if t not in TYPES:
-            raise FileErreur(f'{nom} : "type" doit etre l\'un de {", ".join(TYPES)} (recu : {t!r})')
+        if t not in TYPES + (TYPE_RELIEF,):
+            raise FileErreur(f'{nom} : "type" doit etre l\'un de {", ".join(TYPES + (TYPE_RELIEF,))} (recu : {t!r})')
         try:
             theatre = _texte(e.get('theatre'), 'theatre')
+            if t == TYPE_RELIEF:
+                out['etapes'].append(_valider_relief(e, theatre, sorties, nom))
+                continue
+            for k in CLES_RELIEF:
+                if k in e:
+                    raise FileErreur(f'"{k}" interdite pour le type {t}')
             bases = e.get('bases')
             if (not isinstance(bases, list) or not bases
                     or not all(isinstance(b, str) and b.strip() for b in bases)):
@@ -166,6 +262,16 @@ def deplier(file):
 
     for i, e in enumerate(file['etapes']):
         t, th = e['type'], e['theatre']
+        if t == TYPE_RELIEF:                  # une commande par zone, servie par le crochet : aucune vue
+            pas = _marge_texte(e['pas_m'])
+            for z in e['zones']:
+                args = ['relief', th, z['nom'], '--pas', pas, '--methode', e['methode']] + (['--surface'] if e['surface'] else [])
+                ajouter('crochet', 'relief', th, z['nom'], args, None)
+                cmds[-1]['releve'] = {'nom': z['nom'], 'lat': z['lat'], 'lon': z['lon'], 'cote_m': z['cote_m'],
+                                      'n': _points_par_cote(z['cote_m'], e['pas_m']), 'pas_m': e['pas_m'], 'pas_texte': pas,
+                                      'methode': e['methode'], 'surface': e['surface'], 'budget_image_ms': e['budget_image_ms'],
+                                      'sortie': _sortie_relief(th, z['nom'], e['pas_m'], e['methode'])}
+            continue
         for b in e['bases']:
             if t == 'charts':
                 ajouter('f10capture.py', 'capture', th, b, ['capture', th, b], 'f10')
@@ -178,6 +284,10 @@ def deplier(file):
 
 
 def ligne_commande(c, file):
+    r = c.get('releve')
+    if r:                                     # un releve ne passe pas par la configuration de capture : pas de --config
+        return (f'relief {c["theatre"]} {r["nom"]} : {r["n"]} x {r["n"]} points au pas de {r["pas_texte"]} m, methode {r["methode"]}'
+                + (', surface' if r['surface'] else ''))
     args = list(c['args'])
     if file['config']:
         args += ['--config', file['config']]
@@ -204,10 +314,10 @@ def cmd_verifier(chemin, out=None):
     vue = None
     print(f'{len(cmds)} commande(s) :', file=out)
     for c in cmds:
-        if c['vue'] != vue:
+        if c['vue'] is not None and c['vue'] != vue:
             vue = c['vue']
             print(f'    -> vue {vue} demandee', file=out)
-        print(f'{c["n"]:02d}  [{c["vue"]}]  {ligne_commande(c, file)}', file=out)
+        print(f'{c["n"]:02d}  [{c["vue"] or "--"}]  {ligne_commande(c, file)}', file=out)
     print(f'budget_s du crochet conseille : {_nombre_texte(budget_conseille(file))} s au moins', file=out)
     return 0
 
@@ -560,6 +670,23 @@ def _ecrire(chemin, texte):
     Path(chemin).write_text(texte, encoding='utf-8', newline='\n')
 
 
+def _lua_chaine_longue(texte):
+    """Le texte en chaine longue Lua : [[...]], avec des = en plus si le texte contient deja un crochet fermant."""
+    egaux = ''
+    while f']{egaux}]' in texte:
+        egaux += '='
+    return f'[{egaux}[{texte}]{egaux}]'
+
+
+def table_releve(c, sortie):
+    """releve_demande.lua : la table Lua d'un releve (section 2.2). Les nombres sont ecrits avec repr, jamais en notation
+    qui ne serait pas du Lua."""
+    r = c['releve']
+    return (f"return {{ id = '{c['n']:02d}_{r['nom']}', lat = {r['lat']!r}, lon = {r['lon']!r}, n = {r['n']!r}, pas_m = {r['pas_m']!r}, "
+            f"methode = '{r['methode']}', surface = {'true' if r['surface'] else 'false'}, "
+            f"budget_image_ms = {r['budget_image_ms']!r}, sortie = {_lua_chaine_longue(str(sortie))} }}\n")
+
+
 def _fin_journal(chemin, n=10):
     try:
         with open(chemin, 'r', encoding='utf-8', errors='replace') as f:
@@ -709,6 +836,97 @@ class Nuit:
         res['fin_journal'] = _fin_journal(log)
         self.jr(f'{c["n"]:02d} {res["statut"]} (code {code}, {res["duree_s"]} s)')
 
+    # -- un releve du relief, servi par le crochet
+    def _reponse_releve(self):
+        """Premiere ligne de releve_fait.txt ; None s'il est absent, illisible ou vide (le crochet est en train de l'ecrire)."""
+        mot = self.lire_mot('releve_fait.txt')
+        if not mot:
+            return None
+        return mot.splitlines()[0].strip()
+
+    def executer_relief(self, c, res):
+        """Joue une commande relief (section 2.2). Retourne 'dcs_absent' si le pouls s'est perdu pendant l'attente, sinon None."""
+        r = c['releve']
+        sortie = self.work_dir.joinpath(*r['sortie'])
+        sortie_json = sortie.with_suffix('.json')
+        nom = f'{c["n"]:02d}_{c["outil"]}_{c["commande"]}_{_nom_fichier(c["base"])}.log'
+        log = self.nuit_dir / nom
+        res['journal'] = nom
+        res['code'] = None
+        table = table_releve(c, sortie)
+        _ecrire(log, '# releve_demande.lua\n' + table)
+        debut = self.deps.now()
+        res['debut'] = _iso(debut)
+        self.jr(f'{c["n"]:02d} lance : {ligne_commande(c, self.file)}')
+        arret = None
+        reponse = None
+        try:
+            for mot in ('releve_fait.txt', 'releve_annule.txt'):
+                self.supprimer(mot)
+            sortie.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                sortie_json.unlink()                      # un .json d'une autre nuit ne dit rien de celle-ci
+            except OSError:
+                pass
+            provisoire = self.dir / 'releve_demande.lua.tmp'
+            _ecrire(provisoire, table)
+            os.replace(provisoire, self.dir / 'releve_demande.lua')    # le crochet ne lit jamais un fichier a moitie ecrit
+        except OSError as e:
+            res['statut'] = 'echec'
+            res['erreur'] = f'demande non ecrite : {e.strerror or e}'
+        else:
+            while True:
+                reponse = self._reponse_releve()
+                if reponse is not None:
+                    break
+                if not self.pouls_ok():
+                    arret = 'dcs_absent'
+                    break
+                if self.deps.now() - debut > self.file['delai_commande_s']:
+                    _ecrire(self.dir / 'releve_annule.txt', 'annule\n')
+                    fin_attente = self.deps.now() + RELIEF_ANNULE_ATTENTE_S
+                    while self.deps.now() < fin_attente:
+                        self.deps.sleep(1)
+                        reponse = self._reponse_releve()
+                        if reponse is not None:
+                            break
+                    reponse = reponse or ''
+                    res['statut'] = 'delai'
+                    break
+                self.deps.sleep(1)
+            if arret:
+                res['statut'] = 'dcs_absent'
+                self.supprimer('releve_demande.lua')
+            elif reponse is not None and res.get('statut') != 'delai':
+                if reponse == 'ok':
+                    res['statut'] = 'ok'
+                elif reponse == 'annule':
+                    res['statut'] = 'delai'
+                else:
+                    res['statut'] = 'echec'
+                    res['erreur'] = reponse[len('erreur'):].strip() if reponse.split()[0] == 'erreur' else f'reponse inconnue : {reponse}'
+            if reponse is not None:
+                self.supprimer('releve_fait.txt')
+        res['duree_s'] = round(self.deps.now() - debut, 1)
+        try:
+            with open(log, 'a', encoding='utf-8') as f:
+                f.write('reponse : ' + ('(aucune)' if not reponse else reponse) + '\n')
+                if arret:
+                    f.write('[nuit] pouls perdu pendant le releve : DCS est tenu pour absent\n')
+                elif res['statut'] == 'delai':
+                    f.write(f'[nuit] delai de {self.file["delai_commande_s"]} s depasse : releve_annule.txt ecrit\n')
+                if res.get('erreur') and not reponse:
+                    f.write(f'[nuit] {res["erreur"]}\n')
+        except OSError:
+            pass
+        try:
+            res['releve'] = json.loads(sortie_json.read_text(encoding='utf-8'))
+        except (OSError, ValueError):
+            res['releve'] = None
+        res['fin_journal'] = _fin_journal(log)
+        self.jr(f'{c["n"]:02d} {res["statut"]} (relief, {res["duree_s"]} s)')
+        return arret
+
     # -- la nuit entiere
     def bilan_base(self, resultats, cause, fin):
         return {'file': self.file, 't_nuit': _iso(self.t_nuit), 't_nuit_epoch': self.t_nuit, 'fin': _iso(fin), 'cause': cause,
@@ -759,10 +977,13 @@ class Nuit:
             self.journal_path = self.nuit_dir / 'nuit.log'
             cmds = deplier(self.file)
             resultats = [{'n': c['n'], 'outil': c['outil'],
-                          'arguments': c['args'] + (['--config', self.file['config']] if self.file['config'] else []),
+                          'arguments': c['args'] + (['--config', self.file['config']] if self.file['config'] and not c.get('releve') else []),
                           'vue': c['vue'], 'statut': None, 'debut': None, 'duree_s': None, 'code': None, 'fin_journal': []}
                          for c in cmds]
-            for nom in ('vue_demande.txt', 'vue_faite.txt'):
+            for c, res in zip(cmds, resultats):
+                if c.get('releve'):
+                    res['releve'] = None
+            for nom in ('vue_demande.txt', 'vue_faite.txt', 'releve_demande.lua', 'releve_fait.txt', 'releve_annule.txt'):
                 self.supprimer(nom)
         except Exception as e:
             msg = f'demarrage impossible : {type(e).__name__}: {e}'
@@ -793,8 +1014,13 @@ class Nuit:
                     res['statut'] = 'saute_visee'
                     self.jr(f'{c["n"]:02d} non lancee : la visee a echoue')
                     continue
-                if c['vue'] != self.vue_posee and not self.poser_vue(c['vue']):
+                if c['vue'] is not None and c['vue'] != self.vue_posee and not self.poser_vue(c['vue']):
                     res['statut'] = 'vue_echec'
+                    continue
+                if c.get('releve'):
+                    if self.executer_relief(c, res) == 'dcs_absent':
+                        arret, cause = 'dcs_absent', 'dcs_absent'
+                        self.jr('pouls absent ou trop ancien : DCS est tenu pour absent, la file s\'arrete')
                     continue
                 self.executer(c, res)
             self.jr(f'fin de la file : {cause}')
