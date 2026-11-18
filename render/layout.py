@@ -550,13 +550,14 @@ def place_labels_passes(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, boun
     Passes 2 a 4 : seulement les noms de `to_place` (None : tous) restes sans place.
     Passe 2 : toutes les lignes du nom (de la plus longue a la plus courte) aux fractions LABEL_FRACTIONS_FINE.
     Passe 3 : la meme recherche avec une etiquette a 5 pt.
-    Passe 4 : etiquette deportee, reliee par un trait au point d'attache (fraction 0,5 de la plus longue ligne ; repli `_anchor`),
+    Passe 4 : etiquette deportee, reliee par un trait a un point d'attache (`anchor_candidates`, l'un apres l'autre),
     aux distances LABEL_LEADER_DIST et aux 16 directions (tous les 22,5 degres, du nord de la page, sens horaire), a 6 pt puis a 5 pt.
     Le trait (epaissi de 0,1 mm) et le point d'attache (rayon 0,25 mm) deviennent des obstacles pour les places essayees ensuite ;
     une place dont le rectangle, agrandi de 0,25 mm, contient le point d'attache est refusee.
     box_wh : fonction (nom, k) -> (w, h), k = 1 (6 pt) ou LABEL_SMALL (5 pt).
-    Retourne ({nom: (cx, cy)}, info) ; info[nom] = (passe, k) pour les passes 1 a 3, (4, k, (ax, ay), (ex, ey), distance, direction)
-    pour la passe 4 ((ex, ey) : point du bord de l'etiquette ou le trait aboutit) ; un nom absent n'a trouve aucune place."""
+    Retourne ({nom: (cx, cy)}, info) ; info[nom] = (passe, k) pour les passes 1 a 3, (4, k, (ax, ay), (ex, ey), distance, direction,
+    deplace) pour la passe 4 ((ex, ey) : point du bord de l'etiquette ou le trait aboutit ; deplace : le point d'attache n'est pas
+    celui de `_anchor`) ; un nom absent n'a trouve aucune place."""
     by_name, lines = {}, {}
     for nm, pts, L in ways:
         lines.setdefault(nm, []).append((pts, L))
@@ -602,39 +603,38 @@ def place_labels_passes(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, boun
                 continue
             ordered = sorted(lines[nm], key=lambda t: -t[1])                  # tri stable : egalite dans l'ordre de `ways`
             attempt(nm, [(pts, LABEL_FRACTIONS_FINE) for pts, _ in ordered], k, npass)
-    # passe 4 : etiquette deportee, reliee par un trait au point d'attache (fraction 0,5 de la plus longue ligne du nom)
+    # passe 4 : etiquette deportee, reliee par un trait a un point d'attache ; plusieurs candidats, l'un apres l'autre
     from shapely.geometry import LineString, Point
     for nm in todo:
         if nm in out:
             continue
-        anchor = _anchor(by_name[nm][0], lines[nm], bounds)
-        if anchor is None:
-            continue
-        ax, ay = anchor
-        for k in (1.0, LABEL_SMALL):
-            w, h = box_wh(nm, k)
-            done = False
-            for dist in LABEL_LEADER_DIST:
-                for d in range(16):
-                    th = math.radians(d * 22.5)
-                    cx, cy = ax + dist * math.sin(th), ay - dist * math.cos(th)
-                    rect = (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
-                    if not free(rect, cx, cy, w, h):
-                        continue
-                    if rect[0] - 0.25 <= ax <= rect[2] + 0.25 and rect[1] - 0.25 <= ay <= rect[3] + 0.25:
-                        continue                                    # pas de trait de longueur nulle
-                    ex, ey = min(max(ax, rect[0]), rect[2]), min(max(ay, rect[1]), rect[3])      # point du bord le plus proche
-                    seg = LineString([(ax, ay), (ex, ey)])
-                    if any(_seg_hits(seg, r) for r in placed) or any(_seg_hits(seg, r) for r in forbidden) \
-                            or any(seg.intersects(ln) for ln in leaders):
-                        continue
-                    placed.append(rect)
-                    leaders.append(seg.buffer(0.1))
-                    leaders.append(Point(ax, ay).buffer(0.25))
-                    out[nm] = (cx, cy)
-                    info[nm] = (4, k, (ax, ay), (ex, ey), dist, d * 22.5)
-                    done = True
-                    break
+        done = False
+        for moved, (ax, ay) in anchor_candidates(by_name[nm][0], lines[nm], bounds, forbidden):
+            for k in (1.0, LABEL_SMALL):
+                w, h = box_wh(nm, k)
+                for dist in LABEL_LEADER_DIST:
+                    for d in range(16):
+                        th = math.radians(d * 22.5)
+                        cx, cy = ax + dist * math.sin(th), ay - dist * math.cos(th)
+                        rect = (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+                        if not free(rect, cx, cy, w, h):
+                            continue
+                        if rect[0] - 0.25 <= ax <= rect[2] + 0.25 and rect[1] - 0.25 <= ay <= rect[3] + 0.25:
+                            continue                                    # pas de trait de longueur nulle
+                        ex, ey = min(max(ax, rect[0]), rect[2]), min(max(ay, rect[1]), rect[3])      # point du bord le plus proche
+                        seg = LineString([(ax, ay), (ex, ey)])
+                        if any(_seg_hits(seg, r) for r in placed) or any(_seg_hits(seg, r) for r in forbidden) \
+                                or any(seg.intersects(ln) for ln in leaders):
+                            continue
+                        placed.append(rect)
+                        leaders.append(seg.buffer(0.1))
+                        leaders.append(Point(ax, ay).buffer(0.25))
+                        out[nm] = (cx, cy)
+                        info[nm] = (4, k, (ax, ay), (ex, ey), dist, d * 22.5, moved)
+                        done = True
+                        break
+                    if done:
+                        break
                 if done:
                     break
             if done:
@@ -651,6 +651,33 @@ def _seg_hits(seg, other):
 
 
 LABEL_LEADER_DIST = (3.0, 4.5, 6.0, 8.0, 10.0, 12.0)
+ANCHOR_FRACTIONS = (0.5, 0.25, 0.75, 0.1, 0.9)        # points d'attache candidats de chaque ligne du nom (apres celui de `_anchor`)
+ANCHOR_FREE_HALF = 0.25                               # demi-cote (mm) du carre qui doit etre libre autour d'un point d'attache
+ANCHOR_MIN_SEP = 0.5                                  # un candidat doit etre a plus de 0,5 mm de ceux deja retenus
+
+
+def anchor_candidates(pts, lines_of_name, bounds, forbidden):
+    """Points d'attache candidats d'une etiquette deportee, dans l'ordre : [(deplace, (x, y))]. D'abord celui de `_anchor`, s'il est
+    libre (deplace False) ; puis, pour chaque ligne du nom (de la plus longue a la plus courte, tri stable), les points aux fractions
+    ANCHOR_FRACTIONS, libres, dans `bounds` et a plus de ANCHOR_MIN_SEP mm de tout candidat deja retenu (deplace True).
+    Libre : le point, agrandi d'un carre de ANCHOR_FREE_HALF mm de demi-cote, ne touche aucune zone de `forbidden`."""
+    def is_free(x, y):
+        r = (x - ANCHOR_FREE_HALF, y - ANCHOR_FREE_HALF, x + ANCHOR_FREE_HALF, y + ANCHOR_FREE_HALF)
+        return not any(_hits(r, z) for z in forbidden)
+    out = []
+    a = _anchor(pts, lines_of_name, bounds)
+    if a is not None and is_free(*a):
+        out.append((False, a))
+    for q, _ in sorted(lines_of_name, key=lambda t: -t[1]):
+        for fr in ANCHOR_FRACTIONS:
+            x, y = polyline_point(q, fr)
+            x, y = float(x), float(y)
+            if bounds is not None and not (bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3]):
+                continue
+            if not is_free(x, y) or any(math.hypot(x - c[0], y - c[1]) <= ANCHOR_MIN_SEP for _, c in out):
+                continue
+            out.append((True, (x, y)))
+    return out
 
 
 def _anchor(pts, lines_of_name, bounds):

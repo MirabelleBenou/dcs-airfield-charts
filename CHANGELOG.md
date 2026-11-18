@@ -7,6 +7,10 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Unreleased
 
+**Taxiway names that found no place now get one.**
+
+- A taxiway name that fits nowhere along its taxiway gets a label set apart and joined by a line, as before; when the middle of the taxiway lies inside an area labels must avoid (a runway, typically), or every line from it is blocked, the line now starts from another point of the taxiway.
+
 **Approach pages for ILS runway ends far from the taxiways.**
 
 - When no taxiway point lies within 250 m of a runway threshold, the threshold elevation is now taken from the nearest taxiway points up to 1,000 m away, instead of being left unknown. The runway table shows it, and an ILS runway end in that case gets its approach page.

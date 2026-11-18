@@ -326,7 +326,8 @@ def taxiway_labels(doc, data, view, frame, corners, extra_forbidden, park_xy, lo
         log('etiquettes : ' + ', '.join(f'passe {n} {sum(1 for v in info.values() if v[0] == n)}' for n in (1, 2, 3))
             + f', deportees {sum(1 for v in info.values() if v[0] == 4)}')
         for nm in sorted((n for n in info if info[n][0] == 4), key=dcsdata.natural_key):
-            log(f'etiquette deportee : {nm} a {info[nm][4]:g} mm, {5 if info[nm][1] < 1 else 6} pt')
+            log(f'etiquette deportee : {nm} a {info[nm][4]:g} mm, {5 if info[nm][1] < 1 else 6} pt'
+                + (" (point d'attache deplace)" if info[nm][6] else ''))
         for nm in sorted(names_ok - set(placed), key=dcsdata.natural_key):
             log(f'{LOG_ERROR_LABEL} : {nm}')
     else:
