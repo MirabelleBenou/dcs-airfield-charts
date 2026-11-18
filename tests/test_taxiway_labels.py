@@ -315,8 +315,11 @@ def test_pass4_leader_crossing_another_label_is_refused():
 
 def test_pass4_leader_crossing_an_earlier_leader_is_refused():
     ways = [('A', hline(100.0, 50.0, 54.0), 4.0), ('B', hline(100.0, 50.0, 54.0), 4.0)]
-    placed, info = run(ways, [], PARKS)                                  # meme point d'attache : le trait de A le touche, B n'a pas de place
-    assert info['A'][0] == 4 and 'B' not in placed
+    placed, info = run(ways, [], PARKS)                                  # meme point d'attache : le trait de A le touche, B n'a pas de place la
+    assert info['A'][0] == 4 and info['A'][6] is False
+    assert info['B'][0] == 4 and info['B'][6] is True and info['B'][2] != pytest.approx(ANCHOR)      # B est pose depuis un autre point d'attache
+    assert not seg_of(info['B']).intersects(seg_of(info['A'])) and not seg_of(info['B']).intersects(box(*rect_of(placed['A'])))
+    assert not seg_of(info['A']).intersects(box(*rect_of(placed['B'])))
     ways = [('A', hline(100.0, 50.0, 54.0), 4.0), ('B', hline(100.0, 56.0, 60.0), 4.0)]
     placed, info = run(ways, [], [ANCHOR, (58.0, 100.0)])
     assert info['A'][0] == 4 and info['B'][0] == 4
@@ -383,7 +386,12 @@ def test_pass4_candidate_refused_only_because_its_rectangle_touches_an_earlier_l
     placed, info = layout.place_labels_passes(ways[1:], box_wh, slabs, parks[1:], 0.6, BOUNDS)      # seule : B a 3 mm a l'ouest
     assert info['B'][4] == 3.0 and info['B'][5] == 270.0 and placed['B'] == pytest.approx((54.0, 98.85))
     placed, info = layout.place_labels_passes(ways, box_wh, slabs, parks, 0.6, BOUNDS)              # avec A : son trait (x = 52) traverse ces places
-    assert info['A'][0] == 4 and info['A'][5] == 0.0 and 'B' not in placed
+    assert info['A'][0] == 4 and info['A'][5] == 0.0
+    # la place refusee reste refusee : B n'est pas pose depuis son point d'aujourd'hui (57 ; 98,85) ; il l'est depuis un autre point,
+    # sans croiser le trait de A ni toucher son rectangle
+    assert info['B'][6] is True and info['B'][2] != pytest.approx((57.0, 98.85))
+    assert not seg_of(info['B']).intersects(seg_of(info['A'])) and not seg_of(info['B']).intersects(box(*rect_of(placed['A'])))
+    assert not seg_of(info['A']).intersects(box(*rect_of_wh(placed['B'], 4.7, 1.0)))
 
 
 def test_pass4_anchor_outside_bounds_is_the_continuous_point_nearest_the_centre():

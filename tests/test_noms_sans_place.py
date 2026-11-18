@@ -161,12 +161,20 @@ def test_identical_to_legacy_on_several_names_when_every_today_anchor_is_free():
     assert placed == old_placed and {k: v[:6] for k, v in info.items()} == old_info
 
 
-def test_today_anchor_in_a_forbidden_zone_is_not_tried_next_candidate_succeeds():
+def test_today_anchor_in_a_forbidden_zone_is_tried_first_fails_as_today_then_next_free_candidate_succeeds():
     assert run_legacy(LONG, [MID]) == ({}, {})                              # abe78b8 : tout trait part de la zone, rien
+    assert layout.anchor_candidates(LONG[0][1], [(LONG[0][1], 100.0)], BOUNDS, [MID])[0] == (False, pytest.approx((80.0, 100.0)))
     placed, info = run(LONG, [MID])
     assert info['A'][0] == 4 and info['A'][6] is True
     assert info['A'][2] == pytest.approx((55.0, 100.0))                     # fraction 0,25 de la plus longue ligne
     assert not LineString([info['A'][2], info['A'][3]]).intersects(MID)
+
+
+def test_today_anchor_close_to_a_zone_is_tried_and_succeeds_as_today():
+    forb = [box(70.0, 96.0, 90.0, 99.9)]                                    # a 0,1 mm du point d'aujourd'hui : non libre, mais le trait reussit
+    placed, info = run(LONG, forb)
+    old_placed, old_info = run_legacy(LONG, forb)
+    assert old_info['A'][0] == 4 and placed == old_placed and info['A'][:6] == old_info['A'] and info['A'][6] is False
 
 
 def test_anchor_candidates_order_fractions_longest_line_first():
@@ -201,19 +209,17 @@ def test_candidate_at_exactly_half_mm_is_dropped_and_beyond_is_kept():
 
 
 def test_free_means_a_quarter_mm_square_touching_no_forbidden_zone():
-    line = hline(100.0, 30.0, 130.0)
-    z = box(79.7, 99.0, 79.8, 101.0)                                          # a 0,2 mm du milieu : le carre de 0,25 mm le touche
-    assert layout.anchor_candidates(line, [(line, 100.0)], BOUNDS, [z])[0][0] is True
-    z = box(79.7, 99.0, 79.74, 101.0)                                         # a 0,26 mm : libre
-    first = layout.anchor_candidates(line, [(line, 100.0)], BOUNDS, [z])[0]
-    assert first[0] is False and first[1] == pytest.approx((80.0, 100.0))
-    assert layout.anchor_candidates(line, [(line, 100.0)], BOUNDS, [(79.0, 99.0, 79.7, 101.0)])[0][0] is False        # rectangle (tuple)
-    assert layout.anchor_candidates(line, [(line, 100.0)], BOUNDS, [(79.0, 99.0, 79.8, 101.0)])[0][0] is True
+    line = hline(100.0, 30.0, 130.0)                                          # candidats : 80 (aujourd'hui), 55, 105, 40, 120
+    xs = lambda z: [round(p[0], 6) for _, p in layout.anchor_candidates(line, [(line, 100.0)], BOUNDS, [z])]
+    assert xs(box(55.2, 99.0, 55.3, 101.0)) == [80.0, 105.0, 40.0, 120.0]      # a 0,2 mm de 55 : le carre de 0,25 mm le touche
+    assert xs(box(55.26, 99.0, 55.3, 101.0)) == [80.0, 55.0, 105.0, 40.0, 120.0]       # a 0,26 mm : libre
+    assert xs((55.2, 99.0, 55.3, 101.0)) == [80.0, 105.0, 40.0, 120.0]         # un rectangle (tuple), comme les coins
+    assert xs(box(79.7, 99.0, 79.8, 101.0)) == [80.0, 55.0, 105.0, 40.0, 120.0]       # le point d'aujourd'hui reste, libre ou non
 
 
-def test_whole_line_in_forbidden_zone_no_candidate_name_stays_absent():
+def test_whole_line_in_forbidden_zone_only_today_anchor_name_stays_absent():
     zone = box(25.0, 95.0, 135.0, 105.0)
-    assert layout.anchor_candidates(LONG[0][1], [(LONG[0][1], 100.0)], BOUNDS, [zone]) == []
+    assert layout.anchor_candidates(LONG[0][1], [(LONG[0][1], 100.0)], BOUNDS, [zone]) == [(False, pytest.approx((80.0, 100.0)))]       # le seul : celui d'aujourd'hui
     assert run(LONG, [zone]) == ({}, {}) == run_legacy(LONG, [zone])
     doc, lines = Doc(), []
     placed, _ = compose.taxiway_labels(doc, fake_data([('A', hline(50.0, 20.0, 80.0), 60.0)]), FakeView(), FRAME, NOBOX,

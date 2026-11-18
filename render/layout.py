@@ -657,8 +657,8 @@ ANCHOR_MIN_SEP = 0.5                                  # un candidat doit etre a 
 
 
 def anchor_candidates(pts, lines_of_name, bounds, forbidden):
-    """Points d'attache candidats d'une etiquette deportee, dans l'ordre : [(deplace, (x, y))]. D'abord celui de `_anchor`, s'il est
-    libre (deplace False) ; puis, pour chaque ligne du nom (de la plus longue a la plus courte, tri stable), les points aux fractions
+    """Points d'attache candidats d'une etiquette deportee, dans l'ordre : [(deplace, (x, y))]. D'abord celui de `_anchor`, essaye tel quel,
+    libre ou non (deplace False) ; puis, pour chaque ligne du nom (de la plus longue a la plus courte, tri stable), les points aux fractions
     ANCHOR_FRACTIONS, libres, dans `bounds` et a plus de ANCHOR_MIN_SEP mm de tout candidat deja retenu (deplace True).
     Libre : le point, agrandi d'un carre de ANCHOR_FREE_HALF mm de demi-cote, ne touche aucune zone de `forbidden`."""
     def is_free(x, y):
@@ -666,7 +666,7 @@ def anchor_candidates(pts, lines_of_name, bounds, forbidden):
         return not any(_hits(r, z) for z in forbidden)
     out = []
     a = _anchor(pts, lines_of_name, bounds)
-    if a is not None and is_free(*a):
+    if a is not None:
         out.append((False, a))
     for q, _ in sorted(lines_of_name, key=lambda t: -t[1]):
         for fr in ANCHOR_FRACTIONS:
