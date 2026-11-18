@@ -7,6 +7,10 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Unreleased
 
+**Taxiway names are no longer dropped.**
+
+- When a taxiway name finds no room at its usual place, it is tried along every line of that taxiway, then in a smaller size (5 pt). A name that still finds no room makes `render/build_chart.py` end with exit code 3, after writing the charts, instead of being left out silently. Labels that already had room do not move.
+
 **Terrain survey during unattended nights.**
 
 - New queue step `relief` for `capture/autonome/nuit.py`: the hook reads the ground elevation (and optionally the surface type) of DCS on a square grid and writes it to a CSV file, with the reading speed. The published charts do not change.

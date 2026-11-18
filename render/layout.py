@@ -537,3 +537,60 @@ def place_labels(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, bounds=None
             out[nm] = (cx, cy)
             break
     return out
+
+
+LABEL_FRACTIONS_FINE = (0.50, 0.45, 0.55, 0.40, 0.60, 0.35, 0.65, 0.30, 0.70, 0.25, 0.75, 0.20, 0.80, 0.15, 0.85, 0.10, 0.90,
+                        0.05, 0.95)
+LABEL_SMALL = 5.0 / 6.0            # passe 3 : etiquette a 5 pt (au lieu de 6 pt)
+
+
+def place_labels_passes(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, bounds=None):
+    """Etiquettes de taxiways en trois passes (lot ac-taxiways-etiquettes).
+    Passe 1 : exactement `place_labels` (plus longue ligne du nom, LABEL_FRACTIONS), pour tous les noms. Passe 2 : pour chaque nom
+    sans place, toutes ses lignes (de la plus longue a la plus courte) aux fractions LABEL_FRACTIONS_FINE. Passe 3 : la meme
+    recherche avec une etiquette a 5 pt. Chaque passe voit les etiquettes deja posees.
+    box_wh : fonction (nom, k) -> (w, h), k = 1 (6 pt) ou LABEL_SMALL (5 pt).
+    Retourne ({nom: (cx, cy)}, {nom: (passe, k)}) ; un nom absent n'a trouve aucune place."""
+    by_name, lines = {}, {}
+    for nm, pts, L in ways:
+        lines.setdefault(nm, []).append((pts, L))
+        if nm not in by_name or L > by_name[nm][1]:
+            by_name[nm] = (pts, L)
+    placed, out, info = [], {}, {}
+    tree = cKDTree(np.asarray(obstacles_pts, float)) if len(obstacles_pts) else None
+
+    def free(rect, cx, cy, w, h):
+        if bounds is not None and not (rect[0] >= bounds[0] and rect[1] >= bounds[1] and rect[2] <= bounds[2] and rect[3] <= bounds[3]):
+            return False
+        if any(rects_overlap(rect, r) for r in placed) or any(_hits(rect, r) for r in forbidden):
+            return False
+        if tree is not None:
+            grown = (rect[0] - pt_pad, rect[1] - pt_pad, rect[2] + pt_pad, rect[3] + pt_pad)
+            idx = tree.query_ball_point([cx, cy], math.hypot(w, h) / 2 + pt_pad + 0.1)
+            if any(grown[0] <= obstacles_pts[j][0] <= grown[2] and grown[1] <= obstacles_pts[j][1] <= grown[3] for j in idx):
+                return False
+        return True
+
+    def attempt(nm, candidates, k, npass):
+        w, h = box_wh(nm, k)
+        for pts, fr_list in candidates:
+            for fr in fr_list:
+                cx, cy = polyline_point(pts, fr)
+                rect = (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+                if free(rect, cx, cy, w, h):
+                    placed.append(rect)
+                    out[nm] = (cx, cy)
+                    info[nm] = (npass, k)
+                    return True
+        return False
+
+    names = sorted(by_name, key=dcsdata.natural_key)
+    for nm in names:
+        attempt(nm, [(by_name[nm][0], LABEL_FRACTIONS)], 1.0, 1)
+    for npass, k in ((2, 1.0), (3, LABEL_SMALL)):
+        for nm in names:
+            if nm in out:
+                continue
+            ordered = sorted(lines[nm], key=lambda t: -t[1])                  # tri stable : egalite dans l'ordre de `ways`
+            attempt(nm, [(pts, LABEL_FRACTIONS_FINE) for pts, _ in ordered], k, npass)
+    return out, info

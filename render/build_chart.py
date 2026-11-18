@@ -35,12 +35,18 @@ def main(argv):
     year = args.annee if args.annee is not None else cfg.annee
     osm_dir = cfg.osm_dir
     out_root = Path(args.out) if args.out else Path(cfg.work_dir) / 'charts'
+    label_errors = []
+
+    def log(msg):
+        print(msg)
+        if compose.LOG_ERROR_LABEL in str(msg):          # lot ac-taxiways-etiquettes : un nom sans place fait sortir avec 3
+            label_errors.append(msg)
     data = analysis.analyze(cfg, args.theatre, args.base, year, args.icao, args.osm, osm_dir, log=print)
-    pages = approach.build_approach_pages(data, log=print) if args.approches_seulement else compose.build_pages(data, log=print)
+    pages = approach.build_approach_pages(data, log=print) if args.approches_seulement else compose.build_pages(data, log=log)
     if not args.approches_seulement:                      # lot ac-variante-contexte : la 10-8 des abords, en tete, si la capture elargie existe
         ctx = vicinity.context_folder(cfg, args.theatre, args.base)
         if ctx is not None:
-            pages.insert(0, vicinity.build_vicinity_page(data, pages[0].info['frame'], ctx, log=print))
+            pages.insert(0, vicinity.build_vicinity_page(data, pages[0].info['frame'], ctx, log=log))
     folder = out_root / args.theatre.lower()
     stem = f'{data.icao}_{args.base}'
     pdfs = []
@@ -52,6 +58,9 @@ def main(argv):
         return 0
     export.merge_pdfs(pdfs, folder / f'{stem}_charts.pdf')
     print(f'recueil : {stem}_charts.pdf ({len(pdfs)} pages)')
+    if label_errors:
+        print(f'{len(label_errors)} nom(s) de taxiway sans place : code de sortie 3')
+        return 3
     return 0
 
 

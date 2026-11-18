@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 from shapely.geometry import Polygon
 
-from . import directory, geo, layout, vector
+from . import dcsdata, directory, geo, layout, vector
 from .fonts import CAP_HEIGHT, pt, text_width
 from .page import (BEARING_SIZE, CapEnd, GradLabel, GRAD_SIZE, grad_blockers, FOND_PX_MM, FOND_S_MAX, SYM_INSET_R, SYM_PLAN_R, CORNER_PAD, CORNER_PAD_Y, FRAME_CELL, FRAME_W, FRAME_X, FT, LAST_ROW_Y, LEGEND_Y, PAGE_H, PAGE_W, PLAN_MARGIN_M,
                    ROW_PITCH, X0, X1, PageOut, View, cells_from_mask, draw_scene, edge_ticks, fond_circles, fond_number_elems,
@@ -20,6 +20,7 @@ from .svgdoc import BAND, INK, INK2, TAXI, Doc, circle, f, line, rect, slug, tex
 NORTH_WH = (16.0, 20.0)
 SCALE_H = 10.0
 LABEL_H, LABEL_PAD = 3.0, 1.6
+LOG_ERROR_LABEL = 'ERREUR etiquette de taxiway sans place'
 RW_EXT_M, RW_EXT_W = 120.0, 8.0
 RUNWAY_FREE_M = 20.0
 PARKING_FREE_MM = 2.5
@@ -291,15 +292,26 @@ def taxiway_labels(doc, data, view, frame, corners, extra_forbidden, park_xy, lo
             h = rw.width / 2 + RW_EXT_W / 2
             forbidden.append(Polygon([view.pt(*q) for q in (P0 + n * h, P1 + n * h, P1 - n * h, P0 - n * h)]))
         bounds = (fx + 0.5, fy + 0.5, fx + fw - 0.5, fy + fh - 0.5)
-        placed = layout.place_labels(ways, lambda nm: (text_width(nm, 'bold', size) + LABEL_PAD, LABEL_H), forbidden,
-                                     park_xy, 0.6, bounds)
+
+        def in_frame(pts):
+            return any(bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3] for x, y in pts)
+        names_ok = {nm for nm, pts, _ in ways if in_frame(pts)}
+        for nm in sorted({nm for nm, _, _ in ways} - names_ok, key=dcsdata.natural_key):
+            log(f'etiquette hors du cadre : {nm}')
+        to_place = [wy for wy in ways if wy[0] in names_ok]
+        placed, info = layout.place_labels_passes(
+            to_place, lambda nm, k: (text_width(nm, 'bold', size * k) + LABEL_PAD * k, LABEL_H * k), forbidden, park_xy, 0.6, bounds)
         for nm, (cx, cy) in placed.items():
-            w = text_width(nm, 'bold', size) + LABEL_PAD
-            taxi_rects.append(rect(cx - w / 2, cy - LABEL_H / 2, w, LABEL_H, TAXI, INK, 0.2))
+            k = info[nm][1]
+            w, h = text_width(nm, 'bold', size * k) + LABEL_PAD * k, LABEL_H * k
+            taxi_rects.append(rect(cx - w / 2, cy - h / 2, w, h, TAXI, INK, 0.2))
             doc.add('Taxiway labels', taxi_rects[-1])
-            doc.add('Taxiway labels', text(cx, cy + size * CAP_HEIGHT / 2, nm, size, 'bold', INK, 'middle'))
+            doc.add('Taxiway labels', text(cx, cy + size * k * CAP_HEIGHT / 2, nm, size * k, 'bold', INK, 'middle'))
         log(f'taxiways OSM gardes : {data.osm_kept}')
-        log(f'etiquettes placees : {len(placed)}/{len(data.osm_kept)}')
+        log(f'etiquettes placees : {len(placed)}/{len(names_ok)}')
+        log('etiquettes : ' + ', '.join(f'passe {n} {sum(1 for v in info.values() if v[0] == n)}' for n in (1, 2, 3)))
+        for nm in sorted(names_ok - set(placed), key=dcsdata.natural_key):
+            log(f'{LOG_ERROR_LABEL} : {nm}')
     else:
         log('taxiways OSM gardes : []')
     return placed, taxi_rects
