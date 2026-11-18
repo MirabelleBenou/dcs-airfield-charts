@@ -545,7 +545,7 @@ LABEL_SMALL = 5.0 / 6.0            # passe 3 : etiquette a 5 pt (au lieu de 6 pt
 
 
 def place_labels_passes(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, bounds=None, to_place=None):
-    """Etiquettes de taxiways en quatre passes (lots ac-taxiways-etiquettes). Chaque passe voit les etiquettes deja posees.
+    """Etiquettes de taxiways en quatre passes (lot ac-taxiways-etiquettes). Chaque passe voit les etiquettes deja posees.
     Passe 1 : exactement `place_labels` (plus longue ligne du nom, LABEL_FRACTIONS), pour TOUS les noms de `ways`.
     Passes 2 a 4 : seulement les noms de `to_place` (None : tous) restes sans place.
     Passe 2 : toutes les lignes du nom (de la plus longue a la plus courte) aux fractions LABEL_FRACTIONS_FINE.
