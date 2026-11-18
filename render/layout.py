@@ -556,13 +556,15 @@ def place_labels_passes(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, boun
         lines.setdefault(nm, []).append((pts, L))
         if nm not in by_name or L > by_name[nm][1]:
             by_name[nm] = (pts, L)
-    placed, out, info = [], {}, {}
+    placed, out, info, leaders = [], {}, {}, []
     tree = cKDTree(np.asarray(obstacles_pts, float)) if len(obstacles_pts) else None
 
     def free(rect, cx, cy, w, h):
         if bounds is not None and not (rect[0] >= bounds[0] and rect[1] >= bounds[1] and rect[2] <= bounds[2] and rect[3] <= bounds[3]):
             return False
         if any(rects_overlap(rect, r) for r in placed) or any(_hits(rect, r) for r in forbidden):
+            return False
+        if leaders and any(_hits(rect, ln) for ln in leaders):
             return False
         if tree is not None:
             grown = (rect[0] - pt_pad, rect[1] - pt_pad, rect[2] + pt_pad, rect[3] + pt_pad)
@@ -593,4 +595,62 @@ def place_labels_passes(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, boun
                 continue
             ordered = sorted(lines[nm], key=lambda t: -t[1])                  # tri stable : egalite dans l'ordre de `ways`
             attempt(nm, [(pts, LABEL_FRACTIONS_FINE) for pts, _ in ordered], k, npass)
+    # passe 4 : etiquette deportee, reliee par un trait au point d'attache (fraction 0,5 de la plus longue ligne du nom)
+    from shapely.geometry import LineString
+    for nm in names:
+        if nm in out:
+            continue
+        anchor = _anchor(by_name[nm][0], lines[nm], bounds)
+        if anchor is None:
+            continue
+        ax, ay = anchor
+        for k in (1.0, LABEL_SMALL):
+            w, h = box_wh(nm, k)
+            done = False
+            for dist in LABEL_LEADER_DIST:
+                for d in range(16):
+                    th = math.radians(d * 22.5)
+                    cx, cy = ax + dist * math.sin(th), ay - dist * math.cos(th)
+                    rect = (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+                    if not free(rect, cx, cy, w, h):
+                        continue
+                    ex, ey = min(max(ax, rect[0]), rect[2]), min(max(ay, rect[1]), rect[3])      # point du bord le plus proche
+                    seg = LineString([(ax, ay), (ex, ey)])
+                    if any(_seg_hits(seg, r) for r in placed) or any(_seg_hits(seg, r) for r in forbidden) \
+                            or any(seg.intersects(ln) for ln in leaders):
+                        continue
+                    placed.append(rect)
+                    leaders.append(seg)
+                    out[nm] = (cx, cy)
+                    info[nm] = (4, k, (ax, ay), (ex, ey), dist, d * 22.5)
+                    done = True
+                    break
+                if done:
+                    break
+            if done:
+                break
     return out, info
+
+
+def _seg_hits(seg, other):
+    """Un trait (shapely) contre un rectangle (x0, y0, x1, y1) ou une geometrie shapely."""
+    if isinstance(other, tuple):
+        from shapely.geometry import box
+        return seg.intersects(box(*other))
+    return seg.intersects(other)
+
+
+LABEL_LEADER_DIST = (3.0, 4.5, 6.0, 8.0, 10.0, 12.0)
+
+
+def _anchor(pts, lines_of_name, bounds):
+    """Point d'attache d'une etiquette deportee : fraction 0,5 de la plus longue ligne, s'il est dans `bounds` ; sinon le sommet
+    des lignes du nom, dans `bounds`, le plus proche du centre du cadre ; None s'il n'y en a pas."""
+    ax, ay = polyline_point(pts, 0.5)
+    if bounds is None or (bounds[0] <= ax <= bounds[2] and bounds[1] <= ay <= bounds[3]):
+        return float(ax), float(ay)
+    ctr = ((bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2)
+    cands = [(math.hypot(x - ctr[0], y - ctr[1]), i, float(x), float(y))
+             for i, (x, y) in enumerate(p for q, _ in sorted(lines_of_name, key=lambda t: -t[1]) for p in q)
+             if bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3]]
+    return (min(cands)[2], min(cands)[3]) if cands else None

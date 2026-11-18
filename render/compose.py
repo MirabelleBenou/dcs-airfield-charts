@@ -304,12 +304,19 @@ def taxiway_labels(doc, data, view, frame, corners, extra_forbidden, park_xy, lo
         for nm, (cx, cy) in placed.items():
             k = info[nm][1]
             w, h = text_width(nm, 'bold', size * k) + LABEL_PAD * k, LABEL_H * k
+            if info[nm][0] == 4:                       # etiquette deportee : le trait et le point d'attache, avant l'etiquette
+                (ax, ay), (ex, ey) = info[nm][2], info[nm][3]
+                doc.add('Taxiway labels', line(ax, ay, ex, ey, INK, 0.2))
+                doc.add('Taxiway labels', circle(ax, ay, 0.25, INK))
             taxi_rects.append(rect(cx - w / 2, cy - h / 2, w, h, TAXI, INK, 0.2))
             doc.add('Taxiway labels', taxi_rects[-1])
             doc.add('Taxiway labels', text(cx, cy + size * k * CAP_HEIGHT / 2, nm, size * k, 'bold', INK, 'middle'))
         log(f'taxiways OSM gardes : {data.osm_kept}')
         log(f'etiquettes placees : {len(placed)}/{len(names_ok)}')
-        log('etiquettes : ' + ', '.join(f'passe {n} {sum(1 for v in info.values() if v[0] == n)}' for n in (1, 2, 3)))
+        log('etiquettes : ' + ', '.join(f'passe {n} {sum(1 for v in info.values() if v[0] == n)}' for n in (1, 2, 3))
+            + f', deportees {sum(1 for v in info.values() if v[0] == 4)}')
+        for nm in sorted((n for n in info if info[n][0] == 4), key=dcsdata.natural_key):
+            log(f'etiquette deportee : {nm} a {info[nm][4]:g} mm, {5 if info[nm][1] < 1 else 6} pt')
         for nm in sorted(names_ok - set(placed), key=dcsdata.natural_key):
             log(f'{LOG_ERROR_LABEL} : {nm}')
     else:
