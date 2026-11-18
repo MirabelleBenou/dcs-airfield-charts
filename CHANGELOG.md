@@ -9,7 +9,7 @@ What changed in the published charts, version by version. Each version is a GitH
 
 **Taxiway names are no longer dropped.**
 
-- When a taxiway name finds no room at its usual place, it is tried along every line of that taxiway, then in a smaller size (5 pt). A name that still finds no room makes `render/build_chart.py` end with exit code 3, after writing the charts, instead of being left out silently. Labels that already had room do not move.
+- When a taxiway name finds no room at its usual place, it is tried along every line of that taxiway, then in a smaller size (5 pt), then next to the taxiway with a thin leader line. A name that still finds no room makes `render/build_chart.py` end with exit code 3, after writing the charts, instead of being left out silently. Labels that already had room do not move.
 
 **Terrain survey during unattended nights.**
 

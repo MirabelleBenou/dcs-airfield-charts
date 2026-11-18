@@ -174,7 +174,7 @@ def labels(ways, forbidden=()):
 def test_taxiway_labels_5pt_style_and_log_lines():
     forb = [(0.0, 0.0, 148.0, 48.65), (0.0, 51.35, 148.0, 210.0)]       # bande libre de 2,7 mm : 3,0 ne tient pas, 2,5 oui
     doc, lines, placed, rects = labels([('A', hline(50.0, 20, 100), 80.0)], forb)
-    assert 'etiquettes placees : 1/1' in lines and 'etiquettes : passe 1 0, passe 2 0, passe 3 1' in lines
+    assert 'etiquettes placees : 1/1' in lines and 'etiquettes : passe 1 0, passe 2 0, passe 3 1, deportees 0' in lines
     assert not any('ERREUR' in m for m in lines)
     rect_svg, text_svg = doc.layers['Taxiway labels']
     size = pt(5.0)
@@ -255,8 +255,100 @@ def test_main_returns_3_for_an_error_on_the_vicinity_page_too(monkeypatch, tmp_p
 
 
 def test_main_returns_0_when_everything_is_placed(monkeypatch, tmp_path):
-    rc, written = run_main(monkeypatch, tmp_path, ['etiquettes placees : 2/2', 'etiquettes : passe 1 2, passe 2 0, passe 3 0'])
+    rc, written = run_main(monkeypatch, tmp_path, ['etiquettes placees : 2/2', 'etiquettes : passe 1 2, passe 2 0, passe 3 0, deportees 0'])
     assert rc == 0 and len(written) == 2
+
+
+# ---------- P9 : passe 4, etiquette deportee ----------
+from shapely.geometry import LineString, box          # noqa: E402
+
+ANCHOR = (52.0, 100.0)
+SHORT = [('A', hline(100.0, 50.0, 54.0), 4.0)]
+PARKS = [ANCHOR]                                       # un point de parking sur le tronçon : aucune place aux passes 1 a 3
+
+
+def seg_of(info):
+    return LineString([info[2], info[3]])
+
+
+def test_pass4_attachment_point_and_first_free_place():
+    placed, info = run(SHORT, [], PARKS)
+    assert info['A'][0] == 4 and info['A'][1] == 1.0
+    assert info['A'][2] == pytest.approx(ANCHOR) and info['A'][4] == 3.0 and info['A'][5] == 0.0
+    assert placed['A'] == pytest.approx((52.0, 97.0))                    # 3 mm au nord de la page
+    assert info['A'][3] == pytest.approx((52.0, 98.3))                   # le trait va au bord le plus proche
+
+
+def test_pass4_distances_and_order_distance_first_then_direction():
+    assert layout.LABEL_LEADER_DIST == (3.0, 4.5, 6.0, 8.0, 10.0, 12.0)
+    forb = [(50.0, 95.5, 51.0, 98.0)]                                    # bloque la place nord a 3 mm seulement
+    placed, info = run(SHORT, forb, PARKS)
+    assert info['A'][4] == 3.0 and info['A'][5] == 22.5                  # a 3 mm, direction suivante (sens horaire), pas 4,5 mm au nord
+    assert placed['A'] == pytest.approx((52.0 + 3 * math.sin(math.radians(22.5)), 100.0 - 3 * math.cos(math.radians(22.5))))
+
+
+def test_pass4_leader_crossing_a_forbidden_geometry_is_refused():
+    strip = box(48.0, 98.9, 56.0, 99.1)                                  # piste prolongee : au nord du point d'attache
+    placed, info = run(SHORT, [strip], PARKS)
+    assert info['A'][0] == 4 and info['A'][5] != 0.0
+    assert not seg_of(info['A']).intersects(strip) and not layout._hits(rect_of(placed['A']), strip)
+
+
+CORRIDOR = [(0.0, 0.0, 49.9, 210.0), (54.1, 0.0, 148.0, 210.0), (49.9, 101.0, 54.1, 210.0)]      # seul le nord est ouvert
+
+
+def test_pass4_leader_crossing_another_label_is_refused():
+    other = ('B', hline(97.2, 51.0, 53.0), 2.0)                          # etiquette de passe 1 entre le point d'attache et le nord
+    placed, info = run(SHORT + [other], CORRIDOR, PARKS)
+    assert info['B'][0] == 1
+    assert 'A' not in placed                                             # 3 et 4,5 mm : recouvre B ; 6 a 12 mm : le trait couperait B
+    placed, info = run(SHORT, CORRIDOR, PARKS)                           # sans B, la meme place convient
+    assert info['A'][0] == 4 and info['A'][4] == 3.0
+
+
+def test_pass4_leader_crossing_an_earlier_leader_is_refused():
+    ways = [('A', hline(100.0, 50.0, 54.0), 4.0), ('B', hline(100.0, 50.0, 54.0), 4.0)]
+    placed, info = run(ways, [], PARKS)                                  # meme point d'attache : le trait de A le touche, B n'a pas de place
+    assert info['A'][0] == 4 and 'B' not in placed
+    ways = [('A', hline(100.0, 50.0, 54.0), 4.0), ('B', hline(100.0, 56.0, 60.0), 4.0)]
+    placed, info = run(ways, [], [ANCHOR, (58.0, 100.0)])
+    assert info['A'][0] == 4 and info['B'][0] == 4
+    assert not seg_of(info['A']).intersects(seg_of(info['B']))
+    assert not layout.rects_overlap(rect_of(placed['A']), rect_of(placed['B']))
+    for nm, other in (('A', 'B'), ('B', 'A')):
+        assert not seg_of(info[nm]).intersects(box(*rect_of(placed[other])))
+
+
+def test_pass4_falls_back_to_5pt():
+    forb = CORRIDOR + [(0.0, 0.0, 148.0, 95.9)]                          # au nord, 2,5 mm de haut tiennent, 3,0 non
+    placed, info = run(SHORT, forb, PARKS)
+    assert info['A'][0] == 4 and info['A'][1] == layout.LABEL_SMALL and info['A'][4] == 3.0
+    assert placed['A'] == pytest.approx((52.0, 97.0))
+
+
+def test_pass4_nothing_within_12_mm_leaves_the_name_unplaced():
+    placed, info = run(SHORT, [(0.0, 0.0, 148.0, 210.0)][:0] + [(0.0, 0.0, 148.0, 100.0), (0.0, 100.0, 148.0, 210.0)], PARKS)
+    assert placed == {} and info == {}
+
+
+def test_pass4_anchor_outside_bounds_uses_the_vertex_nearest_the_centre():
+    pts = np.array([[-10.0, 100.0], [20.0, 100.0], [90.0, 100.0], [400.0, 100.0]])
+    assert layout._anchor(pts, [(pts, 410.0)], BOUNDS) == (90.0, 100.0)    # milieu de la ligne hors cadre : sommet dans le cadre le plus proche du centre
+    assert layout._anchor(np.array([[0.0, 0.0], [10.0, 0.0]]), [(np.array([[0.0, 0.0], [10.0, 0.0]]), 10.0)], BOUNDS) == (5.0, 0.0)
+
+
+def test_leader_is_drawn_before_the_label_with_a_dot():
+    doc, lines, placed, _ = labels([('A', hline(50.0, 20.0, 21.0), 1.0)], [])
+    pts = np.array([[20.0, 50.0], [21.0, 50.0]])
+    doc2, lines2 = Doc(), []
+    data = fake_data([('A', pts, 1.0)])
+    compose.taxiway_labels(doc2, data, FakeView(), FRAME, ((0, 0, 1, 1), (0, 0, 1, 1)), [], np.array([[20.5, 50.0]]), lines2.append)
+    layer = doc2.layers['Taxiway labels']
+    assert layer[0].startswith('<line') and 'stroke="#1A1A1A"' in layer[0] and 'stroke-width="0.2"' in layer[0]
+    assert layer[1].startswith('<circle') and 'r="0.25"' in layer[1] and 'fill="#1A1A1A"' in layer[1]
+    assert layer[2].startswith('<rect') and layer[3].startswith('<text')
+    assert 'etiquettes : passe 1 0, passe 2 0, passe 3 0, deportees 1' in lines2
+    assert any(m.startswith('etiquette deportee : A a 3 mm, 6 pt') for m in lines2)
 
 
 # ---------- P5 : Konya (echantillons) ----------
@@ -271,12 +363,13 @@ def konya_logs(work):
 def test_konya_10_9_taxiway_log_lines(konya_logs):
     logs, pages = konya_logs
     assert any(m.startswith('etiquettes placees : ') for m in logs)
-    assert 'etiquettes : passe 1 18, passe 2 0, passe 3 0' in logs
-    assert sorted(m for m in logs if m.startswith('ERREUR')) == ['ERREUR etiquette de taxiway sans place : C',
-                                                                 'ERREUR etiquette de taxiway sans place : D3']
+    assert 'etiquettes placees : 20/20' in logs
+    assert 'etiquettes : passe 1 18, passe 2 0, passe 3 0, deportees 2' in logs
+    assert 'etiquette deportee : C a 3 mm, 6 pt' in logs and 'etiquette deportee : D3 a 6 mm, 6 pt' in logs
+    assert not any('ERREUR' in m for m in logs)
 
 
-def test_build_chart_konya_exits_3_and_adana_exits_0(work, tmp_path):
+def test_build_chart_konya_and_adana_exit_0(work, tmp_path):
     assert build_chart.main(['build_chart.py', 'Syria', 'Adana', '--config', str(work.source), '--out', str(tmp_path / 'a')]) == 0
-    assert build_chart.main(['build_chart.py', 'Syria', 'Konya', '--config', str(work.source), '--out', str(tmp_path / 'k')]) == 3
+    assert build_chart.main(['build_chart.py', 'Syria', 'Konya', '--config', str(work.source), '--out', str(tmp_path / 'k')]) == 0
     assert (tmp_path / 'k' / 'syria' / 'LTAN_Konya_10-9.pdf').is_file()
