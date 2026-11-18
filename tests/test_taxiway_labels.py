@@ -77,13 +77,16 @@ def test_pass1_equals_legacy_when_everything_fits():
 
 
 def test_pass1_labels_unchanged_when_a_name_is_missing():
-    ways = [('A', hline(50.0), 100.0), ('B', hline(52.0), 100.0), ('C', np.array([[20.0, 50.0], [26.0, 50.0]]), 6.0)]
-    forb = [(0.0, 40.0, 148.0, 49.0), (0.0, 51.0, 148.0, 60.0)]
+    # A et B sont posees par l'ancien algorithme ; C perd sa plus longue ligne (bande interdite) et n'a de place que sur la courte
+    ways = [('A', hline(120.0), 100.0), ('B', hline(130.0), 100.0), ('C', hline(50.0, 20.0, 100.0), 80.0),
+            ('C', hline(170.0, 20.0, 40.0), 20.0)]
+    forb = [(0.0, 45.0, 148.0, 56.0)]
     old = legacy_place_labels(ways, lambda nm: (W, H), forb, np.empty((0, 2)), 0.6, BOUNDS)
     new, info = run(ways, forb)
-    assert len(old) < 3
+    assert len(old) >= 2 and 'C' not in old
     for nm, c in old.items():
         assert new[nm] == c and info[nm] == (1, 1.0)
+    assert info['C'][0] in (2, 3, 4) and new['C'][1] == pytest.approx(170.0)
 
 
 # ---------- P2 : passe 2 ----------
@@ -122,17 +125,13 @@ def test_pass2_label_avoids_pass1_labels():
 
 
 def test_pass2_label_added_never_overlaps_earlier_ones_and_does_not_move_them():
-    ways = [('A', hline(50.0), 100.0), ('B', hline(50.0), 100.0), ('C', hline(50.0), 100.0)]
-    forb = [(0.0, 0.0, 148.0, 49.0), (0.0, 51.0, 148.0, 210.0)]      # une seule bande de 2 mm : pas de place pour une etiquette de 2,6
-    placed, info = run(ways, [])
-    assert len(placed) == 3
-    p1 = [nm for nm in placed if info[nm][0] == 1]
-    old = legacy_place_labels(ways, lambda nm: (W, H), [], np.empty((0, 2)), 0.6, BOUNDS)
-    assert all(placed[nm] == old[nm] for nm in p1) and set(p1) == set(old)
-    names = sorted(placed)
-    for i, a in enumerate(names):
-        for b in names[i + 1:]:
-            assert not layout.rects_overlap(rect_of(placed[a], info[a][1]), rect_of(placed[b], info[b][1]))
+    ways = [('A', hline(50.0), 100.0), ('A', hline(100.0, 20.0, 60.0), 40.0), ('B', hline(100.0, 20.0, 60.0), 40.0)]
+    forb = [(0.0, 40.0, 148.0, 60.0)]                                  # A perd sa plus longue ligne : passe 2, sur la ligne de B
+    old = legacy_place_labels(ways, lambda nm: (W, H), forb, np.empty((0, 2)), 0.6, BOUNDS)
+    placed, info = run(ways, forb)
+    assert set(old) == {'B'} and placed['B'] == old['B'] and info['B'] == (1, 1.0)
+    assert info['A'] == (2, 1.0)
+    assert not layout.rects_overlap(rect_of(placed['A']), rect_of(placed['B']))
 
 
 # ---------- P3 : passe 3 ----------
@@ -191,6 +190,14 @@ def test_name_outside_the_frame_is_logged_without_error():
     assert 'etiquette hors du cadre : Z' in lines
     assert 'etiquettes placees : 1/1' in lines
     assert not any('ERREUR' in m for m in lines) and set(placed) == {'A'}
+
+
+def test_a_line_crossing_the_frame_without_a_vertex_inside_keeps_its_pass_1_label():
+    # sonde de la relecture : la ligne X de (-50 ; 60) a (200 ; 60), cadre (10, 10, 100, 150) : posee en (75 ; 60) comme en 66ff09b
+    X = np.array([[-50.0, 60.0], [200.0, 60.0]])
+    doc, lines, placed, _ = labels([('X', X, 250.0)])
+    assert placed['X'] == pytest.approx((75.0, 60.0))
+    assert 'etiquettes placees : 1/1' in lines and not any('hors du cadre' in m or 'ERREUR' in m for m in lines)
 
 
 def test_name_without_room_logs_an_error_and_the_page_is_written():
@@ -327,22 +334,102 @@ def test_pass4_falls_back_to_5pt():
 
 
 def test_pass4_nothing_within_12_mm_leaves_the_name_unplaced():
-    placed, info = run(SHORT, [(0.0, 0.0, 148.0, 210.0)][:0] + [(0.0, 0.0, 148.0, 100.0), (0.0, 100.0, 148.0, 210.0)], PARKS)
+    placed, info = run(SHORT, [(0.0, 0.0, 148.0, 100.0), (0.0, 100.0, 148.0, 210.0)], PARKS)
     assert placed == {} and info == {}
 
 
-def test_pass4_anchor_outside_bounds_uses_the_vertex_nearest_the_centre():
-    pts = np.array([[-10.0, 100.0], [20.0, 100.0], [90.0, 100.0], [400.0, 100.0]])
-    assert layout._anchor(pts, [(pts, 410.0)], BOUNDS) == (90.0, 100.0)    # milieu de la ligne hors cadre : sommet dans le cadre le plus proche du centre
-    assert layout._anchor(np.array([[0.0, 0.0], [10.0, 0.0]]), [(np.array([[0.0, 0.0], [10.0, 0.0]]), 10.0)], BOUNDS) == (5.0, 0.0)
+def test_pass4_anchor_outside_bounds_is_the_continuous_point_nearest_the_centre():
+    pts = np.array([[-10.0, 100.0], [20.0, 100.0], [90.0, 100.0], [400.0, 100.0]])        # milieu (195 ; 100) hors du cadre
+    assert layout._anchor(pts, [(pts, 410.0)], BOUNDS) == pytest.approx((74.0, 100.0))    # centre du cadre (74 ; 105)
+    inside = np.array([[0.0, 0.0], [10.0, 0.0]])
+    assert layout._anchor(inside, [(inside, 10.0)], BOUNDS) == (5.0, 0.0)
+    far = np.array([[-300.0, 50.0], [-100.0, 50.0], [900.0, 50.0]])                       # milieu hors cadre, ligne qui le traverse
+    assert layout._anchor(far, [(far, 1000.0)], BOUNDS) == pytest.approx((74.0, 50.0))
+    out = np.array([[-300.0, 50.0], [-250.0, 50.0], [-200.0, 50.0]])                      # la plus longue ligne ne coupe pas le cadre
+    short = np.array([[100.0, 190.0], [120.0, 190.0]])
+    assert layout._anchor(out, [(out, 100.0), (short, 20.0)], BOUNDS) == pytest.approx((100.0, 190.0))
+    assert layout._anchor(out, [(out, 100.0)], BOUNDS) is None
+
+
+def test_pass4_no_zero_length_leader():
+    # etiquette haute de 6 mm, rien au-dessus de la ligne : a 3 mm au sud le rectangle contiendrait le point d'attache (trait nul) :
+    # refuse, la place a 4,5 mm convient
+    big = lambda nm, k: (4.0, 6.0 * k)
+    placed, info = layout.place_labels_passes(SHORT, big, [(40.0, 96.0, 70.0, 99.9)], np.empty((0, 2)), 0.6, BOUNDS)
+    assert info['A'][0] == 4 and info['A'][4] == 4.5
+    r = rect_of_wh(placed['A'], 4.0, 6.0)
+    assert not (r[0] - 0.25 <= ANCHOR[0] <= r[2] + 0.25 and r[1] - 0.25 <= ANCHOR[1] <= r[3] + 0.25)
+
+
+def rect_of_wh(c, w, h):
+    return (c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2)
+
+
+NORTH_PARKS = PARKS + [(52.0, 97.0), (52.0, 95.5), (52.0, 94.0), (52.0, 92.0), (52.0, 90.0)]       # bloquent 3 a 10 mm au nord
+
+
+def test_pass4_only_free_place_at_12_mm_is_used_and_nothing_beyond():
+    placed, info = run(SHORT, CORRIDOR, NORTH_PARKS)
+    assert info['A'][0] == 4 and info['A'][1] == 1.0 and info['A'][4] == 12.0 and info['A'][5] == 0.0
+    placed, info = run(SHORT, CORRIDOR, NORTH_PARKS + [(52.0, 88.0)])                  # la place a 12 mm bloquee : rien avant 13 mm
+    assert placed == {} and info == {}
+
+
+def test_pass4_candidate_refused_only_because_its_rectangle_touches_an_earlier_leader():
+    slabs = [(55.0, 0.0, 148.0, 98.3), (55.0, 99.4, 148.0, 210.0), (59.5, 98.3, 148.0, 99.4)]      # B ne garde que l'ouest
+    ways = [('A', hline(100.0, 50.0, 54.0), 4.0), ('B', hline(98.85, 55.0, 59.0), 4.0)]
+    parks = np.array([ANCHOR, (57.0, 98.85)])
+    box_wh = lambda nm, k: ((4.0 if nm == 'A' else 4.7) * k, (2.6 if nm == 'A' else 1.0) * k)                              # B : 1 mm de haut (hors de la marge du parking)
+    placed, info = layout.place_labels_passes(ways[1:], box_wh, slabs, parks[1:], 0.6, BOUNDS)      # seule : B a 3 mm a l'ouest
+    assert info['B'][4] == 3.0 and info['B'][5] == 270.0 and placed['B'] == pytest.approx((54.0, 98.85))
+    placed, info = layout.place_labels_passes(ways, box_wh, slabs, parks, 0.6, BOUNDS)              # avec A : son trait (x = 52) traverse ces places
+    assert info['A'][0] == 4 and info['A'][5] == 0.0 and 'B' not in placed
+
+
+def test_pass4_anchor_outside_bounds_is_the_continuous_point_nearest_the_centre():
+    pts = np.array([[-10.0, 100.0], [20.0, 100.0], [90.0, 100.0], [400.0, 100.0]])        # milieu (195 ; 100) hors du cadre
+    assert layout._anchor(pts, [(pts, 410.0)], BOUNDS) == pytest.approx((74.0, 100.0))    # centre du cadre (74 ; 105)
+    inside = np.array([[0.0, 0.0], [10.0, 0.0]])
+    assert layout._anchor(inside, [(inside, 10.0)], BOUNDS) == (5.0, 0.0)
+    far = np.array([[-300.0, 50.0], [-100.0, 50.0], [900.0, 50.0]])                       # milieu hors cadre, ligne qui le traverse
+    assert layout._anchor(far, [(far, 1000.0)], BOUNDS) == pytest.approx((74.0, 50.0))
+    out = np.array([[-300.0, 50.0], [-250.0, 50.0], [-200.0, 50.0]])                      # la plus longue ligne ne coupe pas le cadre
+    short = np.array([[100.0, 190.0], [120.0, 190.0]])
+    assert layout._anchor(out, [(out, 100.0), (short, 20.0)], BOUNDS) == pytest.approx((100.0, 190.0))
+    assert layout._anchor(out, [(out, 100.0)], BOUNDS) is None
+
+
+def test_pass4_no_zero_length_leader():
+    # etiquette haute de 6 mm, rien au-dessus de la ligne : a 3 mm au sud le rectangle contiendrait le point d'attache (trait nul) :
+    # refuse, la place a 4,5 mm convient
+    big = lambda nm, k: (4.0, 6.0 * k)
+    placed, info = layout.place_labels_passes(SHORT, big, [(40.0, 96.0, 70.0, 99.9)], np.empty((0, 2)), 0.6, BOUNDS)
+    assert info['A'][0] == 4 and info['A'][4] == 4.5
+    r = rect_of_wh(placed['A'], 4.0, 6.0)
+    assert not (r[0] - 0.25 <= ANCHOR[0] <= r[2] + 0.25 and r[1] - 0.25 <= ANCHOR[1] <= r[3] + 0.25)
+
+
+def rect_of_wh(c, w, h):
+    return (c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2)
+
+
+NORTH_PARKS = PARKS + [(52.0, 97.0), (52.0, 95.5), (52.0, 94.0), (52.0, 92.0), (52.0, 90.0)]       # bloquent 3 a 10 mm au nord
+
+
+def test_pass4_only_free_place_at_12_mm_is_used_and_nothing_beyond():
+    placed, info = run(SHORT, CORRIDOR, NORTH_PARKS)
+    assert info['A'][0] == 4 and info['A'][1] == 1.0 and info['A'][4] == 12.0 and info['A'][5] == 0.0
+    placed, info = run(SHORT, CORRIDOR, NORTH_PARKS + [(52.0, 88.0)])                  # la place a 12 mm bloquee : rien avant 13 mm
+    assert placed == {} and info == {}
 
 
 def test_leader_is_drawn_before_the_label_with_a_dot():
-    doc, lines, placed, _ = labels([('A', hline(50.0, 20.0, 21.0), 1.0)], [])
     pts = np.array([[20.0, 50.0], [21.0, 50.0]])
     doc2, lines2 = Doc(), []
     data = fake_data([('A', pts, 1.0)])
-    compose.taxiway_labels(doc2, data, FakeView(), FRAME, ((0, 0, 1, 1), (0, 0, 1, 1)), [], np.array([[20.5, 50.0]]), lines2.append)
+    _, rects2 = compose.taxiway_labels(doc2, data, FakeView(), FRAME, ((0, 0, 1, 1), (0, 0, 1, 1)), [], np.array([[20.5, 50.0]]),
+                                       lines2.append)
+    assert [r.split(' ')[0] for r in rects2] == ['<line', '<circle', '<rect']       # la graduation evite aussi le trait et le point
     layer = doc2.layers['Taxiway labels']
     assert layer[0].startswith('<line') and 'stroke="#1A1A1A"' in layer[0] and 'stroke-width="0.2"' in layer[0]
     assert layer[1].startswith('<circle') and 'r="0.25"' in layer[1] and 'fill="#1A1A1A"' in layer[1]

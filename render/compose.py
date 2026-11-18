@@ -6,7 +6,8 @@ import math
 import cv2
 import numpy as np
 from PIL import Image
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Point, Polygon
+from shapely.geometry import box as sbox
 
 from . import dcsdata, directory, geo, layout, vector
 from .fonts import CAP_HEIGHT, pt, text_width
@@ -273,10 +274,13 @@ def draw_inset(doc, box, data, parkings_all, clip_prefix='clip-inset'):
 
 
 def taxiway_labels(doc, data, view, frame, corners, extra_forbidden, park_xy, log):
-    """Etiquettes de taxiways (jeu ou OSM) du plan : une etiquette jaune par nom, posee sur la plus longue ligne de ce nom, hors des
-    coins (`corners` : les rectangles du nord et de l'echelle, agrandis de 1,5 mm), des geometries `extra_forbidden` (encarts, caps)
-    et des pistes prolongees. Ecrit le calque `Taxiway labels`, journalise comme le moteur. Partagee par la 10-9 et la 10-8
-    (lot ac-variante-contexte). Retourne ({nom: (cx, cy)}, [rectangles SVG])."""
+    """Etiquettes de taxiways (jeu ou OSM) du plan : une etiquette jaune par nom, hors des coins (`corners` : les rectangles du nord
+    et de l'echelle, agrandis de 1,5 mm), des geometries `extra_forbidden` (encarts, caps) et des pistes prolongees. Quatre passes
+    (`layout.place_labels_passes`) : la plus longue ligne ; toutes les lignes, positions plus fines ; 5 pt ; etiquette deportee
+    avec un trait. Tous les noms passent par la passe 1 ; les passes 2 a 4 ne traitent que les noms dont une ligne coupe le cadre.
+    Un nom a poser sans place : ligne `ERREUR etiquette de taxiway sans place`. Ecrit le calque `Taxiway labels`, journalise comme le
+    moteur. Partagee par la 10-9 et la 10-8. Retourne ({nom: (cx, cy)}, elements SVG des etiquettes, traits et points d'attache
+    (obstacles de la graduation))."""
     fx, fy, fw, fh = frame
     placed = {}
     taxi_rects = []
@@ -293,21 +297,26 @@ def taxiway_labels(doc, data, view, frame, corners, extra_forbidden, park_xy, lo
             forbidden.append(Polygon([view.pt(*q) for q in (P0 + n * h, P1 + n * h, P1 - n * h, P0 - n * h)]))
         bounds = (fx + 0.5, fy + 0.5, fx + fw - 0.5, fy + fh - 0.5)
 
-        def in_frame(pts):
-            return any(bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3] for x, y in pts)
+        frame_box = sbox(*bounds)
+
+        def in_frame(pts):                       # un troncon coupe le cadre (un seul point : il y est)
+            pts = np.asarray(pts, float)
+            return (frame_box.intersects(Point(pts[0])) if len(pts) == 1 else frame_box.intersects(LineString(pts)))
         names_ok = {nm for nm, pts, _ in ways if in_frame(pts)}
-        for nm in sorted({nm for nm, _, _ in ways} - names_ok, key=dcsdata.natural_key):
-            log(f'etiquette hors du cadre : {nm}')
-        to_place = [wy for wy in ways if wy[0] in names_ok]
         placed, info = layout.place_labels_passes(
-            to_place, lambda nm, k: (text_width(nm, 'bold', size * k) + LABEL_PAD * k, LABEL_H * k), forbidden, park_xy, 0.6, bounds)
+            ways, lambda nm, k: (text_width(nm, 'bold', size * k) + LABEL_PAD * k, LABEL_H * k), forbidden, park_xy, 0.6, bounds,
+            to_place=names_ok)
+        for nm in sorted({nm for nm, _, _ in ways} - names_ok - set(placed), key=dcsdata.natural_key):
+            log(f'etiquette hors du cadre : {nm}')
+        names_ok |= set(placed)
         for nm, (cx, cy) in placed.items():
             k = info[nm][1]
             w, h = text_width(nm, 'bold', size * k) + LABEL_PAD * k, LABEL_H * k
             if info[nm][0] == 4:                       # etiquette deportee : le trait et le point d'attache, avant l'etiquette
                 (ax, ay), (ex, ey) = info[nm][2], info[nm][3]
-                doc.add('Taxiway labels', line(ax, ay, ex, ey, INK, 0.2))
-                doc.add('Taxiway labels', circle(ax, ay, 0.25, INK))
+                for el in (line(ax, ay, ex, ey, INK, 0.2), circle(ax, ay, 0.25, INK)):
+                    doc.add('Taxiway labels', el)
+                    taxi_rects.append(el)           # la graduation evite aussi le trait et le point
             taxi_rects.append(rect(cx - w / 2, cy - h / 2, w, h, TAXI, INK, 0.2))
             doc.add('Taxiway labels', taxi_rects[-1])
             doc.add('Taxiway labels', text(cx, cy + size * k * CAP_HEIGHT / 2, nm, size * k, 'bold', INK, 'middle'))

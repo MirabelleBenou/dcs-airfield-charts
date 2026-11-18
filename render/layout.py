@@ -544,13 +544,19 @@ LABEL_FRACTIONS_FINE = (0.50, 0.45, 0.55, 0.40, 0.60, 0.35, 0.65, 0.30, 0.70, 0.
 LABEL_SMALL = 5.0 / 6.0            # passe 3 : etiquette a 5 pt (au lieu de 6 pt)
 
 
-def place_labels_passes(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, bounds=None):
-    """Etiquettes de taxiways en trois passes (lot ac-taxiways-etiquettes).
-    Passe 1 : exactement `place_labels` (plus longue ligne du nom, LABEL_FRACTIONS), pour tous les noms. Passe 2 : pour chaque nom
-    sans place, toutes ses lignes (de la plus longue a la plus courte) aux fractions LABEL_FRACTIONS_FINE. Passe 3 : la meme
-    recherche avec une etiquette a 5 pt. Chaque passe voit les etiquettes deja posees.
+def place_labels_passes(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, bounds=None, to_place=None):
+    """Etiquettes de taxiways en quatre passes (lots ac-taxiways-etiquettes). Chaque passe voit les etiquettes deja posees.
+    Passe 1 : exactement `place_labels` (plus longue ligne du nom, LABEL_FRACTIONS), pour TOUS les noms de `ways`.
+    Passes 2 a 4 : seulement les noms de `to_place` (None : tous) restes sans place.
+    Passe 2 : toutes les lignes du nom (de la plus longue a la plus courte) aux fractions LABEL_FRACTIONS_FINE.
+    Passe 3 : la meme recherche avec une etiquette a 5 pt.
+    Passe 4 : etiquette deportee, reliee par un trait au point d'attache (fraction 0,5 de la plus longue ligne ; repli `_anchor`),
+    aux distances LABEL_LEADER_DIST et aux 16 directions (tous les 22,5 degres, du nord de la page, sens horaire), a 6 pt puis a 5 pt.
+    Le trait (epaissi de 0,1 mm) et le point d'attache (rayon 0,25 mm) deviennent des obstacles pour les places essayees ensuite ;
+    une place dont le rectangle, agrandi de 0,25 mm, contient le point d'attache est refusee.
     box_wh : fonction (nom, k) -> (w, h), k = 1 (6 pt) ou LABEL_SMALL (5 pt).
-    Retourne ({nom: (cx, cy)}, {nom: (passe, k)}) ; un nom absent n'a trouve aucune place."""
+    Retourne ({nom: (cx, cy)}, info) ; info[nom] = (passe, k) pour les passes 1 a 3, (4, k, (ax, ay), (ex, ey), distance, direction)
+    pour la passe 4 ((ex, ey) : point du bord de l'etiquette ou le trait aboutit) ; un nom absent n'a trouve aucune place."""
     by_name, lines = {}, {}
     for nm, pts, L in ways:
         lines.setdefault(nm, []).append((pts, L))
@@ -589,15 +595,16 @@ def place_labels_passes(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, boun
     names = sorted(by_name, key=dcsdata.natural_key)
     for nm in names:
         attempt(nm, [(by_name[nm][0], LABEL_FRACTIONS)], 1.0, 1)
+    todo = [nm for nm in names if to_place is None or nm in to_place]
     for npass, k in ((2, 1.0), (3, LABEL_SMALL)):
-        for nm in names:
+        for nm in todo:
             if nm in out:
                 continue
             ordered = sorted(lines[nm], key=lambda t: -t[1])                  # tri stable : egalite dans l'ordre de `ways`
             attempt(nm, [(pts, LABEL_FRACTIONS_FINE) for pts, _ in ordered], k, npass)
     # passe 4 : etiquette deportee, reliee par un trait au point d'attache (fraction 0,5 de la plus longue ligne du nom)
-    from shapely.geometry import LineString
-    for nm in names:
+    from shapely.geometry import LineString, Point
+    for nm in todo:
         if nm in out:
             continue
         anchor = _anchor(by_name[nm][0], lines[nm], bounds)
@@ -614,13 +621,16 @@ def place_labels_passes(ways, box_wh, forbidden, obstacles_pts, pt_pad=0.6, boun
                     rect = (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
                     if not free(rect, cx, cy, w, h):
                         continue
+                    if rect[0] - 0.25 <= ax <= rect[2] + 0.25 and rect[1] - 0.25 <= ay <= rect[3] + 0.25:
+                        continue                                    # pas de trait de longueur nulle
                     ex, ey = min(max(ax, rect[0]), rect[2]), min(max(ay, rect[1]), rect[3])      # point du bord le plus proche
                     seg = LineString([(ax, ay), (ex, ey)])
                     if any(_seg_hits(seg, r) for r in placed) or any(_seg_hits(seg, r) for r in forbidden) \
                             or any(seg.intersects(ln) for ln in leaders):
                         continue
                     placed.append(rect)
-                    leaders.append(seg)
+                    leaders.append(seg.buffer(0.1))
+                    leaders.append(Point(ax, ay).buffer(0.25))
                     out[nm] = (cx, cy)
                     info[nm] = (4, k, (ax, ay), (ex, ey), dist, d * 22.5)
                     done = True
@@ -644,13 +654,21 @@ LABEL_LEADER_DIST = (3.0, 4.5, 6.0, 8.0, 10.0, 12.0)
 
 
 def _anchor(pts, lines_of_name, bounds):
-    """Point d'attache d'une etiquette deportee : fraction 0,5 de la plus longue ligne, s'il est dans `bounds` ; sinon le sommet
-    des lignes du nom, dans `bounds`, le plus proche du centre du cadre ; None s'il n'y en a pas."""
+    """Point d'attache d'une etiquette deportee : fraction 0,5 de la plus longue ligne, s'il est dans `bounds` ; sinon le point
+    continu de cette ligne, dans `bounds`, le plus proche du centre du cadre (les autres lignes, de la plus longue a la plus courte,
+    si elle ne coupe pas `bounds`) ; None si aucune ne le coupe."""
+    from shapely.geometry import LineString, Point, box as sbox
+    from shapely.ops import nearest_points
     ax, ay = polyline_point(pts, 0.5)
     if bounds is None or (bounds[0] <= ax <= bounds[2] and bounds[1] <= ay <= bounds[3]):
         return float(ax), float(ay)
-    ctr = ((bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2)
-    cands = [(math.hypot(x - ctr[0], y - ctr[1]), i, float(x), float(y))
-             for i, (x, y) in enumerate(p for q, _ in sorted(lines_of_name, key=lambda t: -t[1]) for p in q)
-             if bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3]]
-    return (min(cands)[2], min(cands)[3]) if cands else None
+    ctr = Point((bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2)
+    frame = sbox(*bounds)
+    for q, _ in sorted(lines_of_name, key=lambda t: -t[1]):         # tri stable : egalite dans l'ordre de `ways`
+        q = np.asarray(q, float)
+        g = Point(q[0]) if len(q) == 1 else LineString(q)
+        g = g.intersection(frame)
+        if not g.is_empty:
+            n = nearest_points(g, ctr)[0]
+            return float(n.x), float(n.y)
+    return None
