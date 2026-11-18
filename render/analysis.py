@@ -16,6 +16,7 @@ NO_FREQUENCY = '\u2014'          # tiret cadratin : frequence de tour inconnue
 Image.MAX_IMAGE_PIXELS = None
 SHELTER_HALF_M, SHELTER_SHARE = 6.0, 0.35
 THRESHOLD_ELEV_MAX_M, THRESHOLD_ELEV_N = 250.0, 5
+THRESHOLD_ELEV_FALLBACK_MAX_M = 1000.0      # repli : aucun point a THRESHOLD_ELEV_MAX_M, le plus proche est pris jusqu'a cette distance
 OSM_TAXIWAY_REF = re.compile(r'^[A-Z]{1,2}[0-9]{0,2}$')
 OSM_ON_PAVEMENT, OSM_PAVEMENT_GROW_M = 0.80, 5.0
 BEACON_BANNER = {'TACAN': 'TACAN', 'VORTAC': 'VORTAC', 'VOR_DME': 'VOR/DME', 'VOR': 'VOR',
@@ -277,6 +278,18 @@ def heliport_has_radio(bj, theatre):
     return ap is not None and getattr(ap, 'atc_radio', None) is not None
 
 
+def threshold_elev_ft(pts, pos):
+    """Altitude du seuil `pos` (x, z), en pieds : la mediane des THRESHOLD_ELEV_N points .rn4 `pts` (x, y, z) les plus proches si le
+    plus proche est a THRESHOLD_ELEV_MAX_M au plus ; sinon (repli) la meme mediane si le plus proche est a THRESHOLD_ELEV_FALLBACK_MAX_M
+    au plus ; sinon None. Retourne (altitude ou None, distance du plus proche si repli, sinon None)."""
+    d = np.hypot(pts[:, 0] - pos[0], pts[:, 2] - pos[1])
+    dmin = float(d.min())
+    if dmin > THRESHOLD_ELEV_FALLBACK_MAX_M:
+        return None, None
+    thr = int(round(float(np.median(pts[np.argsort(d)[:THRESHOLD_ELEV_N], 1])) * FT))
+    return thr, (None if dmin <= THRESHOLD_ELEV_MAX_M else dmin)
+
+
 def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=None, log=print):
     out_root = Path(cfg.work_dir) / 'out' / theatre.lower()
     folder = out_root / base
@@ -360,17 +373,15 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     names = naming.name_ends([(r.p0, r.p1) for r in rws], [(a.name, a.heading) for a in facts.approaches], hints)
     ends = []
     elev_m = float(np.median(pts[:, 1]))
-    pxz = pts[:, [0, 2]]
     for i, r in enumerate(rws):
         for k in range(2):
             nm, az = names[i][k]
             pos = r.p0 if k == 0 else r.p1
             clat, clon = proj.to_latlon(*pos)
             mag = (az - decl) % 360.0            # cap lu au compas du cockpit : le nord de la grille est le nord du jeu (lot caps-cockpit)
-            d = np.hypot(pxz[:, 0] - pos[0], pxz[:, 1] - pos[1])
-            thr = None
-            if d.min() <= THRESHOLD_ELEV_MAX_M:
-                thr = int(round(float(np.median(pts[np.argsort(d)[:THRESHOLD_ELEV_N], 1])) * FT))
+            thr, fallback_m = threshold_elev_ft(pts, pos)
+            if fallback_m is not None:
+                log(f'altitude du seuil {nm} prise à {fallback_m:.0f} m du seuil (aucun point de roulage à {THRESHOLD_ELEV_MAX_M:.0f} m)')
             ends.append(End(nm, az, mag, pos, i, thr))
     attachments = attach_ils(ends, blist, log=log)          # ILS rattaches par la geometrie (lot balises, 4.2)
     ils_antennas = ils_antenna_info(attachments, blist)     # lot ac-approche-ils : antennes de chaque ILS rattache

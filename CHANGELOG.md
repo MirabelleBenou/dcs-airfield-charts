@@ -7,6 +7,10 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Unreleased
 
+**Approach pages for ILS runway ends far from the taxiways.**
+
+- When no taxiway point lies within 250 m of a runway threshold, the threshold elevation is now taken from the nearest taxiway points up to 1,000 m away, instead of being left unknown. The runway table shows it, and an ILS runway end in that case gets its approach page.
+
 **Navaid labels, graticule ticks and taxiway labels no longer overlap.**
 
 - A navaid label avoids the latitude/longitude ticks on the edge of the chart, as it already avoided runways and runway bearings; republishing a chart applies the same rule.
