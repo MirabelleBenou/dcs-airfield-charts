@@ -212,14 +212,15 @@ def navaid_geoms(shown, groups, label_elems):
     return syms + [elems_geom(e) for e in label_elems]
 
 
-def navaids(doc, view, frame, data, runways=(), caps=(), halo=False):
+def navaids(doc, view, frame, data, runways=(), caps=(), halo=False, ticks=()):
     """Symboles et libelles des balises du plan ; les libelles passent par `page.place_navaid_labels` (cadrage 2.2) : a droite
-    du symbole, ou a gauche, dessous, dessus s'ils touchent une piste (`runways`) ou un cap (`caps`, geometries shapely).
+    du symbole, ou a gauche, dessous, dessus s'ils touchent une piste (`runways`), un cap (`caps`) ou un trait de graduation (`ticks`,
+    lot ac-chevauchements-etiquettes : geometries shapely).
     Retourne (geometries des symboles et des libelles, [(groupe, position, libre)]). `halo` (lot ac-variante-contexte, 2.5) : chaque
     ligne de libelle est precedee de son halo blanc (plan sur le fond F10)."""
     L = 'Navaids'
     shown, groups = navaid_plan(view, frame, data)
-    placed = place_navaid_labels([(g['lines'], g['xs'], g['ys']) for g in groups], frame, runways, caps)
+    placed = place_navaid_labels([(g['lines'], g['xs'], g['ys']) for g in groups], frame, runways, caps, ticks)
     first = {g['members'][0]: k for k, g in enumerate(groups)}
     for i, (b, X, Y) in enumerate(shown):
         for e in navaid_symbol_elems(b.kind, X, Y):
@@ -444,7 +445,8 @@ def build_pages(data, log=print):
         doc.add('Runway bearings', with_halo(cap_svg) if data.on_f10 else cap_svg)
         bear_boxes.append((e.name, rot_box(cx, cy, text_width(ce.label, 'bold', BEARING_SIZE), BEARING_SIZE * CAP_HEIGHT, rot)))
     cap_polys = [c[3] for c in caps]
-    nav_geoms, nav_info = navaids(doc, view, frame, data, runway_geoms, cap_polys, halo=data.on_f10)
+    tick_geoms = [elem_geom(ln) for ln, _ in grad_specs]                   # les traits de graduation : les libelles de balises les evitent
+    nav_geoms, nav_info = navaids(doc, view, frame, data, runway_geoms, cap_polys, halo=data.on_f10, ticks=tick_geoms)
 
     # ---- encarts sur le plan
     inset_rects = []
@@ -458,7 +460,7 @@ def build_pages(data, log=print):
             doc.add('Insets', text(X, Y + pt(6.5) * CAP_HEIGHT / 2, z.label, pt(6.5), 'bold', INK, 'middle'))
 
     # ---- etiquettes de taxiways
-    placed, taxi_rects = taxiway_labels(doc, data, view, frame, (rn, rs), inset_rects + cap_polys, park_xy, log)
+    placed, taxi_rects = taxiway_labels(doc, data, view, frame, (rn, rs), inset_rects + cap_polys + list(nav_geoms), park_xy, log)
 
     # ---- cadre, grille, nord, echelle
     nx0 = (rn[0] + rn[2]) / 2

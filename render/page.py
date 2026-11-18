@@ -743,9 +743,10 @@ def navaid_label_elems(lines, pos, xs, ys):
     return [text(x, ay - 0.2, lines[0], s1, w1, c1, anchor), text(x, ay + 2.2, lines[1], s2, w2, c2, anchor)]
 
 
-def place_navaid_labels(groups, frame, runways, caps):
-    """Cadrage 2.2 : le bloc d'un libelle reste a droite du symbole s'il est dans le cadre et ne touche ni une piste ni un cap ;
-    sinon a gauche, puis dessous, puis dessus : la premiere position libre ; aucune : a droite.
+def place_navaid_labels(groups, frame, runways, caps, ticks=()):
+    """Cadrage 2.2 : le bloc d'un libelle reste a droite du symbole s'il est dans le cadre et ne touche ni une piste, ni un cap, ni
+    un trait de graduation (`ticks` : geometries shapely des traits du cadre, lot ac-chevauchements-etiquettes) ; sinon a gauche,
+    puis dessous, puis dessus : la premiere position libre ; aucune : a droite.
     groups : liste de (lignes (l1, l2), xs, ys). Retourne [(position, [element ligne 1, element ligne 2], libre)]."""
     fx, fy, fw, fh = frame
     inside = box(fx, fy, fx + fw, fy + fh)
@@ -755,7 +756,8 @@ def place_navaid_labels(groups, frame, runways, caps):
         for pos in NAVAID_POSITIONS:
             elems = navaid_label_elems(lines, pos, xs, ys)
             g = elems_geom(elems)
-            if inside.contains(g) and not any(g.intersects(r) for r in runways) and not any(g.intersects(c) for c in caps):
+            if inside.contains(g) and not any(g.intersects(r) for r in runways) and not any(g.intersects(c) for c in caps) \
+                    and not any(g.intersects(t) for t in ticks):
                 chosen = (pos, elems, True)
                 break
         out.append(chosen or ('right', navaid_label_elems(lines, 'right', xs, ys), False))

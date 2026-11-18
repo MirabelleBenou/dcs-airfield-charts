@@ -7,6 +7,11 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Unreleased
 
+**Navaid labels, graticule ticks and taxiway labels no longer overlap.**
+
+- A navaid label avoids the latitude/longitude ticks on the edge of the chart, as it already avoided runways and runway bearings; republishing a chart applies the same rule.
+- A taxiway label avoids the navaid symbols and their labels.
+
 **Taxiway names are no longer dropped.**
 
 - When a taxiway name finds no room at its usual place, it is tried along every line of that taxiway, then in a smaller size (5 pt), then next to the taxiway with a thin leader line. A name that still finds no room makes `render/build_chart.py` end with exit code 3, after writing the charts, instead of being left out silently. Labels that already had room do not move.

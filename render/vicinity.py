@@ -361,10 +361,11 @@ def build_vicinity_page(data, frame, folder, log=print, towns=None):
     for ce, (cx, cy, rot, poly, moved) in zip(cap_ends, caps):
         doc.add('Runway bearings', with_halo(cap_element(ce.label, cx, cy, rot, BEARING_SIZE)))
     cap_polys = [c[3] for c in caps]
-    nav_geoms, nav_info = compose.navaids(doc, view, frame, data, runway_geoms, cap_polys, halo=True)
+    tick_geoms = [elem_geom(ln) for ln, _ in grad_specs]
+    nav_geoms, nav_info = compose.navaids(doc, view, frame, data, runway_geoms, cap_polys, halo=True, ticks=tick_geoms)
 
     # ---- noms de taxiways (jeu ou OSM, comme la 10-9)
-    placed, taxi_rects = compose.taxiway_labels(doc, data, view, frame, (rn, rs), cap_polys, [], logp)
+    placed, taxi_rects = compose.taxiway_labels(doc, data, view, frame, (rn, rs), cap_polys + list(nav_geoms), [], logp)
     taxi_geoms = [elem_geom(r) for r in taxi_rects]
 
     # ---- cadre, graduation, nord, echelle (sur leurs rectangles blancs)

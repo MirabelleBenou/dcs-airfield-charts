@@ -488,6 +488,30 @@ def _cap_ends(caps, runways, s, name):
     return ends
 
 
+def _read_ticks(fg, frame):
+    """Geometries des traits de graduation (lot ac-chevauchements-etiquettes) lus dans `Frame & grid` : les traits de 1,8 mm
+    posés sur les quatre bords du cadre, de la forme ecrite par `compose.graticule_specs` (la barre et les reperes de l'echelle
+    n'ont pas cette forme)."""
+    fx, fy, fw, fh = frame
+    tl = 1.8
+    out = []
+    for _, _, ln in fg:
+        if not ln.startswith('<line '):
+            continue
+        a = _attrs(ln)
+        try:
+            x1, y1, x2, y2 = (float(a[k]) for k in ('x1', 'y1', 'x2', 'y2'))
+        except (KeyError, ValueError):
+            continue
+        if a.get('stroke') != INK or a.get('stroke-width') != f(0.3):
+            continue
+        vertical = abs(x1 - x2) < EPS and (abs(y1 - fy) < EPS and abs(y2 - fy - tl) < EPS or abs(y1 - fy - fh) < EPS and abs(y2 - fy - fh + tl) < EPS)
+        horizontal = abs(y1 - y2) < EPS and (abs(x1 - fx) < EPS and abs(x2 - fx - tl) < EPS or abs(x1 - fx - fw) < EPS and abs(x2 - fx - fw + tl) < EPS)
+        if vertical or horizontal:
+            out.append(page.elem_geom(ln))
+    return out
+
+
 def retouch_labels(svg_text, name, old_labels=None):
     """(nouveau SVG, deplacements, sans place) : cadrage 2.4. deplacements : [(calque, texte, avant, apres)]. old_labels : les textes
     de cap du plan avant `retouch_north_and_caps` (meme ordre), pour retrouver la place publiee d'un cap deja pose le long d'une piste."""
@@ -548,7 +572,7 @@ def retouch_labels(svg_text, name, old_labels=None):
             cap_polys.append(page.cap_box(c['label'], c['X'], c['Y'], c['rot']))
 
     # --- balises
-    res = page.place_navaid_labels([(g['lines'], g['xs'], g['ys']) for g in groups], frame, runway_geoms, cap_polys)
+    res = page.place_navaid_labels([(g['lines'], g['xs'], g['ys']) for g in groups], frame, runway_geoms, cap_polys, _read_ticks(fg, frame))
     nav_geoms = list(sym_geoms)
     unplaced = []
     for g, (pos, elems, free) in zip(groups, res):
