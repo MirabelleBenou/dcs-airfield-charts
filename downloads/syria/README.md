@@ -15,8 +15,8 @@ One PDF per airfield and helicopter base (all its pages: the vicinity page 10-8,
 | An Nasiriyah | — | [An_Nasiriyah_charts.pdf](An_Nasiriyah_charts.pdf?raw=true) | 10-8, 10-9 |
 | As Suwayda | — | [As_Suwayda_charts.pdf](As_Suwayda_charts.pdf?raw=true) | 10-8, 10-9 |
 | At Tanf (helicopters) | — | [At_Tanf_charts.pdf](At_Tanf_charts.pdf?raw=true) | 10-9 |
-| Beirut | OLBA | [OLBA_Beirut_charts.pdf](OLBA_Beirut_charts.pdf?raw=true) | 10-8, 10-9, 11-1, 11-2 |
-| Ben Gurion | LLBG | [LLBG_Ben_Gurion_charts.pdf](LLBG_Ben_Gurion_charts.pdf?raw=true) | 10-8, 10-9, 10-9A, 11-1, 11-2, 11-3, 11-4 |
+| Beirut | OLBA | [OLBA_Beirut_charts.pdf](OLBA_Beirut_charts.pdf?raw=true) | 10-8, 10-9, 11-1, 11-2, 11-3 |
+| Ben Gurion | LLBG | [LLBG_Ben_Gurion_charts.pdf](LLBG_Ben_Gurion_charts.pdf?raw=true) | 10-8, 10-9, 10-9A, 11-1, 11-2, 11-3, 11-4, 11-5 |
 | Chukurova | LTDB | [LTDB_Chukurova_charts.pdf](LTDB_Chukurova_charts.pdf?raw=true) | 10-8, 10-9, 10-9A |
 | Damascus | OSDI | [OSDI_Damascus_charts.pdf](OSDI_Damascus_charts.pdf?raw=true) | 10-8, 10-9, 10-9A, 11-1, 11-2 |
 | Deir ez Zor | OSDZ | [OSDZ_Deir_ez_Zor_charts.pdf](OSDZ_Deir_ez_Zor_charts.pdf?raw=true) | 10-8, 10-9 |
@@ -67,7 +67,7 @@ One PDF per airfield and helicopter base (all its pages: the vicinity page 10-8,
 | Palmachim | LL59 | [LL59_Palmachim_charts.pdf](LL59_Palmachim_charts.pdf?raw=true) | 10-8, 10-9, 10-9A |
 | Palmyra | OSPR | [OSPR_Palmyra_charts.pdf](OSPR_Palmyra_charts.pdf?raw=true) | 10-8, 10-9 |
 | Paphos | LCPH | [LCPH_Paphos_charts.pdf](LCPH_Paphos_charts.pdf?raw=true) | 10-8, 10-9, 10-9A, 11-1 |
-| Prince Hassan | OJPH | [OJPH_Prince_Hassan_charts.pdf](OJPH_Prince_Hassan_charts.pdf?raw=true) | 10-8, 10-9, 10-9A |
+| Prince Hassan | OJPH | [OJPH_Prince_Hassan_charts.pdf](OJPH_Prince_Hassan_charts.pdf?raw=true) | 10-8, 10-9, 10-9A, 11-1 |
 | Qabr as Sitt (helicopters) | — | [Qabr_as_Sitt_charts.pdf](Qabr_as_Sitt_charts.pdf?raw=true) | 10-9 |
 | Ramat David | LLRD | [LLRD_Ramat_David_charts.pdf](LLRD_Ramat_David_charts.pdf?raw=true) | 10-8, 10-9, 10-9A, 11-1 |
 | Rasin El Aboud | — | [Rasin_El_Aboud_charts.pdf](Rasin_El_Aboud_charts.pdf?raw=true) | 10-8, 10-9 |

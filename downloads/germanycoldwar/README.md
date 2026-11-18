@@ -19,7 +19,7 @@ The charts carry the DCS name of the airfield, with its ICAO code (76 airfields)
 | Bienenfarm (EDOI) | [Bienenfarm_charts.pdf](Bienenfarm_charts.pdf?raw=true) | 10-8, 10-9 |
 | Bindersleben (EDDE) | [Bindersleben_charts.pdf](Bindersleben_charts.pdf?raw=true) | 10-8, 10-9, 11-1 |
 | Bitburg (EDRB) | [Bitburg_charts.pdf](Bitburg_charts.pdf?raw=true) | 10-8, 10-9, 10-9A, 11-1 |
-| Bornholm (EKRN) | [Bornholm_charts.pdf](Bornholm_charts.pdf?raw=true) | 10-8, 10-9, 11-1 |
+| Bornholm (EKRN) | [Bornholm_charts.pdf](Bornholm_charts.pdf?raw=true) | 10-8, 10-9, 11-1, 11-2 |
 | Brand | [Brand_charts.pdf](Brand_charts.pdf?raw=true) | 10-8, 10-9, 10-9A |
 | Brandis | [Brandis_charts.pdf](Brandis_charts.pdf?raw=true) | 10-8, 10-9, 10-9A |
 | Braunschweig (EDVE) | [Braunschweig_charts.pdf](Braunschweig_charts.pdf?raw=true) | 10-8, 10-9, 11-1 |
@@ -49,7 +49,7 @@ The charts carry the DCS name of the airfield, with its ICAO code (76 airfields)
 | Glindbruchkippe (EDVP) | [Glindbruchkippe_charts.pdf](Glindbruchkippe_charts.pdf?raw=true) | 10-8, 10-9, 10-9A |
 | Gross Mohrdorf | [Gross_Mohrdorf_charts.pdf](Gross_Mohrdorf_charts.pdf?raw=true) | 10-8, 10-9 |
 | Grosse Wiese | [Grosse_Wiese_charts.pdf](Grosse_Wiese_charts.pdf?raw=true) | 10-8, 10-9 |
-| Gutersloh | [Gutersloh_charts.pdf](Gutersloh_charts.pdf?raw=true) | 10-8, 10-9, 10-9A |
+| Gutersloh | [Gutersloh_charts.pdf](Gutersloh_charts.pdf?raw=true) | 10-8, 10-9, 10-9A, 11-1 |
 | Hahn (EDFH) | [Hahn_charts.pdf](Hahn_charts.pdf?raw=true) | 10-8, 10-9, 11-1, 11-2 |
 | Haina (EDGE) | [Haina_charts.pdf](Haina_charts.pdf?raw=true) | 10-8, 10-9 |
 | Hamburg (EDDH) | [Hamburg_charts.pdf](Hamburg_charts.pdf?raw=true) | 10-8, 10-9, 11-1, 11-2, 11-3, 11-4 |

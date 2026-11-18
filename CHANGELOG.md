@@ -5,7 +5,7 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
-## Unreleased
+## AC-V1.7.1 — 18 November 2026
 
 **Taxiway names that found no place now get one.**
 
@@ -31,6 +31,10 @@ What changed in the published charts, version by version. Each version is a GitH
 **Finished branches are deleted by a workflow.**
 
 - New workflow `.github/workflows/menage-branches.yml` with `tools/menage_branches.py`: once a day, a branch whose last commit is at least 7 days old is deleted if it is finished — its whole content is already in `main`, its release tag exists, or it is a release trial. Every other branch is kept, and every decision is listed on the run page. Run by hand, the workflow only lists its decisions. The published charts do not change.
+
+**Known issue.**
+
+- A few taxiway names still find no room and are missing: on the 10-9, Cologne T2, Frankfurt L3 and S25, Herzliya K2, Kastrup A10, Leipzig Halle S6 and Schonefeld G; on the 10-8 only, some names at Chukurova, Gazipasa, Hamburg, HildesHeim, Konya, Larnaca and Uetersen.
 
 ## AC-V1.7.0 — 15 November 2026
 
