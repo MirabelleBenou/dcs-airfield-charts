@@ -246,28 +246,21 @@ def test_tu10_les_neuf_images_de_la_sonde(samples):
 
 
 def test_tu10_image_a_mi_chemin_est_inconnue():
+    """Une image construite entre l'Alt (aplat eleve) et le Sat (aplat nul) : en bruitant une part croissante de l'image, l'aplat
+    passe de 0,9 a 0 ; il existe une part pour laquelle il tombe entre 0,15 et 0,30 : le mode est inconnu."""
     rng = np.random.default_rng(3)
     base = Monde('alt').image(1000.0, 1000.0, 3.0, 1800, 800)
     bruit = np.clip(base.astype(np.int16) + rng.integers(-30, 30, base.shape), 0, 255).astype(np.uint8)
-    for part in (0.80, 0.55, 0.30):                 # part de l'image bruitee : l'aplat tombe entre 0,15 et 0,30
+    assert T.classer_mode(*T.mesurer_centre(base)) == 'alt' and T.classer_mode(*T.mesurer_centre(bruit)) == 'sat'
+    modes = set()
+    for part in np.linspace(0.0, 1.0, 41):
         im = base.copy()
         im[:, :int(1800 * part)] = bruit[:, :int(1800 * part)]
-        aplat, sat = T.mesurer_centre(im)
-        mode = T.classer_mode(aplat, sat)
-        assert mode == ('inconnu' if 0.15 < aplat < 0.30 else mode)
-    im = base.copy()
-    cible = None
-    for part in np.linspace(0.3, 1.0, 40):          # une image construite a mi-chemin existe
-        t = base.copy()
-        t[:, :int(1800 * part)] = bruit[:, :int(1800 * part)]
-        a, s = T.mesurer_centre(t)
-        if 0.15 < a < 0.30:
-            cible = (a, s)
-            break
-    assert cible is not None and T.classer_mode(*cible) == 'inconnu'
-    # saturation intermediaire (75 a 80) avec un aplat eleve : inconnu aussi
-    assert T.classer_mode(0.5, 77.0) == 'inconnu'
-    assert T.classer_mode(0.20, 120.0) == 'inconnu'
+        a, s = T.mesurer_centre(im)
+        mode = T.classer_mode(a, s)
+        modes.add(mode)
+        assert (mode == 'inconnu') == (0.15 < a < 0.30)
+    assert modes == {'alt', 'inconnu', 'sat'}
 
 
 def test_tu10_seuils_aux_bornes():

@@ -22,6 +22,7 @@ from render import geo                                          # noqa: E402
 from render import tiles as T                                   # noqa: E402
 
 ECRAN_PETIT = (370, 300)           # utile (280, 264) apres les marges de f10capture : des images de quelques Ko
+ECRAN_MOYEN = (600, 400)           # utile (510, 364) : assez grand pour que l'etalonnage mesure l'echelle a 0,3 % pres
 ECRAN_REEL = (3440, 1440)
 
 
@@ -54,6 +55,8 @@ class Monde:
             g = 127 + 100 * np.sin(2 * np.pi * (x + 2 * z) / 131.0)
             b = 127 + 100 * np.cos(2 * np.pi * (3 * x - z) / 151.0 + 1.0)
             return np.clip(np.stack(np.broadcast_arrays(r, g, b), axis=-1), 0, 255).astype(np.uint8)
+        if self.forme == 'bruit':
+            return self._bruit(x, z)
         pal = _PALETTE_ALT if self.forme == 'alt' else _PALETTE_MAP
         out = None
         for echelle, part in ((2400.0, 0), (350.0, 1), (60.0, 2)):
@@ -65,6 +68,26 @@ class Monde:
                 garde = (_hash(np.floor(x / echelle), np.floor(z / echelle), 977 + part) % 100) < 35
                 out = np.where(garde[..., None], c, out)
         return out
+
+    def _bruit(self, x, z):
+        """Bruit de valeurs lisse (interpolation lissee de reseaux aleatoires de 40 a 900 m) : du relief a toutes les echelles,
+        sans periodicite, comme une carte antialiasee (l'etalonnage mesure des decalages par correlation de phase)."""
+        x, z = np.broadcast_arrays(x, z)
+        out = np.zeros(x.shape + (3,), float)
+        for canal in range(3):
+            tot = 0.0
+            for k, (echelle, poids) in enumerate(((40.0, 0.25), (110.0, 0.3), (300.0, 0.3), (900.0, 0.4))):
+                u, v = x / echelle, z / echelle
+                iu, iv = np.floor(u), np.floor(v)
+                fu, fv = u - iu, v - iv
+                fu, fv = fu * fu * (3 - 2 * fu), fv * fv * (3 - 2 * fv)
+                g = self.graine * 7 + canal * 31 + k * 101
+
+                def val(a, b):
+                    return (_hash(iu + a, iv + b, g) % 10007) / 10006.0
+                tot = tot + poids * ((1 - fu) * ((1 - fv) * val(0, 0) + fv * val(0, 1)) + fu * ((1 - fv) * val(1, 0) + fv * val(1, 1)))
+            out[..., canal] = tot / 1.25
+        return np.clip(out * 255, 0, 255).astype(np.uint8)
 
     def image(self, xc, zc, mpp, w, h):
         """Image (h, w, 3) uint8 centree en (xc, zc) a l'echelle mpp."""
@@ -131,8 +154,9 @@ class FauxDcs:
     """Crochet et ecran simules : la camera F10 plate au-dessus du monde, a l'echelle de la loi mesuree (facteur pres). Le
     crochet rend la position commandee ; `grab` rend l'ecran complet de la camera. Compte les prises de vue."""
 
-    def __init__(self, monde, ecran, facteur_echelle=1.0, bruit_sat=False):
-        self.monde, self.ecran, self.facteur, self.bruit_sat = monde, ecran, facteur_echelle, bruit_sat
+    def __init__(self, monde, ecran, facteur_echelle=1.0, bruit_cols=0):
+        """bruit_cols : nombre de colonnes (a gauche) ou un bruit par pixel est ajoute (la texture du Sat)."""
+        self.monde, self.ecran, self.facteur, self.bruit_cols = monde, ecran, facteur_echelle, bruit_cols
         self.cam = (0.0, 0.0, 1500.0)
         self.prises = []                           # positions de camera commandees, dans l'ordre
         self.liberations = 0
@@ -146,7 +170,7 @@ class FauxDcs:
                 raise e
         self.cam = (x, z, alt)
         self.prises.append((round(x, 3), round(z, 3), round(alt, 1)))
-        f10capture._last_send = 0.0
+        f10capture._last_send = f10capture.time.perf_counter()
         return x, z, alt
 
     def hook_release(self):
@@ -157,9 +181,11 @@ class FauxDcs:
         x, z, alt = self.cam
         mpp = T.mpp_camera(alt) * self.facteur
         img = self.monde.image(x, z, mpp, w, h)
-        if self.bruit_sat:
+        if self.bruit_cols:
             rng = np.random.default_rng(5)
-            img = np.clip(img.astype(np.int16) + rng.integers(-40, 40, img.shape), 0, 255).astype(np.uint8)
+            n = min(self.bruit_cols, w)
+            img = img.copy()
+            img[:, :n] = np.clip(img[:, :n].astype(np.int16) + rng.integers(-40, 40, img[:, :n].shape), 0, 255).astype(np.uint8)
         return img
 
     def installer(self, monkeypatch):
