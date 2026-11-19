@@ -84,7 +84,11 @@ def parking_circles(root):
         except (TypeError, ValueError):
             raise PlansError('rond sans cx ou cy lisible') from None
         sw = c.get('stroke-width')
-        out.append((cx, cy, c.get('fill'), float(sw) if sw is not None else None))
+        try:
+            sw = float(sw) if sw is not None else None
+        except ValueError:
+            raise PlansError(f'rond de la couche Parking : stroke-width illisible ({sw!r})') from None
+        out.append((cx, cy, c.get('fill'), sw))
     return out
 
 
@@ -144,7 +148,8 @@ def fit(places, circles):
     pair = _nearest(_predict((S, OX, OY), places), circles)
     gap = float(np.hypot(*(_predict((S, OX, OY), places) - circles[pair]).T).max())
     if len(set(pair.tolist())) != n:
-        raise PlansError(f'appariement non un a un ({len(set(pair.tolist()))} ronds pour {n} places, {m} ronds), ecart maximal {gap:.4f} mm')
+        raise PlansError(f'appariement non un a un : {m} ronds, {n} places, {len(set(pair.tolist()))} ronds distincts apparies, '
+                         f'ecart maximal {gap:.4f} mm')
     if not S > 0:
         raise PlansError(f'echelle S = {S} non positive ({m} ronds, {n} places), ecart maximal {gap:.4f} mm')
     if gap > MAX_GAP_MM:
@@ -183,6 +188,8 @@ def reduce_svg(root):
             continue
         lay.attrib.pop('clip-path', None)
         _strip_text(lay)
+        if len(lay) == 0:                      # couche videe par le retrait des textes : retiree, comme une couche absente
+            continue
         new.append(lay)
     body = ET.tostring(new, encoding='unicode', short_empty_elements=True)
     return ("<?xml version='1.0' encoding='UTF-8'?>\n" + body + '\n').encode('utf-8')
@@ -255,18 +262,19 @@ def build_package(theatre, zip_airfields, zip_helicopters, airfields_json, parki
         if ref is None:
             raise PlansError(f'{stem} : pas de page 10-9')
         try:
-            svg = fiches.read_member(fiches.svg_member(ref))
+            try:
+                svg = fiches.read_member(fiches.svg_member(ref))
+            except KeyError as e:
+                raise PlansError(f'fichier absent du zip ({e})') from None
             lat, lon = fiches.read_arp(svg.decode('utf-8'))
             name, _ = fiches.nearest_airfield(lat, lon, airfields)
             ad = airdrome_by_name(airdromes, name)
             aid = ad['airdromeId']
-            if aid in owner:
-                raise PlansError(f'{stem} et {owner[aid]} designent le meme airdromeId ({aid}, {name})')
-            plan = plan_for_chart(svg, ad)
-        except KeyError as e:
-            raise PlansError(f'{stem} : fichier absent du zip ({e})') from None
+            plan = None if aid in owner else plan_for_chart(svg, ad)
         except fiches.FichesError as e:
             raise PlansError(f'{stem} : {e}') from None
+        if plan is None:
+            raise PlansError(f'{stem} et {owner[aid]} designent le meme airdromeId ({aid}, {name})')
         owner[aid] = stem
         plan.stem = stem
         pkg.plans[aid] = plan
@@ -305,36 +313,71 @@ def zip_path(out_root, theatre):
 
 
 def check_targets(out_root, theatre, shelters_path=None):
-    """Refus d'ecraser : dossier `<out>/<cle>/` non vide, zip ou fichier d'abris deja presents."""
+    """Refus avant toute ecriture : dossier `<out>/<cle>/` non vide, zip deja present ; fichier d'abris deja present, sans
+    dossier parent, ou place sous `<out>/<cle>/`."""
     _, rp_key = fiches.resolve_theatre(theatre)
     folder = Path(out_root) / rp_key
     if folder.exists() and (not folder.is_dir() or any(folder.iterdir())):
         raise PlansError(f'dossier de sortie deja present et non vide : {folder}')
     if zip_path(out_root, theatre).exists():
         raise PlansError(f'zip deja present : {zip_path(out_root, theatre)}')
-    if shelters_path is not None and Path(shelters_path).exists():
-        raise PlansError(f'fichier d\'abris deja present : {shelters_path}')
+    if shelters_path is not None:
+        sp = Path(shelters_path)
+        if sp.exists() or sp.is_symlink():
+            raise PlansError(f'fichier d\'abris deja present : {sp}')
+        if folder.resolve() in (sp.parent.resolve() / sp.name).parents:
+            raise PlansError(f'fichier d\'abris sous le dossier de sortie : {sp}')
+        if not sp.parent.is_dir():
+            raise PlansError(f'dossier du fichier d\'abris absent ou pas un dossier : {sp.parent}')
 
 
 def write_package(pkg, out_root, theatre, shelters_path=None):
     """Ecrit `<out>/<cle>/` (index et SVG), le zip (tout a la racine, DEFLATED, date fixe) et, si demande, le fichier
-    d'abris. Retourne (dossier, zip)."""
+    d'abris : tout sous des noms temporaires, renomme a la fin ; sur une OSError, ce qui a ete ecrit est retire et
+    PlansError est levee. Retourne (dossier, zip)."""
     check_targets(out_root, theatre, shelters_path)
     folder = Path(out_root) / pkg.theatre
     zpath = zip_path(out_root, theatre)
-    folder.mkdir(parents=True, exist_ok=True)
     files = [('index.json', index_json(pkg).encode('utf-8'))] + [(f'{aid}.svg', p.svg) for aid, p in sorted(pkg.plans.items())]
-    for name, blob in files:
-        (folder / name).write_bytes(blob)
-    with zipfile.ZipFile(zpath, 'w') as z:
+    made_dirs, temps, done = [], [], []                 # dossiers crees, fichiers temporaires, fichiers renommes
+    try:
+        for d in reversed([folder, *folder.parents]):
+            if not d.exists():
+                d.mkdir()
+                made_dirs.append(d)
         for name, blob in files:
-            info = zipfile.ZipInfo(name, fiches.ZIP_DATE)
-            info.external_attr = 0o644 << 16
-            z.writestr(info, blob, compress_type=zipfile.ZIP_DEFLATED)
-    if shelters_path is not None:
-        sp = Path(shelters_path)
-        sp.parent.mkdir(parents=True, exist_ok=True)
-        sp.write_bytes(shelters_text(pkg).encode('utf-8'))
+            tmp = folder / (name + '.tmp')
+            temps.append(tmp)
+            tmp.write_bytes(blob)
+        ztmp = zpath.with_name(zpath.name + '.tmp')
+        temps.append(ztmp)
+        with zipfile.ZipFile(ztmp, 'w') as z:
+            for name, blob in files:
+                info = zipfile.ZipInfo(name, fiches.ZIP_DATE)
+                info.external_attr = 0o644 << 16
+                z.writestr(info, blob, compress_type=zipfile.ZIP_DEFLATED)
+        targets = [(folder / (n + '.tmp'), folder / n) for n, _ in files] + [(ztmp, zpath)]
+        if shelters_path is not None:
+            sp = Path(shelters_path)
+            stmp = sp.with_name(sp.name + '.tmp')
+            temps.append(stmp)
+            stmp.write_bytes(shelters_text(pkg).encode('utf-8'))
+            targets.append((stmp, sp))
+        for src, dst in targets:
+            src.replace(dst)
+            done.append(dst)
+    except OSError as e:
+        for f in temps + done:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        for d in reversed(made_dirs):
+            try:
+                d.rmdir()
+            except OSError:
+                pass
+        raise PlansError(f'ecriture impossible, rien n\'est laisse : {e}') from None
     return folder, zpath
 
 

@@ -36,7 +36,7 @@ def main(argv):
         plans.check_targets(args.out, args.theatre, args.shelters)
         pkg = plans.build_package(args.theatre, args.zips[0], args.zips[1], args.airfields, args.parkings, args.edition)
         _, zpath = plans.write_package(pkg, args.out, args.theatre, args.shelters)
-    except fiches.FichesError as e:
+    except (fiches.FichesError, OSError) as e:
         print(f'ARRET : {e}', file=sys.stderr)
         return 1
     print(plans.summary(pkg, fiches.resolve_theatre(args.theatre)[0], zpath))

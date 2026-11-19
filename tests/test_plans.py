@@ -57,10 +57,10 @@ def test_fit_refuses_gap_over_limit():
 
 
 def test_fit_refuses_non_one_to_one():
-    places = [(0.0, 0.0), (0.0, 100.0), (0.0, 200.0), (500.0, 100.0)]
-    circles = [(0.0, 0.0), (3.7, 0.0), (7.4, 0.0), (3.7, -18.5)]
-    circles[3] = (3.7, 0.0)                     # deux places sur le meme rond
-    with pytest.raises(plans.PlansError):
+    places = make_places()
+    circles = to_page(places)
+    circles[5] = circles[4]                     # un rond en double : deux places sur le meme rond
+    with pytest.raises(plans.PlansError, match=r'appariement non un a un : 12 ronds, 12 places, 11 ronds distincts apparies, ecart maximal'):
         plans.fit(places, circles)
 
 
@@ -140,6 +140,7 @@ def test_reduction_layers_order_and_content():
     out = plans.reduce_svg(plans.parse_svg(chart_svg([circle_svg(c) for c in pc], extra_layers=extra))).decode()
     labels = [l.split('"')[0] for l in out.split('inkscape:label="')[1:]]
     assert labels == ['Pavement', 'Runways', 'Runway markings', 'Buildings']
+    assert out.count('inkscape:label="Runway markings"') == 1
     for bad in ('<text', 'clip-path', 'defs', 'Parking', 'Insets', 'Header', 'Background', 'halo'):
         assert bad not in out
     assert out.count('<g') == 5                          # 4 couches + le g qui garde un polygone ; le g des textes est retire
@@ -187,6 +188,7 @@ def test_shelters_file_shape():
 
 
 def test_write_package_zip_flat_deterministic_and_no_overwrite(tmp_path):
+    (tmp_path / 'sh').mkdir()
     pkg = make_pkg()
     folder, zpath = plans.write_package(pkg, tmp_path / 'a', 'Syria', tmp_path / 'sh' / 'Syria.json')
     assert folder.name == 'Syria' and zpath.name == 'DCS_Airfield_Charts_Syria_1985_plans.zip'
@@ -215,3 +217,84 @@ def test_two_names_one_airdrome_stops():
         plans.airdrome_by_name(ads, 'A')
     with pytest.raises(plans.PlansError):
         plans.airdrome_by_name(ads, 'B')
+
+
+def test_reduction_drops_layer_emptied_by_text_removal():
+    places, pc = three()
+    extra = ('<g inkscape:groupmode="layer" id="layer-runway-markings" inkscape:label="Runway markings" clip-path="url(#clip-plan)">'
+             '<g><text>09</text></g><text>27</text></g>\n')
+    out = plans.reduce_svg(plans.parse_svg(chart_svg([circle_svg(c) for c in pc], extra_layers=extra))).decode()
+    assert 'Runway markings' not in out and '<text' not in out
+    assert out.index('Pavement') < out.index('Buildings')
+
+
+def test_reduction_is_deterministic():
+    places, pc = three()
+    svg = chart_svg([circle_svg(c) for c in pc])
+    assert plans.reduce_svg(plans.parse_svg(svg)) == plans.reduce_svg(plans.parse_svg(svg))
+
+
+def test_unreadable_stroke_width_stops():
+    places, pc = three()
+    xml = [circle_svg(pc[0], '#FFFFFF', 'abc'), circle_svg(pc[1]), circle_svg(pc[2])]
+    with pytest.raises(plans.PlansError, match='stroke-width'):
+        plans.plan_for_chart(chart_svg(xml), airdrome(places))
+
+
+def test_non_empty_output_folder_without_zip_is_refused(tmp_path):
+    (tmp_path / 'Syria').mkdir()
+    (tmp_path / 'Syria' / 'x').write_text('x')
+    with pytest.raises(plans.PlansError, match='non vide'):
+        plans.write_package(make_pkg(), tmp_path, 'Syria')
+    assert not (tmp_path / 'DCS_Airfield_Charts_Syria_1985_plans.zip').exists()
+
+
+def test_shelters_parent_is_a_file_writes_nothing(tmp_path):
+    (tmp_path / 'afile').write_text('x')
+    out = tmp_path / 'out'
+    with pytest.raises(plans.PlansError, match='dossier du fichier d.abris'):
+        plans.write_package(make_pkg(), out, 'Syria', tmp_path / 'afile' / 'Syria.json')
+    assert not (out / 'Syria').exists() and not list(out.glob('*.zip')) if out.exists() else True
+
+
+def test_shelters_missing_parent_or_under_output_refused(tmp_path):
+    with pytest.raises(plans.PlansError):
+        plans.write_package(make_pkg(), tmp_path / 'out', 'Syria', tmp_path / 'nope' / 'Syria.json')
+    with pytest.raises(plans.PlansError, match='sous le dossier'):
+        plans.write_package(make_pkg(), tmp_path / 'out', 'Syria', tmp_path / 'out' / 'Syria' / 's.json')
+    assert not (tmp_path / 'out').exists()
+
+
+def test_oserror_midway_removes_everything(tmp_path, monkeypatch):
+    def boom(self, *a, **k):
+        raise OSError('disque plein')
+    monkeypatch.setattr(zipfile.ZipFile, 'writestr', boom)
+    out = tmp_path / 'out'
+    with pytest.raises(plans.PlansError, match='disque plein'):
+        plans.write_package(make_pkg(), out, 'Syria', tmp_path / 'sh.json')
+    assert not out.exists() and not (tmp_path / 'sh.json').exists() and not list(tmp_path.glob('*.tmp'))
+
+
+def test_main_stop_in_build_package_leaves_no_folder(tmp_path, capsys):
+    import sys
+    from render import build_plans
+    af = tmp_path / 'airfields.json'
+    af.write_text(json.dumps({'theatres': {'GermanyCW': [['A', 50.0, 8.0, 'a']]}}))
+    pk = tmp_path / 'Syria.json'
+    pk.write_text(json.dumps({'format': 'dcs-parkings-v1', 'theatre': 'Syria', 'airdromes': []}))
+    zips = []
+    for n in ('a.zip', 'h.zip'):
+        zipfile.ZipFile(tmp_path / n, 'w').close()
+        zips.append(str(tmp_path / n))
+    out = tmp_path / 'out'
+    rc = build_plans.main(['GermanyColdWar', '--zips', *zips, '--airfields', str(af), '--parkings', str(pk),
+                           '--edition', 'AC-V1.7.1', '--out', str(out), '--shelters', str(tmp_path / 'sh.json')])
+    assert rc == 1 and 'ARRET' in capsys.readouterr().err
+    assert not out.exists() and not (tmp_path / 'sh.json').exists()
+
+
+def test_main_oserror_is_a_stop_not_a_traceback(tmp_path, capsys, monkeypatch):
+    from render import build_plans
+    monkeypatch.setattr(plans, 'check_targets', lambda *a, **k: (_ for _ in ()).throw(OSError('boum')))
+    rc = build_plans.main(['Syria', '--zips', 'a', 'b', '--airfields', 'c', '--parkings', 'd', '--edition', 'E', '--out', str(tmp_path)])
+    assert rc == 1 and 'ARRET : boum' in capsys.readouterr().err
