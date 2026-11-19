@@ -170,6 +170,14 @@ python -I render/build_fiches.py <Theatre> --zips <airfields zip> <helicopters z
 
 Input: the *airfields* and *helicopters* zips of the theatre (`GermanyColdWar` or `Syria`) and the `airfields.json` of Mission Plan. Each chart is matched to its DCS airfield by the ARP written on its page (the nearest airfield of `airfields.json`, 500 m at most); each heliport is matched to its box on a directory page by replaying the directory layout with `render/directory.py` and pydcs alone, and the replay is checked against the published pages (it stops, writing nothing, if a page does not match). Output: `<folder>/<Theatre>/` with the page images (a page over 1 MB is re-encoded as JPEG) and `index.json` (format `dcs-fiches-v1`), and `<folder>/DCS_Airfield_Charts_<Theatre>_1985_route_planner.zip` with the same files at its root. An existing output folder is never overwritten.
 
+The plan of each chart for [DCS Mission Plan](https://github.com/MirabelleBenou/dcs-mission-plan), which draws the parking stands of an airfield on it, is cut from the same zips, again without drawing anything:
+
+```
+python -I render/build_plans.py <Theatre> --zips <airfields zip> <helicopters zip> --airfields <airfields.json> --parkings downloads/parkings/<GermanyCW|Syria>.json --edition AC-V1.7.1 --out <folder> [--shelters <file>]
+```
+
+Input: the same zips and `airfields.json`, and the parking stands of `downloads/parkings/`. Each chart is matched to its airfield as above; its stands are then fitted to the circles of its Parking layer (least squares, accepted only when every stand meets one circle within 0.01 mm). Output: `<folder>/<key>/` with `index.json` (format `dcs-plans-v1`: the scale and offset that place each page on the DCS map frame) and one SVG per airfield reduced to pavement, runways, runway markings and buildings, without text, and `<folder>/DCS_Airfield_Charts_<Theatre>_1985_plans.zip` with the same files at its root; with `--shelters`, also the stands drawn as hardened shelters (`downloads/parkings/shelters/`). The tool stops, writing nothing, on any mismatch, and never overwrites.
+
 The header line of every chart page gives the airfield reference point three ways: degrees and decimal minutes, degrees-minutes-seconds, and MGRS to 10 m. `render/republish.py` applies every correction the renderer knows to the charts of a release zip, without the F10 captures: the coordinates line, the end label of the scale bar, the magnetic headings and north arrows, the nearest-town line of the heliport directory, the placement of bearing, navaid and grid labels, the PNG size of pages drawn on the F10 map:
 
 ```

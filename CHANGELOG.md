@@ -7,6 +7,11 @@ What changed in the published charts, version by version. Each version is a GitH
 
 ## Unreleased
 
+**Airfield plans for DCS Mission Plan, and hardened shelters of the parking stands.**
+
+- New tool `render/build_plans.py`: from the airfields and helicopters zips of a release, writes for every airfield and heliport chart its 10-9 plan reduced to pavement, runways, runway markings and buildings (no text), with an index giving the scale and offset that place each plan on the DCS map frame. DCS Mission Plan draws the parking stands of an airfield on this plan.
+- New files `downloads/parkings/shelters/GermanyCW.json` and `Syria.json`: for every airfield and heliport charted in Cold War Germany and Syria, the parking stands drawn as hardened shelters on its chart. The published charts do not change.
+
 **More taxiway position signs are read on large airfields.**
 
 - `capture/signread.py` finds and reads more of the yellow-on-black taxiway position signs: a looser yellow test for the thin sign frame, a second ranking of the candidate frames by what lies inside them, reading of signs seen at an angle (not square on the image), and lower acceptance thresholds for signs 10 px tall or more, still never without a clear margin over the second-best letter. On a set of 31 views of a large airfield, 13 letters out of 23 are now read instead of 6, with no wrong letter; signs under 10 px tall are still not read. The published charts do not change.

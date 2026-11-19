@@ -13,6 +13,8 @@ One file per DCS theatre, named after the `theatre` value a mission file carries
 
 **Which aircraft fits which stand.** pydcs puts a helicopter only on a stand marked `heli`, an airplane only on a stand marked `plane`, and only when the aircraft is smaller than the stand in length, width and height. Whether DCS also accepts a helicopter on a stand marked for airplanes only is not settled here: the files give the editor's marks as they are.
 
-Not given: hardened shelters, and the heading of an aircraft on its stand. The airfield names are pydcs's (Syria's helipads are `HC01`, `HI01`, `HS02`…): match airfields by `airdromeId`.
+Not given: the heading of an aircraft on its stand. The airfield names are pydcs's (Syria's helipads are `HC01`, `HI01`, `HS02`…): match airfields by `airdromeId`.
+
+**Hardened shelters.** `shelters/GermanyCW.json` and `shelters/Syria.json` list, for every airfield and heliport charted in Cold War Germany and Syria, the parking stands (`parking`) that the 10-9 chart draws as a hardened shelter (HAS or hangar), read from the F10 map of DCS. Airfields of other theatres are not covered. Regenerate with `render/build_plans.py` (option `--shelters`) from the zips of a release.
 
 **Source**: [pydcs](https://github.com/pydcs/dcs) (LGPL-3.0), which reads them from the DCS mission editor; the commit is given in each file (`source`). Regenerate with `python -I render/export_parkings.py --out downloads/parkings` after a pydcs update. These data follow DCS, not the real world.
