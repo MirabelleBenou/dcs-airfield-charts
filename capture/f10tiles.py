@@ -518,7 +518,8 @@ def cmd_tuiler(a):
     dt = time.perf_counter() - t0
     if stats['rendues']:
         _log(f'temps par tuile et par coeur : reprojection {stats["ms_rendu"] / stats["rendues"]:.1f} ms '
-             f'(lecture des images comprise), codage {stats["ms_codage"] / max(1, len(fichiers)):.1f} ms')
+             f'(lecture des images comprise), codage {stats["ms_codage"] / max(1, len(fichiers)):.1f} ms, '
+             f'reduction de la pyramide {stats["ms_reduction"] / max(1, len(fichiers)):.1f} ms par tuile ecrite')
     _log(f'{len(fichiers)} tuiles, {len(parts)} part(s) sous {out}, {dt:.0f} s ({stats["octets"] / 1e6:.0f} Mo de tuiles)')
     return 0
 

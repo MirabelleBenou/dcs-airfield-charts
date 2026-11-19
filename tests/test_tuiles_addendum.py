@@ -4,7 +4,6 @@ par defaut, source trop grande). Aucun DCS, aucune image de DCS."""
 import json
 import os
 import time
-from pathlib import Path
 
 import numpy as np
 import pytest
