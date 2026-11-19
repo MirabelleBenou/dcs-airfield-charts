@@ -1,5 +1,5 @@
 """Tuiles XYZ de la carte F10 : loi de la camera, Web Mercator, grille de capture, mode de la carte, reprojection, pyramide,
-codage et archives (lot ac-tuiles-v1).
+codage et archives.
 
 Module pur : aucun import de capture/f10capture.py (il se teste sous Linux, sans DCS ni ecran). L'outil capture/f10tiles.py
 lui passe les constantes de l'ecran (taille utile, decalage du recadrage) et l'echelle mesuree.
