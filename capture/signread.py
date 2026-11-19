@@ -13,8 +13,9 @@ La lecture d'une image est une fonction pure (read_image) : elle ne depend ni de
 point vise. Methode :
   1. une carte de jaune relatif (teinte jaune, jugee contre la luminance locale : le panneau a contre-jour est olive, pas
      seulement le jaune franc) ; des cadres candidats par correlation d'un gabarit de cadre (anneau clair, bande sombre)
-     sur cette carte, a plusieurs echelles ;
-  2. pour chaque candidat : correlation (x et y a part, sous-pixel) du coeur de chacun des 35 glyphes avec la carte
+     sur cette carte, a plusieurs echelles ; les cadres lus sont l'union de deux classements (score de gabarit ; bande jaune du
+     cadre x coeur sombre x presence de lettre) ;
+  2. pour chaque candidat : correlation (x et y a part, sous-pixel, formes carrees ou non) du coeur de chacun des 35 glyphes avec la carte
      min(R, G) de l'image, puis du glyphe entier (cadre compris) : une lettre de position est jaune sur noir, une lettre de
      direction noire sur jaune, la polarite les separe (une lettre de direction n'est jamais rendue) ;
   3. un caractere n'est rendu que si le score, le departage sur les seuls pixels ou les gabarits different, et l'ecart au
@@ -55,7 +56,7 @@ CORE_ROWS, CORE_COLS = (17, 105), (17, 107)   # coeur de la tuile 122 x 124 : 14
 # ---------- detection ----------
 HUE_LO, HUE_HI = 0.80, 1.12       # G / R d'un jaune de panneau (teinte 49 a 65 degres) ; l'herbe est plus verte
 CHROMA_MIN = 22                   # min(R, G) - B
-CHROMA_REL = 0.50                 # ... et au moins la moitie de max(R, G) : jaune relatif, pas absolu
+CHROMA_REL = 0.35                 # ... et au moins 35 % de max(R, G) : jaune relatif, pas absolu (le cadre d'1 px se melange au noir)
 LUMA_MIN = 30
 CHROMA_FULL = 160.0
 RING_MARGIN = 0.0                 # marge exterieure sombre (herbe, piste)
@@ -69,7 +70,13 @@ RING_LEVELS = 4
 RING_THRESHOLD = 0.30
 RING_GUARD = 0.02                 # fenetre sans energie : correlation sans objet
 RING_PER_SIZE = 40
-MAX_PROPOSALS = 32
+MAX_PROPOSALS = 48
+FEAT_BAND = 0.12                  # second classement des cadres : epaisseur de la bande du cadre (part du cote)
+FEAT_CORE_MARGIN = 0.22           # ... coeur du cadre : rogne de 22 % du cote par bord
+FEAT_DARK = 70                    # ... pixel sombre du coeur : min(R, G) < 70
+FEAT_LETTER_MIN = 0.08            # ... pixel de lettre : carte jaune douce > 0,08
+FEAT_LETTER_FULL = 0.1            # ... part du coeur en lettre qui vaut 1 (au-dessous : proportionnel)
+FEAT_TIE = 0.5                    # a rang egal, le classement par gabarit passe d'abord
 FAIR_RIVAL = False
 DISC_THRESHOLDS = (0.30, 0.12, 0.08)   # ecart de gabarit qui fait un pixel discriminant
 DISC_MIN_PIXELS = 8
@@ -82,6 +89,12 @@ FULL_MARGIN = 0.02                # marge au-dessus du seuil du glyphe entier
 FULL_GAP = -0.06                  # le glyphe entier du rival ne doit pas battre le notre de plus de 0,06 (non-inferiorite)
 MIN_TILE_READ = 9                 # au-dessous de 9 px de haut : jamais lue
 MIN_TILE = 8                      # tuile la plus petite lue (px de haut)
+ASPECTS_READ = (1.0, 0.88, 0.76)  # largeur / hauteur des formes essayees a la lecture (tuiles vues de biais)
+REFINE_MAX_DIFF = 0.40            # ecart d'echelle largeur / hauteur admis a l'affinage du coeur et du glyphe entier
+LOOSE_MIN_H = 10                  # seconde decision de decide : tuile de 10 px de haut au moins
+LOOSE_H_SPLIT = 12                # ... score exige : LOOSE_SCORE_L des 12 px, LOOSE_SCORE_S de 10 a 12 px
+LOOSE_SCORE_L, LOOSE_SCORE_S = 0.80, 0.82
+LOOSE_FULL, LOOSE_DEPART, LOOSE_ECART = 0.55, 0.40, 0.30
 PIX_THR = 8                       # pixel qui differe : ecart de plus de 8/255 sur un canal
 FROZEN_FRAC = 1e-4                # moins de 0,01 % des pixels differents : image figee
 WINDOW_PROBE = 450                # largeur examinee au bord droit pour la fenetre parasite
@@ -286,6 +299,41 @@ def bar_proposals(soft):
     return out
 
 
+def _feat(p, soft, m):
+    """Second score d'un cadre (score, x, y, cote) : moyenne de la carte jaune sur la bande du cadre x part de coeur sombre x
+    presence de lettre. soft : carte jaune douce, m : min(R, G) (celles de yellow_map)."""
+    sc, px, py, s = p
+    H, W = soft.shape
+    x0, y0, x1, y1 = int(round(px)), int(round(py)), int(round(px + s)), int(round(py + s))
+    if x0 < 1 or y0 < 1 or x1 > W - 1 or y1 > H - 1:
+        return 0.0
+    band = max(1, int(round(FEAT_BAND * s)))
+    a = soft[y0:y1, x0:x1]
+    ring = np.ones(a.shape, bool)
+    ring[band:-band, band:-band] = False
+    c0 = int(round(FEAT_CORE_MARGIN * s))
+    core, cs = m[y0 + c0:y1 - c0, x0 + c0:x1 - c0], soft[y0 + c0:y1 - c0, x0 + c0:x1 - c0]
+    if core.size == 0:
+        return 0.0
+    return float(a[ring].mean()) * float((core < FEAT_DARK).mean()) * min(1.0, float((cs > FEAT_LETTER_MIN).mean()) / FEAT_LETTER_FULL)
+
+
+def rank_union(props, soft, m):
+    """Classe les cadres [(score, x, y, cote)] par l'union entrelacee de deux classements : le score de gabarit et le second
+    score (_feat) ; chaque cadre prend le meilleur de ses deux rangs. Retourne la liste triee, du meilleur au pire, avec un
+    score qui ne sert qu'a l'ordre (1 - rang / (n + 1))."""
+    n = len(props)
+    by_ncc = sorted(range(n), key=lambda i: -props[i][0])
+    f = [_feat(p, soft, m) for p in props]
+    by_f = sorted(range(n), key=lambda i: -f[i])
+    r1, r2 = {i: r for r, i in enumerate(by_ncc)}, {i: r for r, i in enumerate(by_f)}
+    out = []
+    for i, p in enumerate(props):
+        rr = min(r1[i], r2[i] + FEAT_TIE)
+        out.append((1.0 - rr / (n + 1.0), p[1], p[2], p[3]))
+    return sorted(out, reverse=True)
+
+
 # ---------- reconnaissance ----------
 def _ncc(a, b):
     a = a - a.mean()
@@ -324,28 +372,31 @@ COARSE_FACTORS = (0.8, 0.9, 1.0, 1.1, 1.25)
 
 
 def _coarse(m, tpl, cx, cy, s):
-    """Pour chaque glyphe, la meilleure correlation entiere de son coeur, a plusieurs echelles autour d'une tuile de cote s
-    centree en (cx, cy) : {car: (score, x, y, w, h)}."""
+    """Pour chaque glyphe, la meilleure correlation entiere de son coeur, a plusieurs echelles et a plusieurs rapports
+    largeur / hauteur (ASPECTS_READ : la tuile vue de biais n'est pas carree) autour d'une tuile de cote s centree en
+    (cx, cy) : {car: (score, x, y, w, h)}."""
     H, W = m.shape
     core0 = 0.72 * s
     pad = max(2, int(round(0.2 * s)))
     best = {}
     for f in COARSE_FACTORS:
-        cw = max(5, int(round(core0 * f)))
-        x0, y0 = int(round(cx - cw / 2 - pad)), int(round(cy - cw / 2 - pad))
-        xa, ya, xb, yb = max(0, x0), max(0, y0), min(W, x0 + cw + 2 * pad), min(H, y0 + cw + 2 * pad)
-        roi = m[ya:yb, xa:xb]
-        if roi.shape[0] < cw or roi.shape[1] < cw:
-            continue
-        for ch in tpl.chars:
-            r = cv2.matchTemplate(roi, tpl.resized('core', ch, cw, cw), cv2.TM_CCOEFF_NORMED)
-            _, mx, _, loc = cv2.minMaxLoc(r)
-            if ch not in best or mx > best[ch][0]:
-                best[ch] = (float(mx), xa + loc[0], ya + loc[1], cw, cw)
+        for a in ASPECTS_READ:
+            ch_ = max(5, int(round(core0 * f)))
+            cw_ = max(5, int(round(core0 * f * a)))
+            x0, y0 = int(round(cx - cw_ / 2 - pad)), int(round(cy - ch_ / 2 - pad))
+            xa, ya, xb, yb = max(0, x0), max(0, y0), min(W, x0 + cw_ + 2 * pad), min(H, y0 + ch_ + 2 * pad)
+            roi = m[ya:yb, xa:xb]
+            if roi.shape[0] < ch_ or roi.shape[1] < cw_:
+                continue
+            for c in tpl.chars:
+                r = cv2.matchTemplate(roi, tpl.resized('core', c, cw_, ch_), cv2.TM_CCOEFF_NORMED)
+                _, mx, _, loc = cv2.minMaxLoc(r)
+                if c not in best or mx > best[c][0]:
+                    best[c] = (float(mx), xa + loc[0], ya + loc[1], cw_, ch_)
     return best
 
 
-def _refine(m, src, box, scales=(0.92, 1.0, 1.08), step=0.5, rng=0.5, max_diff=0.09):
+def _refine(m, src, box, scales=(0.92, 1.0, 1.08), step=0.5, rng=0.5, max_diff=REFINE_MAX_DIFF):
     """Raffine (score, boite flottante, rendu, fenetre) du glyphe src autour d'une boite entiere (x, y, w, h)."""
     H, W = m.shape
     x, y, w, h = box
@@ -369,14 +420,14 @@ def _refine(m, src, box, scales=(0.92, 1.0, 1.08), step=0.5, rng=0.5, max_diff=0
     return best
 
 
-def _refine_full(m, src, tile, scales=(0.88, 1.0, 1.12), offs=(-1.0, 0.0, 1.0)):
+def _refine_full(m, src, tile, scales=(0.88, 1.0, 1.12), offs=(-1.0, 0.0, 1.0), max_diff=REFINE_MAX_DIFF):
     """Correlation du glyphe entier (cadre compris) autour de la tuile deduite du coeur : (score, boite)."""
     H, W = m.shape
     x, y, w, h = tile
     best = (-2.0, None)
     for sx in scales:
         for sy in scales:
-            if abs(sx - sy) > 0.13:
+            if abs(sx - sy) > max_diff:
                 continue
             tw, th = w * sx, h * sy
             for dx in offs:
@@ -481,9 +532,9 @@ def recognize_twice(m, tpl, cx, cy, s):
     return max(same, key=lambda x: (not x['indisc'], x['ecart']))
 
 
-def decide(r, attached=False, ring_h=0.0):
-    """Le caractere rendu, ou '?' : jamais devine, jamais decide sans departage. Les seuils durcissent avec la petitesse de la
-    tuile ; ring_h : hauteur du cadre propose (pour la tuile voisine d'un panneau d'attente)."""
+def _decide_strict(r, attached=False, ring_h=0.0):
+    """Premiere decision : le caractere rendu, ou '?'. Les seuils durcissent avec la petitesse de la tuile ; ring_h : hauteur
+    du cadre propose (pour la tuile voisine d'un panneau d'attente)."""
     if r is None or r.get('indisc') or round(r['tile'][3]) < MIN_TILE_READ:
         return '?'
     h = r['tile'][3]
@@ -501,6 +552,22 @@ def decide(r, attached=False, ring_h=0.0):
             and r['score'] - r['second'] >= NEIGHBOUR_GAP and r['full'] >= NEIGHBOUR_FULL \
             and r['depart'] >= NEIGHBOUR_DEPART and r['ecart'] > 0:
         ok = True                         # voisine d'un panneau d'attente : le contexte confirme le cadre, mais le departage reste exige
+    return r['car'] if ok else '?'
+
+
+def decide(r, attached=False, ring_h=0.0):
+    """Le caractere rendu, ou '?' : jamais devine, jamais decide sans departage. La premiere decision (_decide_strict) passe
+    d'abord, inchangee. Seulement quand elle rend '?', et si la tuile n'est pas indiscernable et mesure au moins MIN_TILE_READ
+    et LOOSE_MIN_H px de haut, une seconde decision aux seuils abaisses (LOOSE_*) : le departage reste exige."""
+    c = _decide_strict(r, attached, ring_h)
+    if c != '?' or r is None or r.get('indisc') or round(r['tile'][3]) < MIN_TILE_READ or r['tile'][3] < LOOSE_MIN_H:
+        return c
+    h = r['tile'][3]
+    smin = LOOSE_SCORE_L if h >= LOOSE_H_SPLIT else LOOSE_SCORE_S
+    ok = r['score'] >= smin and r['full'] >= LOOSE_FULL and r['depart'] >= LOOSE_DEPART and r['ecart'] >= LOOSE_ECART
+    ok = ok and r['score'] - r['second'] >= SECOND_GAP
+    strong = r['depart'] >= 0.85 and r['ecart'] >= 1.0
+    ok = ok and (strong or r['full'] - r.get('full2', -1.0) >= FULL_GAP)
     return r['car'] if ok else '?'
 
 
@@ -692,7 +759,7 @@ def read_image(bgr, tpl, timings=None, debug=None):
         soft[wy:wy + wh, wx:wx + ww] = 0  # ce qui tombe dans le rectangle de la fenetre parasite est ecarte, rien d'autre
         m[wy:wy + wh, wx:wx + ww] = 0
     t1 = time.perf_counter()
-    allprops = sorted(ring_proposals(soft) + bar_proposals(soft), reverse=True)
+    allprops = rank_union(ring_proposals(soft) + bar_proposals(soft), soft, m)
     big = [p for p in allprops if p[3] >= MIN_TILE]
     dropped = max(0, len(big) - MAX_PROPOSALS)
     saturated = dropped > 0

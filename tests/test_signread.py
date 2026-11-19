@@ -399,7 +399,8 @@ def test_decide_plain_read_needs_every_threshold():
     assert sr.decide(dict(_R, depart=0.1)) == '?'
     assert sr.decide(dict(_R, ecart=0.1)) == '?'
     assert sr.decide(dict(_R, second=0.92)) == '?'                      # deux glyphes a egalite
-    assert sr.decide(dict(_R, full=0.61)) == '?'                        # au ras du seuil : pas de marge
+    assert sr.decide(dict(_R, full=0.54)) == '?'                        # sous le seuil de la seconde decision (0,55)
+    assert sr.decide(dict(_R, full=0.61)) == 'F'                        # la seconde decision (tuile de 10 px et plus) l'accepte
     assert sr.decide(dict(_R, tile=(0, 0, 8, 8))) == '?'                # moins de 9 px de haut
     assert sr.decide(dict(_R, depart=0.7, ecart=0.5, full=0.7, full2=0.9)) == '?'    # le glyphe entier du rival gagne nettement
 

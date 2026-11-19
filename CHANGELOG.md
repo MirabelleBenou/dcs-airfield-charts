@@ -5,6 +5,12 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
+## Unreleased
+
+**More taxiway position signs are read on large airfields.**
+
+- `capture/signread.py` finds and reads more of the yellow-on-black taxiway position signs: a looser yellow test for the thin sign frame, a second ranking of the candidate frames by what lies inside them, reading of signs seen at an angle (not square on the image), and lower acceptance thresholds for signs 10 px tall or more, still never without a clear margin over the second-best letter. On a set of 31 views of a large airfield, 13 letters out of 23 are now read instead of 6, with no wrong letter; signs under 10 px tall are still not read. The published charts do not change.
+
 ## AC-V1.7.1 — 18 November 2026
 
 **Taxiway names that found no place now get one.**
