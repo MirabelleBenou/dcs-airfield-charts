@@ -21,6 +21,10 @@ What changed in the published charts, version by version. Each version is a GitH
 - New `capture/f10tiles.py`: captures an area (a GeoJSON extent or a latitude/longitude rectangle) of the F10 map in a grid at the scale of a target web-map zoom, resumes an interrupted pass, then reprojects the captures to 256 px XYZ tiles (Web Mercator), builds the lower zoom levels and packs the tiles in tar parts with a manifest and a layer description. Two layers: `alt` (PNG, 256 colours) and `sat` (WebP). It also turns the airfield captures of the charts into zoom 17 and 18 tiles. The F10 camera scale above about 5,200 m follows a measured law, used to set the camera altitude; the map mode is checked on the first image.
 - `capture/autonome/nuit.py`: a new `tuiles` step runs such a capture and its tiling in an unattended night.
 
+**Terrain survey in the unattended night.**
+
+- The night hook no longer stops a terrain survey on its first line: DCS returns nothing from a successful file write, which the hook took for a failure. A write now fails only when it reports an error.
+
 ## AC-V1.7.1 — 18 November 2026
 
 **Taxiway names that found no place now get one.**

@@ -906,6 +906,116 @@ def test_r5_erreur_interne_dans_un_releve_finit_le_releve_jamais_la_nuit(h):
     assert h.csv('b') == attendu_csv()
 
 
+# ------------------------------------------------------------------ ecriture du releve : DCS ne rend rien d'un write reussi
+
+FAUX_IO_ECRITURE = r'''
+IO_OPEN_REEL = io.open
+ECRIT = { n = 0 }
+-- poignee des .csv de releve : le write ecrit vraiment, puis rend ce que dit RETOUR[n] (n = rang de l'ecriture), sinon RETOUR.defaut
+function FAUX_IO(retour)
+  RETOUR = retour
+  ECRIT.n = 0
+  io.open = function(nom, mode)
+    local f, e = IO_OPEN_REEL(nom, mode)
+    if not f or not tostring(nom):match('%.csv$') then return f, e end
+    return { write = function(_, s)
+               ECRIT.n = ECRIT.n + 1
+               f:write(s)
+               local r = RETOUR[ECRIT.n] or RETOUR.defaut
+               if r == 'rien' then return end
+               if r == 'nil' then return nil end
+               if r == 'false' then return false end
+               if r == 'nil_message' then return nil, 'disk full' end
+               if r == 'erreur' then error('disk full') end
+               return f
+             end,
+             close = function(_) return f:close() end }
+  end
+end
+'''
+
+
+def _sous(tmp_path, nom):
+    (tmp_path / nom).mkdir()
+    return tmp_path / nom
+
+
+def releve_avec_faux_io(h, retour, nom='z', **plus):
+    h.faux(FAUX_IO_ECRITURE)
+    h.faux('FAUX_IO({ %s })' % ', '.join(f'[ {h.lua(k)} ] = {h.lua(v)}' for k, v in retour.items()))
+    h.demande(nom=nom, **plus)
+    h.servir()
+    h.jusqu_a_fait()
+
+
+@pytest.mark.parametrize('retour', ['rien', 'nil', 'false'])
+def test_w1_export_n5_write_muet_va_jusqu_au_bout(tmp_path, retour):
+    ref = HoteRelief(_sous(tmp_path, 'ref'))
+    ref.lancer_la_file()
+    ref.demande()
+    ref.servir()
+    ref.jusqu_a_fait()
+    h = HoteRelief(_sous(tmp_path, 'muet'))
+    h.lancer_la_file()
+    releve_avec_faux_io(h, {'defaut': retour})
+    assert h.fait == 'ok'
+    assert h.csv() == ref.csv() == attendu_csv()
+    j, jr = h.json(), ref.json()
+    for cle in ('duree_s', 'points_par_s'):
+        j.pop(cle), jr.pop(cle)
+    assert j == jr and j['fin'] == 'complet'
+
+
+@pytest.mark.parametrize('retour', ['rien', 'nil', 'false'])
+def test_w1_mission_surface_n5_write_muet_va_jusqu_au_bout(tmp_path, retour):
+    ref = HoteRelief(_sous(tmp_path, 'ref'))
+    ref.lancer_la_file()
+    ref.demande(methode='mission', surface=True)
+    ref.servir()
+    ref.jusqu_a_fait()
+    h = HoteRelief(_sous(tmp_path, 'muet'))
+    h.lancer_la_file()
+    releve_avec_faux_io(h, {'defaut': retour}, methode='mission', surface=True)
+    assert h.fait == 'ok'
+    assert h.csv() == ref.csv() == attendu_csv(surface=True)
+    j, jr = h.json(), ref.json()
+    for cle in ('duree_s', 'points_par_s'):
+        j.pop(cle), jr.pop(cle)
+    assert j == jr and j['fin'] == 'complet'
+
+
+def test_w2_write_nil_et_message_a_l_entete(h):
+    releve_avec_faux_io(h, {'defaut': 'nil_message'})
+    assert h.fait == 'erreur sortie' and h.appels_alt() == 0
+    assert 'sortie non ouverte' in h.fichier('crochet.log')
+
+
+def test_w2_write_nil_et_message_au_premier_paquet(h):
+    releve_avec_faux_io(h, {2: 'nil_message'})
+    assert h.fait == 'erreur sortie'
+    assert 'sortie non ouverte' not in h.fichier('crochet.log')
+    assert h.json()['fin'] == 'erreur' and h.sorties == 0
+
+
+def test_w2_write_qui_leve_a_l_entete(h):
+    releve_avec_faux_io(h, {'defaut': 'erreur'})
+    assert h.fait == 'erreur sortie' and h.appels_alt() == 0
+    assert 'sortie non ouverte' in h.fichier('crochet.log') and h.sorties == 0
+
+
+def test_w2_write_qui_leve_au_premier_paquet(h):
+    releve_avec_faux_io(h, {2: 'erreur'})
+    assert h.fait == 'erreur sortie' and h.sorties == 0
+
+
+def test_w2_io_open_nil_inchange(h):
+    h.faux("IO_OPEN_REEL = io.open; io.open = function(nom, mode) if tostring(nom):match('%.csv$') then return nil, 'refuse' end return IO_OPEN_REEL(nom, mode) end")
+    h.demande()
+    h.servir()
+    assert h.fait == 'erreur sortie' and h.appels_alt() == 0
+    assert 'sortie non ouverte' in h.fichier('crochet.log')
+
+
 # ------------------------------------------------------------------ R6 : le crochet, relu
 
 DCS_API = ('Export.LoGetAltitude', 'LoGetAltitude', 'Export.LoGeoCoordinatesToLoCoordinates', 'LoGeoCoordinatesToLoCoordinates',

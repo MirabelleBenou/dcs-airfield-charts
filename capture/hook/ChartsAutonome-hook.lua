@@ -145,6 +145,14 @@ local function repondre_releve(mot)
     if not ok then pcall(ecrire_texte, 'releve_fait.txt', mot) end
 end
 
+-- une ecriture du releve n'est un echec que si elle le dit : erreur levee, ou nil accompagne d'un message (convention de Lua).
+-- DCS ne rend rien d'un file:write reussi : un retour vide, nil seul ou false seul n'est pas un echec.
+local function ecriture_en_echec(fh, texte)
+    local ok, r1, r2 = pcall(function() return fh:write(texte) end)
+    if not ok then return true end
+    return r1 == nil and r2 ~= nil
+end
+
 local function json_chaine(s)
     return '"' .. (tostring(s):gsub('[%c"\\]', function(c) return string.format('\\u%04x', c:byte()) end)) .. '"'
 end
@@ -287,8 +295,7 @@ local function servir_releve()
         return
     end
     local fh = io.open(q.sortie, 'wb')
-    local okw = fh and fh:write(RELIEF_ENTETE)
-    if not okw then
+    if not fh or ecriture_en_echec(fh, RELIEF_ENTETE) then
         if fh then pcall(function() fh:close() end) end
         jlog('releve ' .. id .. ' : sortie non ouverte : ' .. q.sortie)
         repondre_releve('erreur sortie')
@@ -410,9 +417,9 @@ local function avancer_releve()
         if t then R.t_dernier = t end
     until R.k >= R.total or not t or not t0 or t - t0 >= budget_s
     R.images = R.images + 1
-    local okw, errw = R.fh:write(table.concat(R.buf))
+    local echec = ecriture_en_echec(R.fh, table.concat(R.buf))
     R.buf = {}
-    if not okw then
+    if echec then
         terminer_releve('erreur', 'sortie')
         return
     end
