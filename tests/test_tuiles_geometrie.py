@@ -188,8 +188,11 @@ def test_tuiles_de_emprise_par_blocs_egal_au_calcul_tuile_par_tuile():
     for tx, ty in list(tl)[:20]:
         o, s, e, n = T.boite_tuile(11, tx, ty)
         assert emp.intersects(shapely.box(o, s, e, n))
-    o, s, e, n = T.boite_tuile(11, *T.tuiles_de_emprise(emp, 11)[0])
-    assert (tx, ty) in tl
+    voisines = {(tx + dx, ty + dy) for tx, ty in tl for dx in (-1, 0, 1) for dy in (-1, 0, 1)} - tl
+    assert voisines                                              # il y en a : l'emprise n'est pas le monde
+    for tx, ty in sorted(voisines):                              # une tuile absente de la liste : sa boite ne coupe pas l'emprise
+        o, s, e, n = T.boite_tuile(11, tx, ty)
+        assert not emp.intersects(shapely.box(o, s, e, n)), (tx, ty)
 
 
 def test_emprises_invalides():

@@ -1081,7 +1081,8 @@ class Nuit:
                     continue
                 if c['depend_de'] and resultats[c['depend_de'] - 1]['statut'] != 'ok':
                     res['statut'] = 'saute_visee'
-                    self.jr(f'{c["n"]:02d} non lancee : la visee a echoue')
+                    quoi = 'la commande dont elle depend a echoue' if c['outil'] == 'f10tiles.py' else 'la visee a echoue'
+                    self.jr(f'{c["n"]:02d} non lancee : {quoi}')
                     continue
                 if c['vue'] is not None and c['vue'] != self.vue_posee and not self.poser_vue(c['vue']):
                     res['statut'] = 'vue_echec'

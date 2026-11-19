@@ -127,21 +127,68 @@ def test_pixel_sans_image_transparent_et_plus_proche_centre():
 
 # ------------------------------------------------------------------ TU5 : la pyramide
 
-def test_reduire_est_la_moyenne_2x2_alpha_compris():
-    rng = np.random.default_rng(1)
-    f = {(dx, dy): rng.integers(0, 256, (256, 256, 4), dtype=np.uint8) for dx in (0, 1) for dy in (0, 1)}
-    r = T.reduire(f)
+def _toile(f):
     toile = np.zeros((512, 512, 4), np.uint8)
     for (dx, dy), t in f.items():
         toile[dy * 256:(dy + 1) * 256, dx * 256:(dx + 1) * 256] = t
-    att = toile.reshape(256, 2, 256, 2, 4).astype(float).mean(axis=(1, 3))
-    assert np.abs(r.astype(float) - att).max() <= 1.0
+    return toile
+
+
+def test_reduire_est_la_moyenne_2x2_sur_une_zone_opaque():
+    rng = np.random.default_rng(1)
+    f = {(dx, dy): rng.integers(0, 256, (256, 256, 4), dtype=np.uint8) for dx in (0, 1) for dy in (0, 1)}
+    for t in f.values():
+        t[:, :, 3] = 255
+    r = T.reduire(f)
+    att = _toile(f).reshape(256, 2, 256, 2, 4).astype(float).mean(axis=(1, 3))
+    assert np.abs(r.astype(float) - att).max() <= 1.0 and (r[:, :, 3] == 255).all()       # opaque : rien ne change
     f[(1, 1)] = None
     f[(0, 1)] = None
     r2 = T.reduire(f)
     assert (r2[128:] == 0).all() and r2[:128].any()                    # une fille absente est transparente
     assert T.reduire({(0, 0): None}) is None
     assert T.reduire({(0, 0): np.zeros((256, 256, 4), np.uint8)}) is None
+
+
+def test_reduire_pondere_par_l_alpha_contre_le_calcul_en_flottants():
+    rng = np.random.default_rng(1)
+    f = {(dx, dy): rng.integers(0, 256, (256, 256, 4), dtype=np.uint8) for dx in (0, 1) for dy in (0, 1)}
+    r = T.reduire(f)
+    toile = _toile(f).astype(float)
+    a = toile[:, :, 3].reshape(256, 2, 256, 2)
+    rgb = toile[:, :, :3].reshape(256, 2, 256, 2, 3)
+    att_rgb = (rgb * a[..., None]).sum(axis=(1, 3)) / np.maximum(a.sum(axis=(1, 3)), 1)[..., None]
+    assert np.abs(r[:, :, :3].astype(float) - att_rgb).max() <= 1.0
+    assert np.abs(r[:, :, 3].astype(float) - a.mean(axis=(1, 3))).max() <= 1.0
+
+
+def test_tu5_bord_transparent_parent_attendu_ecrit_en_dur():
+    """Le parent attendu est ecrit a la main, selon la regle : alpha = moyenne des alphas ; rgb = somme(rgb x alpha) / somme(alpha)."""
+    # on construit les cas dans la toile 512 x 512 des quatre filles : chaque bloc 2 x 2 de pixels donne un pixel de la mere ;
+    # deux pixels opaques gris 200 et deux transparents : le gris reste 200 (la moyenne simple donnait 100), alpha 128
+    toile = np.zeros((512, 512, 4), np.uint8)
+    toile[0:2, 0:2] = [[(200, 200, 200, 255), (200, 200, 200, 255)], [(0, 0, 0, 0), (0, 0, 0, 0)]]              # mere (0, 0)
+    toile[0:2, 2:4] = [[(100, 0, 0, 255), (0, 200, 0, 128)], [(50, 50, 50, 0), (0, 0, 240, 64)]]               # mere (0, 1)
+    toile[0:2, 4:6] = 0                                                                                          # mere (0, 2)
+    toile[0:2, 6:8] = [[(10, 20, 30, 255)] * 2] * 2                                                              # mere (0, 3) : opaque
+    filles = {(dx, dy): np.ascontiguousarray(toile[dy * 256:(dy + 1) * 256, dx * 256:(dx + 1) * 256]) for dx in (0, 1) for dy in (0, 1)}
+    r = T.reduire(filles)
+    assert tuple(r[0, 0]) == (200, 200, 200, 128)
+    assert tuple(r[0, 1]) == (57, 57, 34, 112)         # somme alpha 447 ; r 25500/447, g 25600/447, b 15360/447 ; alpha 447/4
+    assert tuple(r[0, 2]) == (0, 0, 0, 0)               # quatre transparents : rgb 0, alpha 0
+    assert tuple(r[0, 3]) == (10, 20, 30, 255)          # opaque : moyenne simple
+
+
+def test_tu5_le_bord_ne_s_assombrit_pas_de_niveau_en_niveau():
+    """Une zone opaque gris 200 dont la moitie droite est transparente : sur quatre niveaux, tout pixel non transparent reste
+    (200, 200, 200) (la moyenne simple l'assombrissait a chaque niveau)."""
+    t = np.zeros((256, 256, 4), np.uint8)
+    t[:, :101] = (200, 200, 200, 255)                  # frontiere au milieu d'un bloc 2 x 2 a chaque niveau
+    for niveau in range(4):
+        r = T.reduire({(dx, dy): t for dx in (0, 1) for dy in (0, 1)})
+        vus = r[r[:, :, 3] > 0]
+        assert len(vus) and (vus[:, :3] == 200).all(), niveau
+        t = r
 
 
 def test_plan_des_phases():

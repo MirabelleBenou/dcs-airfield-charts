@@ -46,6 +46,8 @@ from render import geo, georef
 from render import tiles as T
 
 RECOUVREMENT_PX = 32            # recouvrement de chaque cote d'une case (pas l'OVERLAP de f10capture)
+PAS_ETALONNAGE_PX = 300         # pas de l'etalonnage, en pixels a l'echelle prevue (f10capture.CALIB_STEP_M vaut 200 m, fixe)
+WEBP_CAPTURE = {'lossless': True, 'quality': 0, 'method': 0}   # image Sat sans perte, la plus rapide (<= 0,5 s pour 3 350 x 1 404 px)
 ESTIM_IMAGE_O = {'alt': 3 * 10 ** 6, 'sat': 6 * 10 ** 6}   # taille d'une image avant la premiere
 RESERVE_DISQUE_O = 10 * 10 ** 9
 CONTROLE_DISQUE_CASES = 200
@@ -190,6 +192,7 @@ def grille_voulue(z):
 
 
 ARGS_GRILLE = ('theatre', 'layer', 'zoom', 'zone', 'extent', 'rows', 'cols')
+ARGS_PASSE = ('theatre', 'layer', 'zoom', 'zone', 'extent')      # ce que `tuiler` compare : rien qui depende de l'ecran
 
 
 def _ecrire_json(chemin, doc):
@@ -222,11 +225,20 @@ def assurer_grille(z):
 
 
 def grille_existante(z):
-    """grille.json d'une passe deja planifiee ; refus (code 2) s'il manque ou differe des arguments."""
+    """grille.json d'une passe deja planifiee, pour `tuiler` : refus (code 2) s'il manque ou si ses arguments (theatre, couche,
+    zoom, zone, emprise) different de ceux de la commande. Rien n'est recalcule : la taille de l'ecran n'intervient pas."""
     p = z.dossier / 'grille.json'
     if not p.is_file():
         _refus(f'{p} introuvable : lancer d\'abord plan ou capture avec les memes arguments')
-    return assurer_grille(z)
+    try:
+        ex = json.loads(p.read_text(encoding='utf-8'))
+    except ValueError:
+        _refus(f'{p} illisible : grille refusee')
+    voulu = {'theatre': z.cle, 'layer': z.couche, 'zoom': z.zoom, 'zone': z.nom, 'extent': z.id_emprise}
+    diff = [k for k in ARGS_PASSE if ex.get(k) != voulu[k]]
+    if diff:
+        _refus(f'la grille {p} differe des arguments ({", ".join(diff)}) : autre passe')
+    return ex
 
 
 # ------------------------------------------------------------------ plan
@@ -264,7 +276,7 @@ def _ecrire_image(img, chemin, couche):
     if couche == 'alt':
         im.save(tmp, format='PNG')
     else:
-        im.save(tmp, format='WEBP', lossless=True, quality=75, method=4)      # sans perte
+        im.save(tmp, format='WEBP', **WEBP_CAPTURE)      # sans perte, le reglage le plus rapide
     os.replace(tmp, chemin)
 
 
@@ -294,9 +306,19 @@ def _verifier_disque(z, restantes):
                                 f'({restantes} images a {moy / 1e6:.1f} Mo + {RESERVE_DISQUE_O / 1e9:.0f} Go)')
 
 
+def _dossier_etalonnage(dossier):
+    """Dossier d'etalonnage neuf : le numero suit le plus haut `etalonnage_NNN` present (pas le nombre d'etalonnages reussis), pour
+    qu'aucune image d'une execution precedente ne soit lue pour le mode."""
+    nums = [int(m.group(1)) for p in dossier.glob('etalonnage_*') if (m := re.fullmatch(r'etalonnage_(\d+)', p.name))]
+    odir = dossier / f'etalonnage_{max(nums, default=0) + 1:03d}'
+    odir.mkdir(parents=True, exist_ok=False)
+    return odir
+
+
 def _etalonner(z, g):
     """Etalonnage de l'echelle a l'altitude commandee de la passe, sur l'aerodrome le plus proche du centre de la zone ;
-    controle du mode de la carte sur la premiere image. Retourne l'enregistrement de l'etalonnage (note au grille.json)."""
+    controle du mode de la carte sur la premiere image. Retourne l'enregistrement de l'etalonnage (note au grille.json).
+    Le pas de `calibrate` (200 m, fixe) est porte pendant l'etalonnage a PAS_ETALONNAGE_PX pixels a l'echelle prevue, puis remis."""
     alt = g['commanded_alt_m']
     pred = T.mpp_camera(alt)
     xs = [c['x'] for c in g['cases']]
@@ -305,14 +327,16 @@ def _etalonner(z, g):
     nom, ax, az = _terrain_aerodrome_proche(z.theatre, cx, cz)
     m = f10capture.MARGIN_ZONE_M
     zone = {'x_min': ax - m, 'x_max': ax + m, 'z_min': az - m, 'z_max': az + m}
-    n = len(g['calibrations']) + 1
-    odir = z.dossier / f'etalonnage_{n:03d}'
-    odir.mkdir(parents=True, exist_ok=True)
+    odir = _dossier_etalonnage(z.dossier)
     echec = None
+    pas_avant = f10capture.CALIB_STEP_M
+    f10capture.CALIB_STEP_M = PAS_ETALONNAGE_PX * pred
     try:
         cal = f10capture.calibrate(zone, alt, pred, odir, f'{nom} (tuiles)')
     except f10capture.CalibrationFailed as e:
         echec, cal = e, None
+    finally:
+        f10capture.CALIB_STEP_M = pas_avant
     img0 = odir / 'calib' / 'nw_c0.png'
     mode = aplat = sat = None
     if img0.is_file():
@@ -323,10 +347,13 @@ def _etalonner(z, g):
                 f'poser le mode {z.couche.upper()} dans la F10 puis relancer (l\'outil ne change jamais le mode)')
     if echec is not None:
         raise f10capture.AskCdP(str(echec))
+    if mode is None:
+        raise f10capture.AskCdP(f'Mode de la carte illisible : {img0} absente apres un etalonnage reussi ; '
+                                f'verifier le dossier {odir} et relancer')
     return {'time': datetime.now().isoformat(timespec='seconds'), 'airfield': nom, 'alt_m': alt, 'mpp_predicted': pred,
             'mpp': cal['mean'], 'measures': cal['measures'], 'spread_rel': cal['max_spread_rel'],
             'dev_vs_predicted_rel': cal['dev_vs_predicted_rel'], 'align_deg': cal['align_deg_max'],
-            'mode': mode, 'aplat': aplat, 'saturation': sat, 'folder': odir.name}
+            'calib_step_px': PAS_ETALONNAGE_PX, 'mode': mode, 'aplat': aplat, 'saturation': sat, 'folder': odir.name}
 
 
 def cmd_capture(a):
@@ -364,6 +391,7 @@ def cmd_capture(a):
             if not ok:
                 non_stables += 1
                 _log(f'r{c["row"]}_c{c["col"]} NON STABLE apres {delai:.1f} s : image non enregistree (reprise a la prochaine execution)')
+                durees.append(_horloge() - tt)          # son temps compte dans l'estimation qui protege --duree-max-s
                 continue
             _ecrire_image(f10capture.crop(img), _nom_image(z, c), z.couche)
             with open(z.dossier / 'captures.jsonl', 'a', encoding='utf-8') as f:
@@ -384,10 +412,29 @@ def cmd_capture(a):
 
 # ------------------------------------------------------------------ tuiler
 
-def _purger_sorties(out, nom):
-    for p in list(out.glob(f'{nom}_z*_*.tar')) + [out / f'{nom}.json', out / f'{nom}.config.json']:
-        if p.is_file():
-            p.unlink()
+OCTETS_TUILE_O = {'alt': 50000, 'sat': 20000}      # poids d'une tuile pour l'estimation du disque de `tuiler`
+
+
+def _verifier_disque_tuiler(z, n_tuiles):
+    """Avant `tuiler` : la place libre du disque de work_dir doit couvrir (tuiles du zoom cible x 4/3 x poids d'une tuile) x 2
+    plus 10 Go ; sinon arret (QUESTION), rien d'efface."""
+    besoin = n_tuiles * 4 / 3 * OCTETS_TUILE_O[z.couche] * 2 + RESERVE_DISQUE_O
+    libre = _espace_libre(f10capture.CFG.work_dir)
+    if libre < besoin:
+        raise f10capture.AskCdP(f'Place disque insuffisante pour tuiler : libre {libre / 1e9:.1f} Go < {besoin / 1e9:.1f} Go '
+                                f'({n_tuiles} tuiles au zoom {z.zoom}, pyramide, deux fois, plus {RESERVE_DISQUE_O / 1e9:.0f} Go) ; '
+                                f'rien n\'a ete efface')
+
+
+def _supprimer_dossier(d):
+    """Dossier de travail : supprime sans taire les erreurs (une erreur arrete la commande, code 3)."""
+    if d.exists():
+        shutil.rmtree(d)
+
+
+def processus_defaut():
+    """Nombre de processus de `tuiler` par defaut : les coeurs moins deux, au moins un (la machine reste utilisable)."""
+    return max(1, (os.cpu_count() or 1) - 2)
 
 
 def _executer_blocs(taches, ctx_spec, n_proc, local):
@@ -419,18 +466,24 @@ def cmd_tuiler(a):
     if absentes:
         _log(f'INCOMPLET {total - len(absentes)}/{total}')
         return CODE_INCOMPLET
-    n_proc = a.processus or os.cpu_count() or 1
+    n_proc = a.processus or processus_defaut()
     t0 = time.perf_counter()
     proj = _projection(z.theatre)
     dossier, tmp = z.dossier / 'tuiles', z.dossier / 'pyramide_tmp'
     out = f10capture.CFG.work_dir / 'out' / 'tuiles'
-    for d in (dossier, tmp):
-        shutil.rmtree(d, ignore_errors=True)
-    out.mkdir(parents=True, exist_ok=True)
-    _purger_sorties(out, z.nom_sortie)
+    raison = T.manifeste_refuse(out, z.nom_sortie, z.zoom)
+    if raison:
+        _refus(raison)
+    uw, uh = g['usable_px']
+    T.verifier_taille_source(z.dossier, (uw, uh))
     base = T.tuiles_de_emprise(z.emprise, z.zoom)
+    _verifier_disque_tuiler(z, len(base))
+    for d in (dossier, tmp):
+        _supprimer_dossier(d)
+    out.mkdir(parents=True, exist_ok=True)
+    T.nettoyer_provisoires(out, z.nom_sortie)
     _log(f'{len(base)} tuiles au zoom {z.zoom}, {total} images, pyramide jusqu\'au zoom {zoom_min}, {n_proc} processus')
-    cache = T.CacheImages(T.charger_image_rgb)
+    cache = T.CacheImages(T.charger_image_rgb)       # borne : T.CACHE_IMAGES images par processus
     ctx_spec = {'type': 'grille', 'passe': str(z.dossier), 'theatre': z.theatre}
     local = (proj, sources, cache)
     stats = {'ms_rendu': 0.0, 'ms_reduction': 0.0, 'ms_codage': 0.0, 'octets': 0, 'rendues': 0, 'vides': 0}
@@ -449,18 +502,19 @@ def cmd_tuiler(a):
         if zb - niveaux > zoom_min:
             zh = zb - niveaux
             tuiles_phase = sorted((int(p.parent.name), int(p.stem)) for p in (tmp / str(zh)).glob('*/*.npy')) if (tmp / str(zh)).is_dir() else []
-    shutil.rmtree(tmp, ignore_errors=True)
+    _supprimer_dossier(tmp)
     fichiers = T.lister_tuiles(dossier, z.couche)
     par_zoom = {}
     for zz, _, _, _ in fichiers:
         par_zoom[zz] = par_zoom.get(zz, 0) + 1
     _log('tuiles par zoom : ' + ', '.join(f'z{k} {v}' for k, v in sorted(par_zoom.items())))
-    parts = T.empaqueter(fichiers, f'{z.couche}-{z.cle}', out, z.nom_sortie, z.zoom, TAILLE_PART_O)
+    parts = T.empaqueter(fichiers, f'{z.couche}-{z.cle}', out, z.nom_sortie, z.zoom, TAILLE_PART_O, provisoire=True)
     lon_o, lat_s, lon_e, lat_n = z.emprise.bounds
     meta = {'layer': z.couche, 'theatre': z.cle, 'zone': z.nom, 'zoom': z.zoom, 'format': T.EXTENSIONS[z.couche]}
-    T.ecrire_manifeste(out / f'{z.nom_sortie}.json', meta, parts, par_zoom)
-    T.ecrire_config(out / f'{z.nom_sortie}.config.json', z.couche, T.CLES_ROUTE_PLANNER.get(z.cle, z.theatre),
+    T.ecrire_manifeste(out / f'{z.nom_sortie}.json.tmp', meta, parts, par_zoom)
+    T.ecrire_config(out / f'{z.nom_sortie}.config.json.tmp', z.couche, T.CLES_ROUTE_PLANNER.get(z.cle, z.theatre),
                     min(par_zoom), max(par_zoom), (lat_s, lon_o, lat_n, lon_e))
+    T.publier(out, z.nom_sortie, [z.zoom], parts, [f'{z.nom_sortie}.json', f'{z.nom_sortie}.config.json'])   # tout est ecrit : on remplace
     dt = time.perf_counter() - t0
     if stats['rendues']:
         _log(f'temps par tuile et par coeur : reprojection {stats["ms_rendu"] / stats["rendues"]:.1f} ms '
@@ -517,6 +571,7 @@ def fabriquer_aerodromes(theatre, bases, racine_out, dossier, proj, zooms=ZOOMS_
             log(f'{b} : mosaic.png absente, ignoree')
             continue
         with Image.open(mos) as im:
+            T.verifier_taille_source(mos, im.size)
             if im.size != (g.width, g.height):
                 log(f'{b} : mosaique {im.size[0]}x{im.size[1]} differente de base.json {g.width}x{g.height}, ignoree')
                 continue
@@ -532,7 +587,7 @@ def fabriquer_aerodromes(theatre, bases, racine_out, dossier, proj, zooms=ZOOMS_
         _refus('aucune base a traiter (base.json et mosaic.png)')
     sources = T.Sources(xc, zc, mpp, w, h, cles)
     cache = T.CacheImages(T.charger_image_rgb, n=3)
-    shutil.rmtree(dossier, ignore_errors=True)
+    _supprimer_dossier(Path(dossier))
     par_zoom = {}
     for zoom in zooms:
         faites = set()
@@ -557,18 +612,22 @@ def cmd_aerodromes(a):
     nom = f'alt-{cle}-aerodromes'
     dossier = f10capture.CFG.work_dir / 'tuiles_brut' / nom
     out = f10capture.CFG.work_dir / 'out' / 'tuiles'
-    out.mkdir(parents=True, exist_ok=True)
-    _purger_sorties(out, nom)
+    raison = T.manifeste_refuse(out, nom, list(ZOOMS_AERODROMES))
+    if raison:
+        _refus(raison)
     par_zoom, bounds, traitees = fabriquer_aerodromes(a.theatre, bases, f10capture.out_theatre(a.theatre), dossier, proj)
+    out.mkdir(parents=True, exist_ok=True)
+    T.nettoyer_provisoires(out, nom)
     fichiers = T.lister_tuiles(dossier, 'alt')
     parts = []
     for zoom in ZOOMS_AERODROMES:
-        parts += T.empaqueter([f for f in fichiers if f[0] == zoom], f'alt-{cle}', out, nom, zoom, TAILLE_PART_O)
+        parts += T.empaqueter([f for f in fichiers if f[0] == zoom], f'alt-{cle}', out, nom, zoom, TAILLE_PART_O, provisoire=True)
     meta = {'layer': 'alt', 'theatre': cle, 'zone': 'aerodromes', 'zoom': list(ZOOMS_AERODROMES), 'format': 'png',
             'bases': traitees}
-    T.ecrire_manifeste(out / f'{nom}.json', meta, parts, par_zoom)
-    T.ecrire_config(out / f'{nom}.config.json', 'alt', T.CLES_ROUTE_PLANNER.get(cle, a.theatre), min(ZOOMS_AERODROMES),
+    T.ecrire_manifeste(out / f'{nom}.json.tmp', meta, parts, par_zoom)
+    T.ecrire_config(out / f'{nom}.config.json.tmp', 'alt', T.CLES_ROUTE_PLANNER.get(cle, a.theatre), min(ZOOMS_AERODROMES),
                     max(ZOOMS_AERODROMES), bounds)
+    T.publier(out, nom, list(ZOOMS_AERODROMES), parts, [f'{nom}.json', f'{nom}.config.json'])
     _log(f'{len(traitees)} bases, {sum(par_zoom.values())} tuiles, {len(parts)} part(s) sous {out}')
     return 0
 

@@ -14,6 +14,8 @@ import hashlib
 import io
 import json
 import math
+import os
+import re
 import tarfile
 from collections import OrderedDict
 from pathlib import Path
@@ -36,6 +38,8 @@ WEBP_QUALITE = 85
 WEBP_METHODE = 6
 ALPHA_OPAQUE_MIN = 128                 # PNG a palette : transparence binaire (alpha >= 128 : opaque)
 TAILLE_PART_DEFAUT = 300000000
+COTE_MAX_SOURCE_PX = 32767              # limite de cv2.remap : une image source plus grande est refusee
+CACHE_IMAGES = 16                      # images decodees gardees par processus (16 x ~14 Mo pour une image de 3 350 x 1 404 px)
 LICENCE_NOM = 'LICENSE-TILES.txt'
 EXTENSIONS = {'alt': 'png', 'sat': 'webp'}
 
@@ -299,7 +303,7 @@ class Sources:
 class CacheImages:
     """Cache d'images decodees (les plus recentes d'abord), borne en nombre d'images."""
 
-    def __init__(self, charger, n=16):
+    def __init__(self, charger, n=CACHE_IMAGES):
         self._charger, self._n = charger, n
         self._d = OrderedDict()
 
@@ -314,9 +318,24 @@ class CacheImages:
         return img
 
 
+Image.MAX_IMAGE_PIXELS = None          # comme render/analysis.py : une mosaique ou une image de capture peut depasser la limite de Pillow
+
+
+class SourceTropGrande(RuntimeError):
+    """Une image source de plus de COTE_MAX_SOURCE_PX px de cote (limite de cv2.remap) : la passe s'arrete (code 3)."""
+
+
+def verifier_taille_source(chemin, taille):
+    """Leve SourceTropGrande si `taille` (largeur, hauteur) depasse COTE_MAX_SOURCE_PX de cote ; le message nomme l'image."""
+    if max(taille) > COTE_MAX_SOURCE_PX:
+        raise SourceTropGrande(f'image source trop grande : {chemin} ({taille[0]} x {taille[1]} px, cote maximal '
+                               f'{COTE_MAX_SOURCE_PX} px pour la reprojection)')
+
+
 def charger_image_rgb(chemin):
-    """Image (PNG ou WebP) en tableau RGB uint8."""
+    """Image (PNG ou WebP) en tableau RGB uint8 ; SourceTropGrande si elle depasse COTE_MAX_SOURCE_PX de cote."""
     with Image.open(chemin) as im:
+        verifier_taille_source(chemin, im.size)
         return np.ascontiguousarray(np.asarray(im.convert('RGB')))
 
 
@@ -387,9 +406,10 @@ def rendre_tuile(zoom, tx, ty, projection, sources, cache, maps=None):
 # ------------------------------------------------------------------ la pyramide et le codage
 
 def reduire(filles):
-    """Tuile du zoom z - 1 : la reduction 2 x 2 (moyenne, alpha compris, arrondie) de ses quatre filles. `filles` : dict
-    {(dx, dy): tuile RGBA ou None}, dx dy dans {0, 1} (colonne, ligne) ; une fille absente est transparente. None si
-    toutes sont absentes ou transparentes."""
+    """Tuile du zoom z - 1 : la reduction 2 x 2 de ses quatre filles, ponderee par l'alpha. `filles` : dict {(dx, dy): tuile RGBA
+    ou None}, dx dy dans {0, 1} (colonne, ligne) ; une fille absente est transparente. Alpha du parent = moyenne des quatre alphas
+    (arrondie) ; RGB du parent = somme(rgb x alpha) / somme(alpha) sur les quatre filles (RGB 0 si la somme des alphas est nulle).
+    Sur une zone opaque, c'est la moyenne simple. None si toutes les filles sont absentes ou transparentes."""
     toile = np.zeros((2 * TILE, 2 * TILE, 4), np.uint8)
     present = False
     for (dx, dy), t in filles.items():
@@ -399,8 +419,14 @@ def reduire(filles):
         present = True
     if not present:
         return None
-    s = toile.reshape(TILE, 2, TILE, 2, 4).astype(np.uint16).sum(axis=(1, 3))
-    out = ((s + 2) // 4).astype(np.uint8)
+    alpha = toile[:, :, 3].reshape(TILE, 2, TILE, 2).astype(np.uint32)
+    rgb = toile[:, :, :3].reshape(TILE, 2, TILE, 2, 3).astype(np.uint32)
+    somme_a = alpha.sum(axis=(1, 3))                                          # (256, 256), au plus 4 x 255
+    num = (rgb * alpha[..., None]).sum(axis=(1, 3))                           # (256, 256, 3)
+    den = np.maximum(somme_a, 1)[..., None]
+    out = np.zeros((TILE, TILE, 4), np.uint8)
+    out[:, :, :3] = np.where(somme_a[..., None] > 0, (2 * num + den) // (2 * den), 0).astype(np.uint8)
+    out[:, :, 3] = ((somme_a + 2) // 4).astype(np.uint8)
     return out if out[:, :, 3].any() else None
 
 
@@ -566,9 +592,11 @@ def sha256_fichier(chemin):
     return h.hexdigest()
 
 
-def empaqueter(tuiles, prefixe, dossier_sortie, nom, zoom_label, limite=TAILLE_PART_DEFAUT, licence=LICENCE_TUILES):
+def empaqueter(tuiles, prefixe, dossier_sortie, nom, zoom_label, limite=TAILLE_PART_DEFAUT, licence=LICENCE_TUILES,
+               provisoire=False):
     """Parts tar `<nom>_z<zoom_label>_<nnn>.tar` de `limite` octets au plus (une tuile n'est jamais coupee), chemins internes
     `<prefixe>/{z}/{x}/{y}.<ext>`, `LICENSE-TILES.txt` dans chaque part. tuiles : liste triee de (z, x, y, chemin).
+    `provisoire` : les parts s'ecrivent sous `<part>.tmp` (leur nom rendu est le definitif) ; `publier` les met en place.
     Retourne [{'name', 'tiles', 'bytes', 'sha256'}]."""
     dossier_sortie = Path(dossier_sortie)
     dossier_sortie.mkdir(parents=True, exist_ok=True)
@@ -579,7 +607,7 @@ def empaqueter(tuiles, prefixe, dossier_sortie, nom, zoom_label, limite=TAILLE_P
     def ouvrir():
         nonlocal tf, nom_part, n_tuiles, chemin_part
         nom_part = f'{nom}_z{zoom_label}_{len(parts) + 1:03d}.tar'
-        chemin_part = dossier_sortie / nom_part
+        chemin_part = dossier_sortie / (nom_part + '.tmp' if provisoire else nom_part)
         tf = tarfile.open(chemin_part, 'w', format=tarfile.USTAR_FORMAT)
         info = tarfile.TarInfo(LICENCE_NOM)
         info.size, info.mode, info.mtime = len(lic), 0o644, 0
@@ -645,6 +673,55 @@ def ecrire_config(chemin, couche, theatre_cle, min_zoom, max_native_zoom, bounds
            'attribution': MENTION}
     Path(chemin).write_text(json.dumps(doc, indent=1, ensure_ascii=False), encoding='utf-8')
     return doc
+
+
+def _series(nom, zoom):
+    return re.compile(re.escape(f'{nom}_z{zoom}_') + r'\d{3}\.tar')
+
+
+def manifeste_refuse(dossier_sortie, nom, zoom):
+    """Raison du refus d'ecrire les archives `nom` pour le zoom cible `zoom` (entier, ou liste de zooms pour `aerodromes`), ou None.
+    Un manifeste `<nom>.json` deja la d'un AUTRE zoom cible (meme couche, meme theatre, meme zone), ou illisible : refus ; rien
+    n'est ecrit ni effacé (une seule serie par couche, theatre et zone)."""
+    p = Path(dossier_sortie) / f'{nom}.json'
+    if not p.is_file():
+        return None
+    try:
+        ex = json.loads(p.read_text(encoding='utf-8')).get('zoom')
+    except (ValueError, AttributeError):
+        return f'{p} est illisible : refus d\'ecrire par-dessus, a verifier ou a supprimer'
+    if ex != zoom:
+        return (f'{p} existe pour le zoom {ex} (cette commande : {zoom}) : une seule serie par couche, theatre et zone ; '
+                f'changer de nom de zone (--nom) ou supprimer ce manifeste et ses parts')
+    return None
+
+
+def nettoyer_provisoires(dossier_sortie, nom):
+    """Efface les fichiers provisoires (`*.tmp`) d'une ecriture interrompue pour les archives `nom`."""
+    d = Path(dossier_sortie)
+    if not d.is_dir():
+        return
+    motif = re.compile(re.escape(nom) + r'(_z\d+_\d{3}\.tar|\.json|\.config\.json)\.tmp')
+    for p in d.iterdir():
+        if motif.fullmatch(p.name):
+            p.unlink()
+
+
+def publier(dossier_sortie, nom, zooms, parts, fichiers):
+    """Met en place des archives ecrites sous des noms provisoires, seulement quand tout est ecrit : les parts (`parts` de
+    `empaqueter(provisoire=True)`) puis les fichiers `fichiers` (noms de fichiers ecrits sous `<nom>.tmp`, ex. manifeste et
+    config) remplacent les anciens ; seules les series des zooms `zooms` voient leurs anciennes parts en trop effacees."""
+    d = Path(dossier_sortie)
+    nouveaux = {p['name'] for p in parts}
+    for p in parts:
+        os.replace(d / (p['name'] + '.tmp'), d / p['name'])
+    for z in zooms:
+        motif = _series(nom, z)
+        for ancien in d.iterdir():
+            if motif.fullmatch(ancien.name) and ancien.name not in nouveaux:
+                ancien.unlink()
+    for f in fichiers:
+        os.replace(d / (f + '.tmp'), d / f)
 
 
 # ------------------------------------------------------------------ les sources d'une grille (grille.json + captures.jsonl)

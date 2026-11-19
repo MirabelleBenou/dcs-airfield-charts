@@ -71,9 +71,12 @@ class Monde:
 
     def _bruit(self, x, z):
         """Bruit de valeurs lisse (interpolation lissee de reseaux aleatoires de 40 a 900 m) : du relief a toutes les echelles,
-        sans periodicite, comme une carte antialiasee (l'etalonnage mesure des decalages par correlation de phase)."""
-        x, z = np.broadcast_arrays(x, z)
-        out = np.zeros(x.shape + (3,), float)
+        sans periodicite, comme une carte antialiasee (l'etalonnage mesure des decalages par correlation de phase).
+        Quand x ne varie que par ligne et z que par colonne (une image), le reseau n'est calcule que sur les cases touchees."""
+        separable = x.ndim == 2 and z.ndim == 2 and x.shape[1] == 1 and z.shape[0] == 1
+        if not separable:
+            x, z = np.broadcast_arrays(x, z)
+        out = np.zeros(np.broadcast(x, z).shape + (3,), float)
         for canal in range(3):
             tot = 0.0
             for k, (echelle, poids) in enumerate(((40.0, 0.25), (110.0, 0.3), (300.0, 0.3), (900.0, 0.4))):
@@ -82,9 +85,18 @@ class Monde:
                 fu, fv = u - iu, v - iv
                 fu, fv = fu * fu * (3 - 2 * fu), fv * fv * (3 - 2 * fv)
                 g = self.graine * 7 + canal * 31 + k * 101
+                nu, nv = int(iu.max() - iu.min()) + 2, int(iv.max() - iv.min()) + 2
+                if separable and nu * nv < out.shape[0] * out.shape[1] // 2:
+                    u0, v0 = int(iu.min()), int(iv.min())
+                    gu, gv = np.meshgrid(np.arange(u0, u0 + nu), np.arange(v0, v0 + nv), indexing='ij')
+                    lat = (_hash(gu, gv, g) % 10007) / 10006.0
+                    a, b = (iu - u0).astype(int), (iv - v0).astype(int)
 
-                def val(a, b):
-                    return (_hash(iu + a, iv + b, g) % 10007) / 10006.0
+                    def val(da, db):
+                        return lat[a + da, b + db]
+                else:
+                    def val(da, db):
+                        return (_hash(iu + da, iv + db, g) % 10007) / 10006.0
                 tot = tot + poids * ((1 - fu) * ((1 - fv) * val(0, 0) + fv * val(0, 1)) + fu * ((1 - fv) * val(1, 0) + fv * val(1, 1)))
             out[..., canal] = tot / 1.25
         return np.clip(out * 255, 0, 255).astype(np.uint8)
@@ -110,6 +122,8 @@ def cfg(tmp_path, monkeypatch):
                         encoding='utf-8')
         monkeypatch.setattr(f10capture, '_screen', None)
         f10capture.init(['x', '--config', str(path)])
+        if ecran[0] < 1000:                    # un petit ecran ne laisse pas 300 px de decalage : le pas des anciens tests (~53 px au z15)
+            monkeypatch.setattr(ft, 'PAS_ETALONNAGE_PX', 53.0)
         return f10capture.CFG, w
     return make
 
