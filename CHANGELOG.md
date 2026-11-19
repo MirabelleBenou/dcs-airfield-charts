@@ -11,6 +11,11 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - `capture/signread.py` finds and reads more of the yellow-on-black taxiway position signs: a looser yellow test for the thin sign frame, a second ranking of the candidate frames by what lies inside them, reading of signs seen at an angle (not square on the image), and lower acceptance thresholds for signs 10 px tall or more, still never without a clear margin over the second-best letter. On a set of 31 views of a large airfield, 13 letters out of 23 are now read instead of 6, with no wrong letter; signs under 10 px tall are still not read. The published charts do not change.
 
+**Map tiles from the DCS World F10 map (work in progress).**
+
+- New `capture/f10tiles.py`: captures an area (a GeoJSON extent or a latitude/longitude rectangle) of the F10 map in a grid at the scale of a target web-map zoom, resumes an interrupted pass, then reprojects the captures to 256 px XYZ tiles (Web Mercator), builds the lower zoom levels and packs the tiles in tar parts with a manifest and a layer description. Two layers: `alt` (PNG, 256 colours) and `sat` (WebP). It also turns the airfield captures of the charts into zoom 17 and 18 tiles. The F10 camera scale above about 5,200 m follows a measured law, used to set the camera altitude; the map mode is checked on the first image.
+- `capture/autonome/nuit.py`: a new `tuiles` step runs such a capture and its tiling in an unattended night.
+
 ## AC-V1.7.1 — 18 November 2026
 
 **Taxiway names that found no place now get one.**

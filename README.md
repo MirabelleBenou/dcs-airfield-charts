@@ -68,6 +68,7 @@ What a chart shows: pavement, runways and their markings, buildings and hardened
 | `capture/signcapture.py`, `capture/rn5.py` | taxiway signs, first half (work in progress): `rn5.py` reads the taxiway graph of an airfield from its `.rn5` file; `signcapture.py` plans where to look for the signs (`visee`) and takes those views in DCS with the free camera (`capture`) |
 | `capture/signread.py` | taxiway signs, second half (work in progress): reads the location signs (yellow letter on black) on the images of `capture`, by template matching with glyphs taken at run time from the game's own sign textures; writes `lecture.json` and `lecture.tsv` (`lire`) |
 | `capture/signattr.py` | taxiway signs, third part (work in progress): places the letters read by `signread.py` on the ground, gives them to the runway exits of the `.rn5` graph, and writes `attribution.json` and the airfield's taxiway names from the game, `<work_dir>/taxiways_dcs/<theatre>/<Base>.json` (`attribuer`) |
+| `capture/f10tiles.py`, `render/tiles.py` | map tiles from the F10 map (work in progress): grid capture at the scale of a target zoom, reprojection to XYZ tiles, zoom levels, tar parts; `render/tiles.py` is the pure part (geometry, reprojection, pyramid, archives), testable without DCS |
 | `render/` | the renderer: vectorises a captured base (pavement, buildings, runways), reads the game facts through pydcs, lays out the A5 pages and exports SVG, PDF and PNG; `build_chart.py` renders a base, `fetch_osm.py` downloads real taxiway names from OpenStreetMap; fonts in `render/fonts/` |
 | `tests/` | `python -m pytest`; the tests that need captured samples or DCS files run when `DCS_CHARTS_SAMPLES` points to a folder holding them, and are skipped otherwise |
 | `downloads/` | the published charts: one PDF per airfield in `downloads/<theatre>/` (with its index), and a zip per theatre holding every page as PDF, PNG and SVG |
@@ -110,6 +111,40 @@ The file is looked up in this order: the `--config <path>` command-line option, 
 **Terrain survey (work in progress).** A queue step of type `relief` asks the hook itself to read the ground elevation on a square grid around a point (`zones`: `nom`, `lat`, `lon`, `cote_m`; `pas_m`, the grid step in metres). With `"methode": "export"` (default) the hook calls `LoGetAltitude`; with `"methode": "mission"` it reads batches of points in the mission environment (`land.getHeight`, and `land.getSurfaceType` with `"surface": true`). Each survey writes `<work_dir>/out/relief/<theatre>/<nom>_<pas>m_<methode>.csv` (DCS `x`, `z` and elevation, in metres) and a `.json` with its speed. `budget_image_ms` (default 40) is the time spent reading points in each frame.
 
 The files written during the night are packed into zip files with a `bilan.json` report, under `<work_dir>\autonome\nuits\`. When the queue names a GitHub repository and a token file, they are also uploaded as the assets of a release of that repository, replaced every night. The PC can then shut down.
+
+## Map tiles (work in progress)
+
+`capture/f10tiles.py` makes web-map tiles (XYZ, Web Mercator, 256 px) from the F10 map of the game: it captures an area in a grid at the scale of a target zoom, reprojects the captures to tiles, builds the lower zoom levels and packs the tiles in tar parts. Two layers: `alt` (the Alt map, PNG with at most 256 colours) and `sat` (the Sat map, WebP quality 85). The map mode is set by hand in the F10 before the capture: the tool checks it on the first image and never changes it.
+
+```
+python -I capture/f10tiles.py plan <Theatre> --couche alt|sat --zoom <z> (--emprise <geojson> | --rectangle <lat_s>,<lon_o>,<lat_n>,<lon_e>) [--nom <zone>]
+python -I capture/f10tiles.py capture   <same arguments> [--duree-max-s <s>]
+python -I capture/f10tiles.py tuiler    <same arguments> [--zoom-min <z>] [--processus <n>]
+python -I capture/f10tiles.py aerodromes <Theatre> [<Base> ...]
+```
+
+- `plan` computes the grid (the scale of the tiles of the target zoom at the highest latitude of the extent, the camera altitude it needs, the number of images and tiles, the disk space) and writes `grille.json` under `<work_dir>/tuiles_brut/<layer>-<theatre>-z<zoom>-<zone>/`. It does not touch DCS. The extent is a GeoJSON polygon (`--emprise`, used as it is) or a latitude/longitude rectangle (`--rectangle`).
+- `capture` plays the grid, one image per cell, in a serpentine order; it calibrates the camera scale at the start of each run, checks the map mode, and resumes where it stopped (a cell whose image exists is skipped). `--duree-max-s` makes it stop by itself, cleanly, before that time.
+- `tuiler` reprojects the complete grid to the tiles of the target zoom (each tile pixel looks up its point in the nearest capture, bilinear, a single resampling), builds the zoom levels down to `--zoom-min` (default 8) as 2 x 2 averages, and writes tar parts of at most 300 MB with a manifest and a layer description under `<work_dir>/out/tuiles/`. On an incomplete grid it writes nothing and exits with code 4.
+- `aerodromes` turns the captures of the charts (`out/<theatre>/<Base>/`) into zoom 17 and 18 tiles of the `alt` layer, without any new capture.
+
+The F10 camera scale follows a measured law: metres per pixel = 0.00033555 x h, where h is the camera altitude up to 5,232.6 m and altitude squared over 5,232.6 above; the tool uses it to set the altitude from the scale it wants.
+
+In an unattended night (above), a `tuiles` step runs a capture and its tiling, the tiling only if the capture succeeded:
+
+```json
+{
+  "etapes": [
+    {"type": "tuiles", "theatre": "Syria", "couche": "alt", "zoom": 15, "emprise": "zones/syria.geojson", "zoom_min": 8},
+    {"type": "tuiles", "theatre": "Syria", "couche": "sat", "zoom": 16, "rectangle": [34.9, 35.9, 35.2, 36.4], "nom": "essai"}
+  ],
+  "delai_commande_s": 10800
+}
+```
+
+The capture stops by itself 120 s before `delai_commande_s`; the next night resumes it. The raw captures stay under `tuiles_brut/` and are never gathered into the night's zips; the tar parts, manifests and layer descriptions under `out/tuiles/` are.
+
+Map imagery © Eagle Dynamics SA — captured from the DCS World F10 map. Non-commercial use only. Not affiliated with or endorsed by Eagle Dynamics.
 
 ## Rendering charts
 

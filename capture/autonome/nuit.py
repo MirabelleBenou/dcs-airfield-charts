@@ -46,7 +46,12 @@ VUE_STABILISATION_S = 5
 ESSAIS_TELEVERSEMENT = 3
 API_DEFAUT = 'https://api.github.com'
 
-TYPES = ('charts', 'contexte', 'panneaux')
+TYPES = ('charts', 'contexte', 'panneaux', 'tuiles')
+TYPE_TUILES = 'tuiles'                 # l'etape de capture de tuiles XYZ de la carte F10 (capture/f10tiles.py)
+CLES_TUILES = ('couche', 'zoom', 'emprise', 'rectangle', 'nom', 'zoom_min')
+COUCHES_TUILES = ('alt', 'sat')
+ZOOM_TUILES = (8, 18)
+DUREE_MARGE_TUILES_S = 120             # la capture de tuiles s'arrete d'elle-meme ce nombre de secondes avant le delai de la commande
 TYPE_RELIEF = 'relief'                 # l'etape servie par le crochet lui-meme (releve du relief), sans outil externe
 CLES_RELIEF = ('zones', 'pas_m', 'methode', 'surface', 'budget_image_ms')
 CLES_ZONE = ('nom', 'lat', 'lon', 'cote_m')
@@ -56,7 +61,7 @@ BUDGET_IMAGE_MAX_MS = 1000
 POINTS_MAX = 4000000                   # n x n au plus, par zone
 RELIEF_ANNULE_ATTENTE_S = 30           # attente de la reponse du crochet apres releve_annule.txt
 CLES_FILE = ('etapes', 'budget_captures_s', 'delai_commande_s', 'eteindre', 'ecran_eteint', 'taille_zip_max_o', 'config', 'tampon')
-CLES_ETAPE = ('type', 'theatre', 'bases', 'marge') + CLES_RELIEF
+CLES_ETAPE = ('type', 'theatre', 'bases', 'marge') + CLES_RELIEF + CLES_TUILES
 CLES_TAMPON = ('depot', 'jeton', 'release')
 
 
@@ -158,6 +163,47 @@ def _valider_relief(e, theatre, sorties, nom_etape):
             'budget_image_ms': budget_ms}
 
 
+def _entier(valeur, nom, bas, haut):
+    if isinstance(valeur, bool) or not isinstance(valeur, int) or not bas <= valeur <= haut:
+        raise FileErreur(f'"{nom}" doit etre un entier de {bas} a {haut} (recu : {valeur!r})')
+    return valeur
+
+
+def _valider_tuiles(e, theatre):
+    """Les champs propres a l'etape tuiles. Retourne l'etape validee."""
+    for k in ('bases', 'marge') + CLES_RELIEF:
+        if k in e:
+            raise FileErreur(f'"{k}" interdite pour le type tuiles')
+    couche = e.get('couche')
+    if couche not in COUCHES_TUILES:
+        raise FileErreur(f'"couche" doit etre {" ou ".join(COUCHES_TUILES)} (recu : {couche!r})')
+    if 'zoom' not in e:
+        raise FileErreur('"zoom" manquante pour le type tuiles')
+    zoom = _entier(e['zoom'], 'zoom', ZOOM_TUILES[0], ZOOM_TUILES[1])
+    if ('emprise' in e) == ('rectangle' in e):
+        raise FileErreur('une seule des cles "emprise" (chemin d\'un GeoJSON) et "rectangle" (lat_s, lon_o, lat_n, lon_e) est obligatoire')
+    etape = {'type': TYPE_TUILES, 'theatre': theatre, 'couche': couche, 'zoom': zoom}
+    if 'emprise' in e:
+        etape['emprise'] = _texte(e['emprise'], 'emprise')
+    else:
+        r = e['rectangle']
+        if (not isinstance(r, list) or len(r) != 4
+                or not all(not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v) for v in r)):
+            raise FileErreur('"rectangle" doit etre une liste de quatre nombres : lat_s, lon_o, lat_n, lon_e')
+        lat_s, lon_o, lat_n, lon_e = r
+        if not (-90 <= lat_s < lat_n <= 90 and -180 <= lon_o < lon_e <= 180):
+            raise FileErreur('"rectangle" : lat_s < lat_n dans [-90, 90] et lon_o < lon_e dans [-180, 180]')
+        etape['rectangle'] = list(r)
+    if 'nom' in e:
+        nom = e['nom']
+        if not isinstance(nom, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', nom):
+            raise FileErreur(f'"nom" doit correspondre a [A-Za-z0-9_-]+ (recu : {nom!r})')
+        etape['nom'] = nom
+    if 'zoom_min' in e:
+        etape['zoom_min'] = _entier(e['zoom_min'], 'zoom_min', 0, zoom)
+    return etape
+
+
 def valider_file(data):
     """Valide la file lue du JSON (section 2.3). Retourne un dict complet, defauts compris. Leve FileErreur."""
     if not isinstance(data, dict):
@@ -182,6 +228,13 @@ def valider_file(data):
             raise FileErreur(f'{nom} : "type" doit etre l\'un de {", ".join(TYPES + (TYPE_RELIEF,))} (recu : {t!r})')
         try:
             theatre = _texte(e.get('theatre'), 'theatre')
+            if t != TYPE_TUILES:
+                for k in CLES_TUILES:
+                    if k in e:
+                        raise FileErreur(f'"{k}" interdite pour le type {t}')
+            if t == TYPE_TUILES:
+                out['etapes'].append(_valider_tuiles(e, theatre))
+                continue
             if t == TYPE_RELIEF:
                 out['etapes'].append(_valider_relief(e, theatre, sorties, nom))
                 continue
@@ -204,6 +257,9 @@ def valider_file(data):
         out['etapes'].append(etape)
     out['budget_captures_s'] = _nombre_positif(data['budget_captures_s'], 'budget_captures_s') if 'budget_captures_s' in data else BUDGET_DEFAUT_S
     out['delai_commande_s'] = _nombre_positif(data['delai_commande_s'], 'delai_commande_s') if 'delai_commande_s' in data else DELAI_DEFAUT_S
+    if any(e['type'] == TYPE_TUILES for e in out['etapes']) and out['delai_commande_s'] <= DUREE_MARGE_TUILES_S:
+        raise FileErreur(f'"delai_commande_s" doit depasser {DUREE_MARGE_TUILES_S} s avec une etape tuiles '
+                         f'(la capture s\'arrete {DUREE_MARGE_TUILES_S} s avant le delai)')
     for k in ('eteindre', 'ecran_eteint'):
         if k in data and not isinstance(data[k], bool):
             raise FileErreur(f'"{k}" doit etre true ou false')
@@ -274,6 +330,16 @@ def deplier(file):
                                       'n': _points_par_cote(z['cote_m'], e['pas_m']), 'pas_m': e['pas_m'], 'pas_texte': pas,
                                       'methode': e['methode'], 'surface': e['surface'], 'budget_image_ms': e['budget_image_ms'],
                                       'sortie': _sortie_relief(th, z['nom'], e['pas_m'], e['methode'])}
+            continue
+        if t == TYPE_TUILES:                  # une capture (arretee d'elle-meme avant le delai), puis son tuilage, qui en depend
+            zone = [th, '--couche', e['couche'], '--zoom', str(e['zoom'])]
+            zone += ['--emprise', e['emprise']] if 'emprise' in e else ['--rectangle', ','.join(_nombre_texte(v) for v in e['rectangle'])]
+            zone += ['--nom', e['nom']] if 'nom' in e else []
+            etiquette = e.get('nom') or ('theatre' if 'emprise' in e else 'rect')
+            ajouter('f10tiles.py', 'capture', th, etiquette,
+                    ['capture'] + zone + ['--duree-max-s', _nombre_texte(file['delai_commande_s'] - DUREE_MARGE_TUILES_S)], 'f10')
+            ajouter('f10tiles.py', 'tuiler', th, etiquette,
+                    ['tuiler'] + zone + (['--zoom-min', str(e['zoom_min'])] if 'zoom_min' in e else []), 'f10', depend_de=len(cmds))
             continue
         for b in e['bases']:
             if t == 'charts':

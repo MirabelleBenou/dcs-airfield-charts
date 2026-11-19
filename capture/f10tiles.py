@@ -433,7 +433,7 @@ def cmd_tuiler(a):
     cache = T.CacheImages(T.charger_image_rgb)
     ctx_spec = {'type': 'grille', 'passe': str(z.dossier), 'theatre': z.theatre}
     local = (proj, sources, cache)
-    stats = {'ms_rendu': 0.0, 'ms_codage': 0.0, 'octets': 0, 'vides': 0}
+    stats = {'ms_rendu': 0.0, 'ms_reduction': 0.0, 'ms_codage': 0.0, 'octets': 0, 'rendues': 0, 'vides': 0}
     tuiles_phase = [(int(x), int(y)) for x, y in base]
     for k, (zb, niveaux) in enumerate(T.plan_phases(z.zoom, zoom_min)):
         blocs = T.blocs_de(tuiles_phase, zb, T.BLOC_NIVEAUX)
@@ -462,6 +462,9 @@ def cmd_tuiler(a):
     T.ecrire_config(out / f'{z.nom_sortie}.config.json', z.couche, T.CLES_ROUTE_PLANNER.get(z.cle, z.theatre),
                     min(par_zoom), max(par_zoom), (lat_s, lon_o, lat_n, lon_e))
     dt = time.perf_counter() - t0
+    if stats['rendues']:
+        _log(f'temps par tuile et par coeur : reprojection {stats["ms_rendu"] / stats["rendues"]:.1f} ms '
+             f'(lecture des images comprise), codage {stats["ms_codage"] / max(1, len(fichiers)):.1f} ms')
     _log(f'{len(fichiers)} tuiles, {len(parts)} part(s) sous {out}, {dt:.0f} s ({stats["octets"] / 1e6:.0f} Mo de tuiles)')
     return 0
 

@@ -1205,7 +1205,7 @@ def test_c11_budget_conseille(tmp_path, capsys):
 # -- correction 12 : les types d'etape
 
 def test_c12_les_trois_types_seulement():
-    assert nuit.TYPES == ('charts', 'contexte', 'panneaux')
+    assert nuit.TYPES == ('charts', 'contexte', 'panneaux', 'tuiles')
     with pytest.raises(nuit.FileErreur) as e:
         nuit.valider_file(_etape(type='theatre', theatre='T', bases=['B']))
     assert 'charts, contexte, panneaux' in str(e.value)

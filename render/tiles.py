@@ -467,12 +467,13 @@ def traiter_bloc(spec, projection, sources, cache):
          source : 'rendu' (les tuiles `tuiles` du zoom de base sont rendues) ou 'spill' (elles sont lues de `tmp`),
          tuiles : [(tx, ty)], couche, dossier, tmp, ecrire_base (vrai : ecrire aussi les tuiles du zoom de base),
          garder_haut (vrai : garder en tmp la tuile du niveau le plus bas pour la phase suivante).
-    Retourne {'ecrites': {zoom: n}, 'octets': n, 'ms_rendu': s, 'ms_codage': s, 'vides': n}."""
+    Retourne {'ecrites': {zoom: n}, 'octets': n, 'ms_rendu' (reprojection du zoom de base, lecture des images comprise),
+    'ms_reduction', 'ms_codage', 'rendues' (tuiles non vides rendues par reprojection ; 0 pour un bloc lu du spill), 'vides'}."""
     import time
     z0, couche = spec['base_zoom'], spec['couche']
     niveaux = spec['niveaux']
-    t_rendu = t_codage = 0.0
-    octets, vides = 0, 0
+    t_rendu = t_red = t_codage = 0.0
+    octets, vides, rendues = 0, 0, 0
     ecrites = {}
     courant = {}
     for tx, ty in spec['tuiles']:
@@ -482,10 +483,15 @@ def traiter_bloc(spec, projection, sources, cache):
         else:
             p = _spill(spec['tmp'], z0, tx, ty)
             t = np.load(p) if p.is_file() else None
-        t_rendu += time.perf_counter() - t0
+        if spec['source'] == 'rendu':
+            t_rendu += time.perf_counter() - t0
+        else:
+            t_red += time.perf_counter() - t0
         if t is None:
             vides += 1
             continue
+        if spec['source'] == 'rendu':
+            rendues += 1
         courant[(tx, ty)] = t
         if spec['ecrire_base']:
             t0 = time.perf_counter()
@@ -503,7 +509,7 @@ def traiter_bloc(spec, projection, sources, cache):
             r = reduire(filles)
             if r is not None:
                 suivant[(px, py)] = r
-        t_rendu += time.perf_counter() - t0
+        t_red += time.perf_counter() - t0
         t0 = time.perf_counter()
         for (px, py), r in suivant.items():
             octets += ecrire_tuile(spec['dossier'], z, px, py, couche, r)
@@ -516,7 +522,8 @@ def traiter_bloc(spec, projection, sources, cache):
             p = _spill(spec['tmp'], z, x, y)
             p.parent.mkdir(parents=True, exist_ok=True)
             np.save(p, t)
-    return {'ecrites': ecrites, 'octets': octets, 'ms_rendu': t_rendu * 1000, 'ms_codage': t_codage * 1000, 'vides': vides}
+    return {'ecrites': ecrites, 'octets': octets, 'ms_rendu': t_rendu * 1000, 'ms_reduction': t_red * 1000,
+            'ms_codage': t_codage * 1000, 'rendues': rendues, 'vides': vides}
 
 
 def blocs_de(tuiles, base_zoom, niveaux):

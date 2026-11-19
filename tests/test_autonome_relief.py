@@ -61,7 +61,7 @@ def test_r1_en_sous_processus_isole(tmp_path):
 
 
 def test_r1_types_inchanges_et_defauts():
-    assert nuit.TYPES == ('charts', 'contexte', 'panneaux')
+    assert nuit.TYPES == ('charts', 'contexte', 'panneaux', 'tuiles')
     e = nuit.valider_file(file_de(relief()))['etapes'][0]
     assert (e['methode'], e['surface'], e['budget_image_ms']) == ('export', False, 40)
     assert e['zones'] == [ZONE_ALEPPO] and e['pas_m'] == 100 and 'bases' not in e
