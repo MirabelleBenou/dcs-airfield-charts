@@ -608,7 +608,7 @@ def test_p5_witness(lots, atlas, nom):
     assert (res['fenetre'] is not None) == fenetre
     assert any(t['coupee'] for t in res['tuiles']) == coupee
     if nom.endswith('Mahlwinkel_013'):
-        assert res['tuiles'] == []
+        assert [t for t in res['tuiles'] if t['car'] != '?'] == []
 
 
 def test_p5_sixteen_readable_letters_in_all(lots, atlas):

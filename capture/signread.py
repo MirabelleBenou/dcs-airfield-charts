@@ -91,7 +91,9 @@ MIN_TILE_READ = 9                 # au-dessous de 9 px de haut : jamais lue
 MIN_TILE = 8                      # tuile la plus petite lue (px de haut)
 ASPECTS_READ = (1.0, 0.88, 0.76)  # largeur / hauteur des formes essayees a la lecture (tuiles vues de biais)
 REFINE_MAX_DIFF = 0.40            # ecart d'echelle largeur / hauteur admis a l'affinage du coeur et du glyphe entier
+SQUARE_REFINE_DIFF, SQUARE_FULL_DIFF = 0.09, 0.13   # ... et celui des tuiles de moins de NONSQUARE_MIN_H px : lecture carree d'origine
 LOOSE_MIN_H = 10                  # seconde decision de decide : tuile de 10 px de haut au moins
+NONSQUARE_MIN_H = LOOSE_MIN_H     # lecture non carree : cadre propose (cote s) de 10 px au moins ; au-dessous, lecture carree inchangee
 LOOSE_H_SPLIT = 12                # ... score exige : LOOSE_SCORE_L des 12 px, LOOSE_SCORE_S de 10 a 12 px
 LOOSE_SCORE_L, LOOSE_SCORE_S = 0.80, 0.82
 LOOSE_FULL, LOOSE_DEPART, LOOSE_ECART = 0.55, 0.40, 0.30
@@ -371,7 +373,7 @@ def _render(src, x0, y0, tw, th, X0, Y0, X1, Y1, blur=0.45):
 COARSE_FACTORS = (0.8, 0.9, 1.0, 1.1, 1.25)
 
 
-def _coarse(m, tpl, cx, cy, s):
+def _coarse(m, tpl, cx, cy, s, aspects=ASPECTS_READ):
     """Pour chaque glyphe, la meilleure correlation entiere de son coeur, a plusieurs echelles et a plusieurs rapports
     largeur / hauteur (ASPECTS_READ : la tuile vue de biais n'est pas carree) autour d'une tuile de cote s centree en
     (cx, cy) : {car: (score, x, y, w, h)}."""
@@ -380,7 +382,7 @@ def _coarse(m, tpl, cx, cy, s):
     pad = max(2, int(round(0.2 * s)))
     best = {}
     for f in COARSE_FACTORS:
-        for a in ASPECTS_READ:
+        for a in aspects:
             ch_ = max(5, int(round(core0 * f)))
             cw_ = max(5, int(round(core0 * f * a)))
             x0, y0 = int(round(cx - cw_ / 2 - pad)), int(round(cy - ch_ / 2 - pad))
@@ -476,9 +478,25 @@ def _discriminate(m, tpl, win, box, first, rival, box_rival=None):
 
 
 def recognize(m, tpl, cx, cy, s, rivals=3):
+    """Lit une tuile de cote ~s centree en (cx, cy) (voir _recognize). Les formes non carrees ne sont essayees que pour un cadre
+    propose de NONSQUARE_MIN_H px au moins ; si la tuile ainsi lue mesure moins de NONSQUARE_MIN_H px de haut, elle est relue
+    comme avant, en carre, et cette lecture carree est retenue si elle donne elle aussi une tuile de moins de NONSQUARE_MIN_H px :
+    sous 10 px rien ne change. (Une lecture carree qui trouverait une tuile plus grande n'est pas retenue : c'est la lecture
+    non carree, qui n'a pas trouve de petite tuile, qui fait foi.)"""
+    if s < NONSQUARE_MIN_H:
+        return _recognize(m, tpl, cx, cy, s, rivals, False)
+    r = _recognize(m, tpl, cx, cy, s, rivals, True)
+    if r is not None and r['tile'][3] < NONSQUARE_MIN_H:
+        r0 = _recognize(m, tpl, cx, cy, s, rivals, False)
+        if r0 is not None and r0['tile'][3] < NONSQUARE_MIN_H:
+            return r0
+    return r
+
+
+def _recognize(m, tpl, cx, cy, s, rivals, wide):
     """Lit une tuile de cote ~s centree en (cx, cy) : dict (caractere, score, departage, ecart, boite du coeur, score du glyphe
     entier) ou None. Le caractere n'est pas encore decide (voir decide)."""
-    co = _coarse(m, tpl, cx, cy, s)
+    co = _coarse(m, tpl, cx, cy, s, ASPECTS_READ if wide else (1.0,))
     if not co:
         return None
     rank = sorted(co.items(), key=lambda kv: -kv[1][0])[:rivals]
@@ -486,14 +504,14 @@ def recognize(m, tpl, cx, cy, s, rivals=3):
         return None                       # rien qui ressemble a un glyphe : on n'affine pas
     refined = []
     for ch, (sc0, x, y, w, h) in rank:
-        sc, box, t, win = _refine(m, tpl.core[ch], (x, y, w, h))
+        sc, box, t, win = _refine(m, tpl.core[ch], (x, y, w, h), max_diff=REFINE_MAX_DIFF if wide else SQUARE_REFINE_DIFF)
         if box is not None:
             refined.append((sc, ch, box, win))
     if not refined:
         return None
     refined.sort(key=lambda t: -t[0])
     s1, ch1, box1, win1 = refined[0]
-    full, tile = _refine_full(m, tpl.tile[ch1], _tile_of_core(box1))
+    full, tile = _refine_full(m, tpl.tile[ch1], _tile_of_core(box1), max_diff=REFINE_MAX_DIFF if wide else SQUARE_FULL_DIFF)
     p1, pr = 1.0, -1.0
     indisc = False
     for s2, ch2, box2, _ in refined[1:]:
@@ -508,7 +526,7 @@ def recognize(m, tpl, cx, cy, s, rivals=3):
     second = refined[1][0] if len(refined) > 1 else 0.0
     full2 = -1.0
     if len(refined) > 1:                  # le glyphe entier du rival, a son propre alignement
-        full2 = _refine_full(m, tpl.tile[refined[1][1]], _tile_of_core(refined[1][2]))[0]
+        full2 = _refine_full(m, tpl.tile[refined[1][1]], _tile_of_core(refined[1][2]), max_diff=REFINE_MAX_DIFF if wide else SQUARE_FULL_DIFF)[0]
     return {'car': ch1, 'score': s1, 'second': second, 'depart': p1, 'ecart': p1 - pr, 'core': box1,
             'full': full, 'full2': full2, 'indisc': indisc, 'tile': tile if tile is not None else _tile_of_core(box1)}
 

@@ -147,6 +147,31 @@ def test_refine_full_accepts_a_scale_gap_up_to_040(tpl):
     assert sc >= sc13
 
 
+def test_non_square_shapes_are_tried_only_from_10_px(tpl, monkeypatch):
+    assert sr.NONSQUARE_MIN_H == 10 == sr.LOOSE_MIN_H
+    img = _grass(120, 160)
+    img[40:40 + 16, 60:60 + 16] = cv2.resize(_glyph_tile('H'), (16, 16), interpolation=cv2.INTER_AREA)
+    _, m = sr.yellow_map(img)
+    seen = []
+    real = sr._coarse
+    monkeypatch.setattr(sr, '_coarse', lambda m_, t_, cx, cy, s, aspects=sr.ASPECTS_READ: (seen.append((s, aspects)), real(m_, t_, cx, cy, s, aspects))[1])
+    sr.recognize(m, tpl, 68, 48, 9)
+    assert seen[-1] == (9, (1.0,))                                      # sous 10 px : lecture carree d'origine
+    sr.recognize(m, tpl, 68, 48, 16)
+    assert seen[-1] == (16, sr.ASPECTS_READ)
+
+
+def test_a_9_px_tile_read_through_a_larger_frame_is_still_read_square(tpl):
+    # le cadre propose (12 px) est plus grand que la tuile (9 px) : la lecture non carree trouve une tuile de moins de 10 px,
+    # la lecture carree d'origine la relit et rend la meme lettre qu'avant
+    img = _grass(300, 600)
+    img[120:129, 250:259] = cv2.resize(_glyph_tile('I'), (9, 9), interpolation=cv2.INTER_AREA)
+    _, m = sr.yellow_map(img)
+    r = sr.recognize_twice(m, tpl, 254.5, 124.5, 12)
+    assert r['car'] == 'I' and r['tile'][3] < sr.NONSQUARE_MIN_H
+    assert sr.decide(r) == 'I'
+
+
 # ---------- 2.4 les seuils de decide des 10 px ----------
 # seconde decision : score 0,83 (>= 0,82 a 10 px), full 0,56 (>= 0,55), depart 0,45, ecart 0,35 ; la premiere (tuile de 10 px : 0,88,
 # 0,70, 0,50, 0,40) les refuse
