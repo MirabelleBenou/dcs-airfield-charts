@@ -211,6 +211,21 @@ def test_tuiler_saute_si_capture_a_echoue(monde, capture, attendu):
     assert [c['n'] for c in monde.appels] == ([1] if attendu[1] == 'saute_visee' else [1, 2])
 
 
+def test_message_neutre_du_tuilage_saute(monde):
+    monde.scripts = {1: {'code': 1}}
+    monde.jouer(file_tuiles(tuiles()))
+    journal = (monde.nuit_dir / 'nuit.log').read_text(encoding='utf-8')
+    ligne = next(l for l in journal.splitlines() if '02 non lancee' in l)
+    assert ligne.endswith('02 non lancee : la commande dont elle depend a echoue') and 'visee' not in ligne
+
+
+def test_message_des_visees_inchange(monde):
+    monde.scripts = {4: {'code': 7}}                              # etape de charts : la visee echoue, la capture est sautee
+    monde.jouer(file_exemple())
+    journal = (monde.nuit_dir / 'nuit.log').read_text(encoding='utf-8')
+    assert '05 non lancee : la visee a echoue' in journal
+
+
 def test_une_capture_en_echec_ne_saute_que_son_tuilage(monde):
     monde.scripts = {1: {'code': 1}}
     monde.jouer(file_tuiles(tuiles(nom='a'), tuiles(nom='b')))
