@@ -5,6 +5,12 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
+## Unreleased
+
+**Terrain relief as web map tiles.**
+
+- New tool `render/build_relief.py`: from the ground elevation read in DCS on a 100 m grid (the `relief` step of the unattended night), builds for a theatre a hillshade layer — transparent, lit from several directions, to lay over any map — and an elevation layer in the Mapbox Terrain-RGB format (0.1 m), as web map tiles from zoom 6 to 11, packed in one zip with a description of both layers. The published charts do not change.
+
 ## AC-V1.8.0 — 20 November 2026
 
 **Vicinity page 10-8 for the eight helicopter bases of Syria.**

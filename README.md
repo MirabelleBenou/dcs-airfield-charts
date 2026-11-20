@@ -206,6 +206,19 @@ Tests: `python -m pytest` (see the table above for the tests that need samples).
 
 Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [OurAirports](https://github.com/davidmegginson/ourairports-data) (public domain) for the ICAO codes in `downloads/navaids/`; [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports.
 
+## Terrain relief tiles
+
+`render/build_relief.py` turns the ground elevation read in DCS on a 100 m grid (the `relief` step of the unattended night) into web-map tiles (XYZ, Web Mercator, 256 px, zoom 6 to 11, native zoom 11) for one theatre, packed in a zip:
+
+```
+python -I render/build_relief.py <Theatre> --entrees <zip or csv> [<zip or csv> ...] --edition <text> --out <folder> [--processus <n>]
+```
+
+- `DCS_Airfield_Charts_<Theatre>_relief.zip` holds `hillshade/{z}/{x}/{y}.webp` (a transparent hillshade lit from several directions, lossless WebP, to lay over any map), `elevation/{z}/{x}/{y}.png` (the ground elevation, Mapbox Terrain-RGB, PNG), `relief.json` (the description of both layers) and `LICENSE-RELIEF.txt`. The elevation grid is also written as `relief_<key>.npy` and `.json`.
+- Terrain-RGB: the elevation of a pixel is `-10000 + (R * 65536 + G * 256 + B) * 0.1` metres; a transparent pixel is off the map. Data off the 100 m grid, disagreeing on a shared edge, or missing a node inside the theatre extent is refused (exit code 2).
+
+Relief: DCS World, Eagle Dynamics SA — terrain elevation read in the game. Non-commercial use only.
+
 ## Publishing a release (maintainers)
 
 Releases are created by the workflow `.github/workflows/release.yml`, not by hand. On `main`, the `Unreleased` section of the CHANGELOG is first renamed to the new version. Then a branch `release/AC-V<x.y.z>` is pushed: that `main` commit plus files under `.release/` only — `notes.md` (the release text), the zips under `assets/` (a zip over 100 MB, the limit of a git push, is pushed in parts `<name>.part001`, `<name>.part002`… that the workflow joins), and last `manifest.json` (tag, title, `main` commit, and the name, size and SHA-256 of each zip).
