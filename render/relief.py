@@ -46,6 +46,7 @@ SIGMA_CASES, TRONC_SIGMA = 8.0, 4.0   # grille lissee : filtre gaussien de 8 cas
 F_BRUTE, F_LISSEE = 3.0, 7.0          # exagerations verticales
 POIDS_BRUTE, POIDS_LISSEE = 0.55, 0.45
 MARGE_CASES = 34                      # 32 (4 sigma) + 1 (gradient) + 1 (interpolation)
+RAYON_NON_RELEVE = 34                 # `hillshade` : transparent a 34 cases (Tchebychev) au plus d'un noeud non releve (NaN)
 COULEUR_OMBRE, GAIN_OMBRE, OPACITE_OMBRE = (40, 32, 24), 1.6, 0.70
 COULEUR_LUMIERE, GAIN_LUMIERE, OPACITE_LUMIERE = (255, 252, 240), 2.2, 0.55
 
@@ -68,6 +69,10 @@ class RefusDonnees(Exception):
     """Une entree que l'outil refuse (code 2) : le message nomme la cause."""
 
 
+class ErreurSortie(Exception):
+    """Un dossier de sortie que l'outil ne peut pas preparer (code 2) : le message nomme le dossier et la cause."""
+
+
 def nom_dcs(theatre):
     """Nom DCS du theatre (Syria, GermanyColdWar, Caucasus) d'apres son nom sans casse ni espaces ; None s'il est inconnu."""
     return NOMS_DCS.get(theatre.replace(' ', '').lower())
@@ -84,17 +89,28 @@ def _rien(*_a, **_k):
 
 # ------------------------------------------------------------------ la lecture des entrees
 
-def lister_csv(chemins):
+def membre_retenu(nom_membre, theatre):
+    """Vrai si le membre d'un zip est un CSV du releve du theatre : `out/relief/<nom DCS du theatre>/<nom>_100m_export.csv`
+    (directement sous ce dossier). Tout autre membre (journaux, `.json`, CSV d'un autre theatre ou d'un autre dossier) s'ignore."""
+    prefixe = f'out/relief/{nom_dcs(theatre) or theatre}/'
+    if not nom_membre.startswith(prefixe):
+        return False
+    reste = nom_membre[len(prefixe):]
+    return '/' not in reste and reste.endswith('_100m_export.csv') and len(reste) > len('_100m_export.csv')
+
+
+def lister_csv(chemins, theatre):
     """Les CSV des entrees : liste triee de (libelle, ouvrir) ou `ouvrir()` rend les octets du CSV. Un zip donne ses membres
-    `.csv` (les autres membres s'ignorent) lus sans rien ecrire sur le disque ; un `.csv` nu est lu tel quel. Le libelle est
-    `<zip>::<membre>` ou le nom du fichier : jamais le chemin du disque."""
+    `out/relief/<nom DCS de `theatre`>/*_100m_export.csv` (les autres membres s'ignorent) lus sans rien ecrire sur le disque ;
+    un `.csv` nu est lu tel quel. Le libelle est `<zip>::<membre>` ou le nom du fichier : jamais le chemin du disque.
+    RefusDonnees : zip illisible, ou aucun CSV retenu."""
     out = []
     for c in chemins:
         c = Path(c)
         if c.suffix.lower() == '.zip':
             try:
                 with zipfile.ZipFile(c) as z:
-                    membres = [i.filename for i in z.infolist() if not i.is_dir() and i.filename.lower().endswith('.csv')]
+                    membres = [i.filename for i in z.infolist() if not i.is_dir() and membre_retenu(i.filename, theatre)]
             except zipfile.BadZipFile as e:
                 raise RefusDonnees(f'{c.name} : zip illisible ({e})')
             for m in membres:
@@ -102,7 +118,8 @@ def lister_csv(chemins):
         else:
             out.append((c.name, _ouvrir_fichier(c)))
     if not out:
-        raise RefusDonnees('aucun CSV dans les entrees')
+        raise RefusDonnees(f'aucun CSV retenu dans les entrees (attendu : out/relief/{nom_dcs(theatre) or theatre}/*_100m_export.csv '
+                           f'dans un zip, ou un .csv nu)')
     out.sort(key=lambda t: t[0])
     return out
 
@@ -120,8 +137,43 @@ def _ouvrir_fichier(chemin):
     return ouvrir
 
 
+def _est_ligne_ignoree(ligne):
+    """Une ligne que `np.loadtxt` saute : vide, ou qui ne porte qu'un commentaire (`#`)."""
+    return ligne.rstrip(b'\r').split(b'#', 1)[0] == b''
+
+
+def numero_de_ligne(octets, n):
+    """Numero (dans le fichier, a partir de 1, l'en-tete etant la ligne 1, lignes vides comprises) de la ligne de la n-ieme ligne
+    de donnees (n a partir de 0) : `np.loadtxt` saute les lignes vides, son propre rang glisse alors. None s'il y en a moins."""
+    vues = -1
+    for k, ligne in enumerate(octets.split(b'\n')):
+        if k == 0 or _est_ligne_ignoree(ligne):
+            continue
+        vues += 1
+        if vues == n:
+            return k + 1
+    return None
+
+
+def _premiere_ligne_illisible(octets):
+    """(numero de ligne du fichier, cause) de la premiere ligne de donnees que `lire_csv` ne sait pas lire ; None si aucune."""
+    for k, ligne in enumerate(octets.split(b'\n')):
+        if k == 0 or _est_ligne_ignoree(ligne):
+            continue
+        champs = ligne.rstrip(b'\r').split(b'#', 1)[0].split(b',')
+        if len(champs) < len(ENTETE):
+            return k + 1, f'{len(champs)} colonne(s) au lieu de {len(ENTETE)} au moins'
+        for c in (2, 3, 4):
+            try:
+                float(champs[c])
+            except ValueError:
+                return k + 1, f'valeur non numerique : {champs[c].decode("utf-8", errors="replace")[:40]!r} (colonne {c + 1})'
+    return None
+
+
 def lire_csv(libelle, octets):
-    """Tableau (n, 3) float64 de (x, z, alt_m) d'un CSV. RefusDonnees : en-tete inattendu, ligne illisible, valeur non finie."""
+    """Tableau (n, 3) float64 de (x, z, alt_m) d'un CSV. RefusDonnees : en-tete inattendu, ligne illisible, valeur non finie ;
+    le numero de ligne d'un refus est celui du fichier, lignes vides comprises."""
     entete = octets.split(b'\n', 1)[0].decode('utf-8-sig', errors='replace').strip().split(',')
     if [c.strip() for c in entete[:len(ENTETE)]] != ENTETE:
         raise RefusDonnees(f'{libelle} : en-tete inattendu (attendu : i,j,x,z,alt_m,surface ; recu : {",".join(entete)[:80]})')
@@ -130,13 +182,16 @@ def lire_csv(libelle, octets):
             warnings.simplefilter('ignore')
             a = np.loadtxt(io.BytesIO(octets), delimiter=',', skiprows=1, usecols=(2, 3, 4), dtype=np.float64, ndmin=2)
     except ValueError as e:
-        raise RefusDonnees(f'{libelle} : ligne illisible ({e})')
+        mauvaise = _premiere_ligne_illisible(octets)
+        if mauvaise is None:
+            raise RefusDonnees(f'{libelle} : ligne illisible ({e})')
+        raise RefusDonnees(f'{libelle} ligne {mauvaise[0]} : ligne illisible ({mauvaise[1]})')
     if a.shape[0] == 0:
         raise RefusDonnees(f'{libelle} : aucun point')
     mauvais = ~np.isfinite(a).all(axis=1)
     if mauvais.any():
         n = int(np.nonzero(mauvais)[0][0])
-        raise RefusDonnees(f'{libelle} ligne {n + 2} : valeur absente ou non numerique (x, z ou alt_m)')
+        raise RefusDonnees(f'{libelle} ligne {numero_de_ligne(octets, n)} : valeur absente ou non numerique (x, z ou alt_m)')
     return a
 
 
@@ -156,12 +211,13 @@ class Grille:
         return hashlib.sha256(np.ascontiguousarray(self.alt, dtype=np.float32).tobytes()).hexdigest()
 
 
-def construire_grille(chemins, emprise=None, log=_rien):
-    """La grille de toutes les entrees (§ regles de la grille). `emprise` : (x_min, z_min, x_max, z_max) en metres ; donnee, elle
-    commande la regle « un noeud de la grille dans l'emprise que nulle entree ne donne est refuse » ; None : regle debrayee
-    (essais, tests). RefusDonnees pour : un point hors noeud (a 0,01 m pres), un noeud lu deux fois avec deux altitudes (a
-    0,01 m pres), un noeud manquant dans l'emprise, une entree illisible."""
-    csv = lister_csv(chemins)
+def construire_grille(chemins, theatre, emprise=None, log=_rien):
+    """La grille de toutes les entrees (§ regles de la grille) du theatre `theatre` (le filtre des membres d'un zip, `lister_csv`).
+    `emprise` : (x_min, z_min, x_max, z_max) en metres ; donnee, elle commande la regle « un noeud de la grille dans l'emprise
+    que nulle entree ne donne est refuse » ; None : regle debrayee (essais, tests). Un noeud lu deux fois (bord commun) garde la
+    premiere valeur lue (ordre des libelles tries). RefusDonnees pour : un point hors noeud (a 0,01 m pres), un noeud lu deux fois
+    avec deux altitudes (a 0,01 m pres), un noeud manquant dans l'emprise, une entree illisible."""
+    csv = lister_csv(chemins, theatre)
     # passe 1 : l'origine (plus petit x, plus petit z) et l'etendue de toutes les entrees
     x_lo = z_lo = math.inf
     x_hi = z_hi = -math.inf
@@ -184,15 +240,14 @@ def construire_grille(chemins, emprise=None, log=_rien):
         octets = ouvrir()
         sha = hashlib.sha256(octets).hexdigest()
         a = lire_csv(lib, octets)
-        del octets
         x, z, h = a[:, 0], a[:, 1], a[:, 2]
         i = np.rint((x - x0) / PAS_M)
         j = np.rint((z - z0) / PAS_M)
         hors = (np.abs(x - (x0 + PAS_M * i)) > TOL_NOEUD_M) | (np.abs(z - (z0 + PAS_M * j)) > TOL_NOEUD_M)
         if hors.any():
             n = int(np.nonzero(hors)[0][0])
-            raise RefusDonnees(f'{lib} ligne {n + 2} : le point (x = {x[n]:g}, z = {z[n]:g}) ne tombe pas sur un noeud de la '
-                               f'grille de {PAS_M:g} m (origine x0 = {x0:g}, z0 = {z0:g}) a {TOL_NOEUD_M:g} m pres '
+            raise RefusDonnees(f'{lib} ligne {numero_de_ligne(octets, n)} : le point (x = {x[n]:g}, z = {z[n]:g}) ne tombe pas sur '
+                               f'un noeud de la grille de {PAS_M:g} m (origine x0 = {x0:g}, z0 = {z0:g}) a {TOL_NOEUD_M:g} m pres '
                                f'({int(hors.sum())} point(s) dans ce cas)')
         i, j = i.astype(np.int64), j.astype(np.int64)
         h32 = h.astype(np.float32)
@@ -202,22 +257,35 @@ def construire_grille(chemins, emprise=None, log=_rien):
         diff = deja & (ecart > TOL_ALT_M + TOL_ALT_FLOAT32_M)
         if diff.any():
             n = int(np.nonzero(diff)[0][0])
-            raise RefusDonnees(f'{lib} ligne {n + 2} : le noeud ({int(i[n])}, {int(j[n])}) (x = {x[n]:g}, z = {z[n]:g}) est deja '
-                               f'donne avec une autre altitude ({float(avant[n]):.2f} m, ici {float(h32[n]):.2f} m ; ecart '
-                               f'{float(ecart[n]):.2f} m > {TOL_ALT_M:g} m)')
-        alt[i, j] = h32
-        relu = np.abs(alt[i, j].astype(np.float64) - h32.astype(np.float64)) > TOL_ALT_M + TOL_ALT_FLOAT32_M
+            raise RefusDonnees(f'{lib} ligne {numero_de_ligne(octets, n)} : le noeud ({int(i[n])}, {int(j[n])}) (x = {x[n]:g}, '
+                               f'z = {z[n]:g}) est deja donne avec une autre altitude ({float(avant[n]):.2f} m, ici {float(h32[n]):.2f} m ; '
+                               f'ecart {float(ecart[n]):.2f} m > {TOL_ALT_M:g} m)')
+        # un noeud deja donne par une entree precedente garde sa valeur ; dans ce fichier, la premiere ligne d'un noeud
+        # donne sa valeur
+        neuf = np.nonzero(~deja)[0]
+        if neuf.size:
+            _, premiere = np.unique(i[neuf] * nj + j[neuf], return_index=True)
+            choix = neuf[premiere]
+            alt[i[choix], j[choix]] = h32[choix]
+        relu = ~deja & (np.abs(alt[i, j].astype(np.float64) - h32.astype(np.float64)) > TOL_ALT_M + TOL_ALT_FLOAT32_M)
         if relu.any():
             n = int(np.nonzero(relu)[0][0])
-            raise RefusDonnees(f'{lib} ligne {n + 2} : le noeud ({int(i[n])}, {int(j[n])}) est donne deux fois dans ce fichier avec '
-                               f'deux altitudes')
+            raise RefusDonnees(f'{lib} ligne {numero_de_ligne(octets, n)} : le noeud ({int(i[n])}, {int(j[n])}) est donne deux fois '
+                               f'dans ce fichier avec deux altitudes')
         entrees.append({'fichier': lib, 'sha256': sha})
         log(f'  lu {lib} ({a.shape[0]} points)')
-        del a, x, z, h, i, j, h32, avant, deja, ecart, diff, relu, hors
+        del octets, a, x, z, h, i, j, h32, avant, deja, ecart, diff, relu, hors, neuf
     g = Grille(alt, x0, z0, PAS_M, entrees)
     if emprise is not None:
         verifier_emprise(g, emprise)
     return g
+
+
+def emprise_grille(grille):
+    """(x_min, z_min, x_max, z_max) : le rectangle de la grille, de `x0` a `x0 + pas (ni - 1)` et de `z0` a `z0 + pas (nj - 1)`.
+    C'est l'emprise des tuiles (les noeuds non releves y sont transparents)."""
+    ni, nj = grille.alt.shape
+    return (grille.x0, grille.z0, grille.x0 + grille.pas_m * (ni - 1), grille.z0 + grille.pas_m * (nj - 1))
 
 
 def verifier_emprise(grille, emprise):
@@ -412,10 +480,22 @@ def _bilineaire(tab, i0, j0, ti, tj):
     return out
 
 
+def noeuds_proches_non_releves(alt_fenetre, rayon=RAYON_NON_RELEVE):
+    """Booleens de la forme de `alt_fenetre` : vrai pour un noeud a `rayon` cases au plus (distance de Tchebychev) d'un noeud NaN de
+    la fenetre. Le bord de la fenetre n'est pas un noeud non releve. None s'il n'y a aucun NaN."""
+    manque = np.isnan(alt_fenetre)
+    if not manque.any():
+        return None
+    return ndimage.maximum_filter(manque.astype(np.uint8), size=2 * rayon + 1, mode='constant', cval=0).astype(bool)
+
+
 def rendre_tuiles(grille_alt, x0, z0, emprise, projection, tuiles):
     """Les tuiles z11 `tuiles` [(tx, ty)] des deux couches : {'hillshade': {(tx, ty): RGBA}, 'elevation': {...}} ; une tuile
     entierement transparente n'y est pas. Chaque pixel prend le point du sol de `render.tiles.cartes_xz` ; hors de l'emprise,
-    hors de la grille, ou sur un noeud manquant, il est transparent. Le resultat d'une tuile ne depend pas des autres."""
+    hors de la grille, ou sur un noeud manquant, il est transparent. Zones non relevees (NaN dans la grille) : `elevation` est
+    transparente sur un pixel dont un noeud d'interpolation de poids non nul est NaN ; `hillshade` l'est en plus sur un pixel dont
+    l'un des quatre noeuds d'interpolation est a RAYON_NON_RELEVE cases au plus d'un noeud NaN (l'ombrage remplace NaN par 0 et
+    dessinerait une falaise). Le resultat d'une tuile ne depend pas des autres."""
     ni, nj = grille_alt.shape
     x_min, z_min, x_max, z_max = emprise
     cartes = {}
@@ -433,9 +513,12 @@ def rendre_tuiles(grille_alt, x0, z0, emprise, projection, tuiles):
     # la fenetre de la grille : les noeuds des pixels + MARGE_CASES, rognee a la grille
     wi0, wi1 = max(0, math.floor(f_lo[0]) - MARGE_CASES), min(ni - 1, math.floor(f_hi[0]) + 1 + MARGE_CASES)
     wj0, wj1 = max(0, math.floor(f_lo[1]) - MARGE_CASES), min(nj - 1, math.floor(f_hi[1]) + 1 + MARGE_CASES)
-    s = None
+    s = proche = None
     if wi1 - wi0 >= 1 and wj1 - wj0 >= 1:
-        fenetre = np.nan_to_num(np.asarray(grille_alt[wi0:wi1 + 1, wj0:wj1 + 1], dtype=np.float64), nan=0.0)
+        brut = np.asarray(grille_alt[wi0:wi1 + 1, wj0:wj1 + 1], dtype=np.float64)
+        proche = noeuds_proches_non_releves(brut)
+        fenetre = np.nan_to_num(brut, nan=0.0)
+        del brut
         s = ombrage_volumes(fenetre)
         del fenetre
     for (tx, ty), (X, Z, fi, fj) in cartes.items():
@@ -449,8 +532,12 @@ def rendre_tuiles(grille_alt, x0, z0, emprise, projection, tuiles):
             continue
         out['elevation'][(tx, ty)] = encoder_terrain_rgb(h, ok)
         wsi, wsj = s.shape
-        si = _bilineaire(s, np.clip(i0 - wi0, 0, wsi - 2), np.clip(j0 - wj0, 0, wsj - 2), ti, tj)
-        ombre = couleur_ombrage(si, ok)
+        pi, pj = np.clip(i0 - wi0, 0, wsi - 2), np.clip(j0 - wj0, 0, wsj - 2)
+        si = _bilineaire(s, pi, pj, ti, tj)
+        valide = ok
+        if proche is not None:
+            valide = ok & ~(proche[pi, pj] | proche[pi + 1, pj] | proche[pi, pj + 1] | proche[pi + 1, pj + 1])
+        ombre = couleur_ombrage(si, valide)
         if ombre[..., 3].any():
             out['hillshade'][(tx, ty)] = ombre
     return out
@@ -570,14 +657,26 @@ def _executer(taches, processus):
         yield from pool.imap_unordered(traiter_bloc, taches)
 
 
+def effacer_tuiles(dossier):
+    """Efface les anciennes tuiles des deux couches sous `<dossier>/tiles/` : un dossier absent passe ; une erreur (dossier qu'on ne
+    peut pas effacer, fichier a la place d'un dossier...) arrete la passe (ErreurSortie, le dossier et la cause nommes)."""
+    for couche in COUCHES:
+        d = Path(dossier) / 'tiles' / couche
+        try:
+            shutil.rmtree(d)
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            raise ErreurSortie(f'les anciennes tuiles de {d.name} ne peuvent pas etre effacees ({d} : {e}) : passe arretee')
+
+
 def produire_tuiles(chemin_grille, theatre, x0, z0, emprise, dossier, niveaux=NIVEAUX_DEFAUT, processus=1, log=_rien):
     """Toutes les tuiles des deux couches de z11 a z6 sous `<dossier>/tiles/<couche>/{z}/{x}/{y}.<ext>` (les anciennes tuiles
-    de ces deux dossiers sont effacees d'abord). Retourne {'compte': {couche: {zoom: n}}, 'octets', 'bounds', 'ms': {...}}."""
+    de ces deux dossiers sont effacees d'abord ; ErreurSortie si l'effacement echoue). Retourne {'compte': {couche: {zoom: n}}, 'octets', 'bounds', 'ms': {...}}."""
     if not 1 <= niveaux <= ZOOM_MAX - ZOOM_MIN:
         raise ValueError(f'niveaux : de 1 a {ZOOM_MAX - ZOOM_MIN}')
     dossier = Path(dossier)
-    for couche in COUCHES:
-        shutil.rmtree(dossier / 'tiles' / couche, ignore_errors=True)
+    effacer_tuiles(dossier)
     proj = geo.Projection.for_theatre(theatre)
     contour = contour_emprise(emprise, proj)
     z11 = T.tuiles_de_emprise(contour, ZOOM_MAX)

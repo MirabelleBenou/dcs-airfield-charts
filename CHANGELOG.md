@@ -11,6 +11,11 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - New tool `render/build_relief.py`: from the ground elevation read in DCS on a 100 m grid (the `relief` step of the unattended night), builds for a theatre a hillshade layer — transparent, lit from several directions, to lay over any map — and an elevation layer in the Mapbox Terrain-RGB format (0.1 m), as web map tiles from zoom 6 to 11, packed in one zip with a description of both layers. The published charts do not change.
 
+**Minimum sector altitudes (MSA) of every airfield.**
+
+- New data in `downloads/msa/` (Caucasus, Cold War Germany, Syria): for each airfield, heliport and helipad of the mission editor, the minimum sector altitude within 25 NM, in four sectors by magnetic bearing to the airfield, computed on the ground elevation read in DCS — 1,000 ft above the highest ground of the sector, 2,000 ft where it reaches 1,500 m, rounded up to 100 ft. Ground only: obstacles are not included. New tool `render/build_msa.py`. The published charts do not change.
+- Terrain relief: the ground elevation read in DCS now covers every airfield of Syria and Cold War Germany, beyond the theatre bounds given by pydcs; the relief tiles cover the whole grid, and the hillshade is left transparent next to areas that were not read.
+
 ## AC-V1.8.0 — 20 November 2026
 
 **Vicinity page 10-8 for the eight helicopter bases of Syria.**

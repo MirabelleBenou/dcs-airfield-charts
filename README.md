@@ -215,9 +215,19 @@ python -I render/build_relief.py <Theatre> --entrees <zip or csv> [<zip or csv> 
 ```
 
 - `DCS_Airfield_Charts_<Theatre>_relief.zip` holds `hillshade/{z}/{x}/{y}.webp` (a transparent hillshade lit from several directions, lossless WebP, to lay over any map), `elevation/{z}/{x}/{y}.png` (the ground elevation, Mapbox Terrain-RGB, PNG), `relief.json` (the description of both layers) and `LICENSE-RELIEF.txt`. The elevation grid is also written as `relief_<key>.npy` and `.json`.
+- `--grille-seule` writes only the grid (`relief_<key>.npy` and `.json`) and stops: no tiles, no zip, and `--edition` is not needed.
 - Terrain-RGB: the elevation of a pixel is `-10000 + (R * 65536 + G * 256 + B) * 0.1` metres; a transparent pixel is off the map. Data off the 100 m grid, disagreeing on a shared edge, or missing a node inside the theatre extent is refused (exit code 2).
 
 Relief: DCS World, Eagle Dynamics SA — terrain elevation read in the game. Non-commercial use only.
+
+## Minimum sector altitudes
+
+`downloads/msa/` (Caucasus, Cold War Germany, Syria) gives, for each airfield, heliport and helipad of the mission editor, the minimum sector altitude within 25 NM, in four sectors by magnetic bearing to the airfield, computed on the ground elevation read in DCS (fields in [`downloads/msa/README.md`](downloads/msa/README.md)).
+
+- Rule: 1,000 ft above the highest ground of the sector (2,000 ft where it reaches 1,500 m), rounded up to 100 ft. Ground only: obstacles are not included.
+- Regenerate, on the grid written by `render/build_relief.py --grille-seule`: `python -I render/build_msa.py <Theatre> --grille relief_<key>.npy --parkings downloads/parkings/<key>.json --edition <text> --out downloads/msa [--annee 1985]`
+
+Terrain: DCS World, Eagle Dynamics SA — terrain elevation read in the game. Non-commercial use only. Not for real-world navigation.
 
 ## Publishing a release (maintainers)
 
