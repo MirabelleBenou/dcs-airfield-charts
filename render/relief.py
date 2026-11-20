@@ -1,9 +1,12 @@
 """Relief de DCS en tuiles web : la grille du relief, un ombrage transparent (`hillshade`) et l'altitude au format Terrain-RGB
 (`elevation`), en tuiles XYZ Web Mercator de 256 px du zoom 6 au zoom 11 (z11 natif), et le zip qui les porte.
 
-Entree : le relief de DCS releve au pas de 100 m (CSV `i,j,x,z,alt_m,surface`, lus dans des zips sans les decompresser, ou nus).
+Entree : le relief de DCS releve au pas de 100 m (CSV `i,j,x,z,alt_m,surface`, lus dans des zips sans les decompresser, ou nus ;
+dans un zip, seuls les membres `out/relief/<nom DCS du theatre>/*_100m_export.csv` sont lus).
 Repere DCS : x vers le Nord, z vers l'Est (metres). La grille a pour case (i, j) le point x = x0 + 100 i, z = z0 + 100 j.
 
+Les tuiles couvrent le rectangle de la grille, qui peut deborder de `terrain.bounds` de pydcs ; la grille a des zones non relevees
+(NaN) : `elevation` y est transparente, `hillshade` l'est aussi a RAYON_NON_RELEVE cases autour.
 Module pur : ni DCS ni ecran. La reprojection (pixel de tuile -> point du sol) est celle des tuiles F10 (`render.tiles.cartes_xz`) ;
 la reduction de `hillshade` est `render.tiles.reduire`. Le calcul se fait par blocs de tuiles, sur une fenetre de la grille avec
 une marge de MARGE_CASES cases : le resultat ne depend ni de la taille des blocs ni du nombre de processus.
