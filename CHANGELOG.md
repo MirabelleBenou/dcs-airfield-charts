@@ -5,7 +5,11 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
-## Unreleased
+## AC-V1.8.0 — 20 November 2026
+
+**Vicinity page 10-8 for the eight helicopter bases of Syria.**
+
+- At Tanf, Kharab Ishk, Lakatamia, Marj as Sultan North, Marj as Sultan South, Naqoura, Qabr as Sitt and Taftanaz now open with their vicinity page 10-8, like the airfields: the lightened F10 map around the base, with its runways and their headings, its beacons and the towns within 20 km. Their other pages do not change.
 
 **Airfield plans for DCS Mission Plan, and hardened shelters of the parking stands.**
 
