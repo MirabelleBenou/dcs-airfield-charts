@@ -1,0 +1,27 @@
+{
+ "tag": "AC-V1.8.0",
+ "title": "AC-V1.8.0 \u2014 20 November 2026",
+ "commit": "19724a4df12095e7f4c837d8e0ac779399b69223",
+ "assets": [
+  {
+   "name": "DCS_Airfield_Charts_GermanyColdWar_1985_airfields.zip",
+   "size": 428086495,
+   "sha256": "c19953841bf5db0656e664b40be06925bcce2b0357adec9aa694d0d6e736609a"
+  },
+  {
+   "name": "DCS_Airfield_Charts_GermanyColdWar_1985_helicopters.zip",
+   "size": 37441109,
+   "sha256": "142ed869a0c3f912c5f4071aef3b39b3a609a5f433643517e635e96a6c968dad"
+  },
+  {
+   "name": "DCS_Airfield_Charts_Syria_1985_airfields.zip",
+   "size": 237928946,
+   "sha256": "1f02dff535a720c5e97e767afe8455edb275ec372d7f1cc55b4705a2ea4a069e"
+  },
+  {
+   "name": "DCS_Airfield_Charts_Syria_1985_helicopters.zip",
+   "size": 80185426,
+   "sha256": "650485f25dfda0b10dd7a1240a24b48404b1839b0c42ae2af08e2f58eb318fa8"
+  }
+ ]
+}
