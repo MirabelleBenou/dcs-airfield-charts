@@ -2,6 +2,7 @@
 mode de la carte), `plan` et les refus d'arguments. Aucun DCS."""
 import json
 import random
+import types
 from pathlib import Path
 
 import numpy as np
@@ -462,7 +463,6 @@ def _passe_sim(cfg, monkeypatch, monde, retard_s=None):
 
 
 def types_ns(horloge):
-    import types
     return types.SimpleNamespace(perf_counter=horloge.perf_counter, sleep=horloge.sleep)
 
 
