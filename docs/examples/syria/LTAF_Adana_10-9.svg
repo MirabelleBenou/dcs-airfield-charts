@@ -64,8 +64,8 @@
 <circle cx="129.853" cy="105.414" r="0.45" fill="#1A1A1A"/>
 </g>
 <g inkscape:groupmode="layer" id="layer-runway-bearings" inkscape:label="Runway bearings" clip-path="url(#clip-plan)">
-<g transform="translate(14.081 152.125) rotate(55.79)"><text x="0" y="0.79" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold" text-anchor="middle">050.2°</text></g>
-<g transform="translate(120.803 79.577) rotate(55.79)"><text x="0" y="0.79" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold" text-anchor="middle">230.2°</text></g>
+<g transform="translate(14.081 152.125) rotate(55.79)"><text x="0" y="0.79" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold" text-anchor="middle">052.4°</text></g>
+<g transform="translate(120.803 79.577) rotate(55.79)"><text x="0" y="0.79" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold" text-anchor="middle">232.4°</text></g>
 </g>
 <g inkscape:groupmode="layer" id="layer-taxiway-labels" inkscape:label="Taxiway labels" clip-path="url(#clip-plan)">
 <rect x="121.519" y="88.293" width="2.62" height="3" fill="#FFCC00" stroke="#1A1A1A" stroke-width="0.2"/>
@@ -170,7 +170,7 @@
 </g>
 <rect x="44" y="49" width="51.622" height="44.528" fill="none" stroke="#1A1A1A" stroke-width="0.35"/>
 <text x="44" y="48.1" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold">P1 · A01–D09</text>
-<text x="95.622" y="48.1" font-family="Barlow Condensed" font-size="1.905" fill="#5A5A5A" text-anchor="end">1:12 185</text>
+<text x="95.622" y="48.1" font-family="Barlow Condensed" font-size="1.905" fill="#5A5A5A" text-anchor="end">1:12185</text>
 </g>
 <g inkscape:groupmode="layer" id="layer-inset-p2" inkscape:label="P2">
 <rect x="80.7" y="121.1" width="43.176" height="44.258" fill="#FFFFFF"/>
@@ -239,7 +239,7 @@
 </g>
 <rect x="81" y="124.5" width="42.576" height="40.558" fill="none" stroke="#1A1A1A" stroke-width="0.35"/>
 <text x="81" y="123.6" font-family="Barlow Condensed" font-size="2.258" fill="#1A1A1A" font-weight="bold">P2 · E01–E17</text>
-<text x="123.576" y="123.6" font-family="Barlow Condensed" font-size="1.905" fill="#5A5A5A" text-anchor="end">1:5 079</text>
+<text x="123.576" y="123.6" font-family="Barlow Condensed" font-size="1.905" fill="#5A5A5A" text-anchor="end">1:5079</text>
 </g>
 <circle cx="120.041" cy="106.008" r="2.5" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.3"/>
 <text x="120.041" y="106.811" font-family="Barlow Condensed" font-size="2.293" fill="#1A1A1A" font-weight="bold" text-anchor="middle">P1</text>
@@ -257,8 +257,8 @@
 <text x="82.102" y="41.809" font-family="Barlow Condensed" font-size="1.87" fill="#5A5A5A" text-anchor="middle">035-17</text>
 <line x1="76.436" y1="183.1" x2="76.436" y2="181.3" stroke="#1A1A1A" stroke-width="0.3"/>
 <text x="76.436" y="180.7" font-family="Barlow Condensed" font-size="1.87" fill="#5A5A5A" text-anchor="middle">035-17</text>
-<g transform="translate(21 170.6) rotate(2.24)"><line x1="0" y1="0" x2="0" y2="-12" stroke="#1A1A1A" stroke-width="0.3"/><polyline points="-0.9,-11.1 0,-12.2 0.9,-11.1" fill="none" stroke="#1A1A1A" stroke-width="0.3"/></g>
-<g transform="translate(21 170.6) rotate(5.63)"><line x1="0" y1="0" x2="0" y2="-12" stroke="#1A1A1A" stroke-width="0.6"/><polygon points="0,-13.6 -1,-11 1,-11" fill="#1A1A1A"/></g>
+<g transform="translate(21 170.6) rotate(0)"><line x1="0" y1="0" x2="0" y2="-12" stroke="#1A1A1A" stroke-width="0.3"/><polyline points="-0.9,-11.1 0,-12.2 0.9,-11.1" fill="none" stroke="#1A1A1A" stroke-width="0.3"/></g>
+<g transform="translate(21 170.6) rotate(3.39)"><line x1="0" y1="0" x2="0" y2="-12" stroke="#1A1A1A" stroke-width="0.6"/><polygon points="0,-13.6 -1,-11 1,-11" fill="#1A1A1A"/></g>
 <text x="21" y="174" font-family="Barlow Condensed" font-size="2.082" fill="#1A1A1A" font-weight="bold" text-anchor="middle">VAR 3°E</text>
 <text x="21" y="176.6" font-family="Barlow Condensed" font-size="1.905" fill="#5A5A5A" text-anchor="middle">(1985)</text>
 <line x1="93.898" y1="172.6" x2="127" y2="172.6" stroke="#1A1A1A" stroke-width="0.35"/>
@@ -268,6 +268,7 @@
 <line x1="115.966" y1="172.6" x2="115.966" y2="174.2" stroke="#1A1A1A" stroke-width="0.3"/>
 <text x="115.966" y="176.8" font-family="Barlow Condensed" font-size="1.87" fill="#1A1A1A" text-anchor="middle">500</text>
 <line x1="127" y1="172.6" x2="127" y2="173.6" stroke="#1A1A1A" stroke-width="0.3"/>
+<text x="127" y="176.8" font-family="Barlow Condensed" font-size="1.87" fill="#1A1A1A" text-anchor="middle">750 M</text>
 <line x1="93.898" y1="172.6" x2="93.898" y2="171" stroke="#1A1A1A" stroke-width="0.3"/>
 <text x="93.898" y="170.3" font-family="Barlow Condensed" font-size="1.87" fill="#1A1A1A" text-anchor="middle">0</text>
 <line x1="107.351" y1="172.6" x2="107.351" y2="171" stroke="#1A1A1A" stroke-width="0.3"/>
@@ -279,13 +280,15 @@
 <text x="6" y="11.4" font-family="Barlow Condensed" font-size="4.586" fill="#1A1A1A" font-weight="bold">LTAF</text>
 <text x="6" y="14.7" font-family="Barlow Condensed" font-size="2.293" fill="#5A5A5A">SYRIA · DCS</text>
 <text x="74.55" y="11.9" font-family="Barlow Condensed" font-size="5.292" fill="#1A1A1A" font-weight="bold" text-anchor="middle" letter-spacing="1.1">ADANA SAKIRPASA</text>
-<text x="74.4" y="15" font-family="Barlow Condensed" font-size="2.293" fill="#5A5A5A" text-anchor="middle" letter-spacing="0.8">AÉRODROME</text>
+<text x="74.4" y="15" font-family="Barlow Condensed" font-size="2.293" fill="#5A5A5A" text-anchor="middle" letter-spacing="0.8">AIRFIELD</text>
 <text x="142" y="11.4" font-family="Barlow Condensed" font-size="4.586" fill="#1A1A1A" font-weight="bold" text-anchor="end">10-9</text>
 <text x="142" y="14.7" font-family="Barlow Condensed" font-size="2.293" fill="#5A5A5A" text-anchor="end">v1</text>
 <line x1="6" y1="17.1" x2="142" y2="17.1" stroke="#1A1A1A" stroke-width="0.5"/>
-<text x="6" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">ÉLÉV. 56 FT</text>
-<text x="51.3" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">ARP N36°58.9' E035°16.8'</text>
-<text x="96.7" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">VAR 3°E (1985)</text>
+<text x="6" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">ELEV 56 FT</text>
+<text x="27.718" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">ARP N36°58.9' E035°16.8'</text>
+<text x="62.131" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">N36°58'55" E035°16'48"</text>
+<text x="95.414" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">MGRS 36S YF 0293 9529</text>
+<text x="128.552" y="21.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">VAR 3°E (1985)</text>
 <line x1="6" y1="22.8" x2="142" y2="22.8" stroke="#1A1A1A" stroke-width="0.25"/>
 <rect x="6" y="23.8" width="136" height="5.2" fill="#F2F2F2"/>
 <text x="7.5" y="27.4" font-family="Barlow Condensed" font-size="2.681" fill="#1A1A1A" font-weight="bold">ADANA SAKIRPASA TOWER</text>
@@ -298,40 +301,40 @@
 <text x="116" y="27.4" font-family="Barlow Condensed" font-size="1.976" fill="#5A5A5A">HF</text>
 <text x="122.5" y="27.4" font-family="Barlow Condensed" font-size="2.681" fill="#1A1A1A" font-weight="bold">4.400</text>
 <rect x="6" y="30" width="136" height="5.2" fill="#F2F2F2"/>
-<text x="7.5" y="33.6" font-family="Barlow Condensed" font-size="2.681" fill="#1A1A1A" font-weight="bold">BALISES</text>
+<text x="7.5" y="33.6" font-family="Barlow Condensed" font-size="2.681" fill="#1A1A1A" font-weight="bold">NAVAIDS</text>
 <text x="44" y="33.6" font-family="Barlow Condensed" font-size="1.976" fill="#5A5A5A">VOR/DME</text>
 <text x="51.655" y="33.6" font-family="Barlow Condensed" font-size="2.681" fill="#1A1A1A" font-weight="bold">ADA 112.70</text>
 <text x="67.653" y="33.6" font-family="Barlow Condensed" font-size="1.976" fill="#5A5A5A">NDB</text>
 <text x="71.871" y="33.6" font-family="Barlow Condensed" font-size="2.681" fill="#1A1A1A" font-weight="bold">ADN 395</text>
 </g>
 <g inkscape:groupmode="layer" id="layer-runway-table" inkscape:label="Runway table">
-<text x="6" y="186.94" font-family="Barlow Condensed SemiBold" font-size="1.835" fill="#5A5A5A" letter-spacing="0.4">PISTE</text>
-<text x="20" y="186.94" font-family="Barlow Condensed SemiBold" font-size="1.835" fill="#5A5A5A" letter-spacing="0.4">CAP MAG</text>
-<text x="40" y="186.94" font-family="Barlow Condensed SemiBold" font-size="1.835" fill="#5A5A5A" letter-spacing="0.4">LONGUEUR × LARGEUR</text>
-<text x="68" y="186.94" font-family="Barlow Condensed SemiBold" font-size="1.835" fill="#5A5A5A" letter-spacing="0.4">ÉLÉV. SEUIL</text>
+<text x="6" y="186.94" font-family="Barlow Condensed SemiBold" font-size="1.835" fill="#5A5A5A" letter-spacing="0.4">RWY</text>
+<text x="20" y="186.94" font-family="Barlow Condensed SemiBold" font-size="1.835" fill="#5A5A5A" letter-spacing="0.4">MAG HDG</text>
+<text x="40" y="186.94" font-family="Barlow Condensed SemiBold" font-size="1.835" fill="#5A5A5A" letter-spacing="0.4">LENGTH × WIDTH</text>
+<text x="68" y="186.94" font-family="Barlow Condensed SemiBold" font-size="1.835" fill="#5A5A5A" letter-spacing="0.4">THR ELEV</text>
 <text x="94" y="186.94" font-family="Barlow Condensed SemiBold" font-size="1.835" fill="#5A5A5A" letter-spacing="0.4">ILS</text>
-<text x="142" y="186.94" font-family="Barlow Condensed" font-size="2.328" fill="#1A1A1A" font-weight="bold" text-anchor="end">PARKINGS : 39 DONT 0 EN ABRI</text>
+<text x="142" y="186.94" font-family="Barlow Condensed" font-size="2.328" fill="#1A1A1A" font-weight="bold" text-anchor="end">PARKING: 39 (0 SHELTERED)</text>
 <text x="6" y="190.74" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">05</text>
-<text x="20" y="190.74" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">050.2°</text>
-<text x="40" y="190.74" font-family="Barlow Condensed" font-size="2.434" fill="#1A1A1A">9 016 × 186 FT (2748 × 57 M)</text>
+<text x="20" y="190.74" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">052.4°</text>
+<text x="40" y="190.74" font-family="Barlow Condensed" font-size="2.434" fill="#1A1A1A">9016 × 186 FT (2748 × 57 M)</text>
 <text x="68" y="190.74" font-family="Barlow Condensed" font-size="2.434" fill="#1A1A1A">56 FT</text>
 <text x="94" y="190.74" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">IADA 108.70</text>
 <text x="6" y="194.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">23</text>
-<text x="20" y="194.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">230.2°</text>
-<text x="40" y="194.2" font-family="Barlow Condensed" font-size="2.434" fill="#1A1A1A">9 016 × 186 FT (2748 × 57 M)</text>
+<text x="20" y="194.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A" font-weight="bold">232.4°</text>
+<text x="40" y="194.2" font-family="Barlow Condensed" font-size="2.434" fill="#1A1A1A">9016 × 186 FT (2748 × 57 M)</text>
 <text x="68" y="194.2" font-family="Barlow Condensed" font-size="2.434" fill="#1A1A1A">56 FT</text>
 <text x="94" y="194.2" font-family="Barlow Condensed" font-size="2.54" fill="#1A1A1A">—</text>
-<circle cx="82.073" cy="197.9" r="0.45" fill="#1A1A1A"/>
-<text x="84.473" y="198.9" font-family="Barlow Condensed" font-size="2.223" fill="#5A5A5A">OUVERT</text>
-<rect x="98.064" y="197.045" width="1.71" height="1.71" fill="#4D4D4D" rx="0.6"/>
-<circle cx="98.919" cy="197.9" r="0.45" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
-<text x="101.319" y="198.9" font-family="Barlow Condensed" font-size="2.223" fill="#5A5A5A">ABRI (HAS, HANGAR)</text>
-<circle cx="124.737" cy="197.9" r="0.45" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.25"/>
-<text x="127.137" y="198.9" font-family="Barlow Condensed" font-size="2.223" fill="#5A5A5A">HÉLICOPTÈRE SEUL</text>
+<circle cx="81.489" cy="197.9" r="0.45" fill="#1A1A1A"/>
+<text x="83.889" y="198.9" font-family="Barlow Condensed" font-size="2.223" fill="#5A5A5A">OPEN</text>
+<rect x="95.537" y="197.045" width="1.71" height="1.71" fill="#4D4D4D" rx="0.6"/>
+<circle cx="96.392" cy="197.9" r="0.45" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.2"/>
+<text x="98.792" y="198.9" font-family="Barlow Condensed" font-size="2.223" fill="#5A5A5A">SHELTER (HAS, HANGAR)</text>
+<circle cx="125.542" cy="197.9" r="0.45" fill="#FFFFFF" stroke="#1A1A1A" stroke-width="0.25"/>
+<text x="127.942" y="198.9" font-family="Barlow Condensed" font-size="2.223" fill="#5A5A5A">HELICOPTER ONLY</text>
 </g>
 <g inkscape:groupmode="layer" id="layer-footer" inkscape:label="Footer">
 <line x1="6" y1="201.2" x2="142" y2="201.2" stroke="#1A1A1A" stroke-width="0.5"/>
-<text x="6" y="203.7" font-family="Barlow Condensed" font-size="2.152" fill="#5A5A5A">DCS AIRFIELD CHARTS · données : carte F10 et fichiers de DCS World (Eagle Dynamics), via pydcs · taxiways © OpenStreetMap contributors</text>
-<text x="142" y="203.7" font-family="Barlow Condensed" font-size="2.152" fill="#1A1A1A" font-weight="bold" text-anchor="end">PAS POUR LA NAVIGATION RÉELLE</text>
+<text x="6" y="203.7" font-family="Barlow Condensed" font-size="2.152" fill="#5A5A5A">DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics), via pydcs · taxiways © OpenStreetMap contributors</text>
+<text x="142" y="203.7" font-family="Barlow Condensed" font-size="2.152" fill="#1A1A1A" font-weight="bold" text-anchor="end">NOT FOR REAL-WORLD NAVIGATION</text>
 </g>
 </svg>
