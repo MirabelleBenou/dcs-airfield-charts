@@ -55,6 +55,7 @@ class GeometrieImpossible(Exception):
 
 
 TRAVERSAL_MIN_FT = 1000           # addendum 1 : traversee d'une piste admise a AD ELEV + 1 000 ft au moins
+FAF_MAX_NM = 10.0                 # addendum 2 : un FAF a plus de 10 NM du seuil ecarte le sens
 
 
 # ---------- vecteurs et caps ----------
@@ -338,11 +339,16 @@ class Entree:
     runways: list                 # polygones (quatre coins (x, z)) de toutes les pistes du terrain
     thr_ft: int
     elev_ft: int
-    decl: float                   # declinaison a la balise de reference (caps)
+    decl: float                   # declinaison a la balise de reference (radiales, QDM, MSA)
     gamma: float                  # convergence a la balise de reference (MSA)
     ref: Balise                   # balise de reference (avion) ou NDB (helicoptere)
     ndb: Balise = None            # avion : NDB de l'option 3
     ils: dict = None              # {'s_gs' (m), 'tch' (ft), 'loc' (texte)} si la base a une page ILS pour ce seuil
+    decl_thr: float = None        # declinaison au seuil (CRS de finale, interrompue, eloignement de l'hippodrome) ; None : `decl`
+
+    @property
+    def d_thr(self):
+        return self.decl if self.decl_thr is None else self.decl_thr
 
 
 @dataclass
@@ -482,7 +488,7 @@ def avion(e, alt, x0, z0):
     ref = e.ref.pos
     az = e.az
     uf = unit(az)
-    crs = mag_int(az, e.decl)
+    crs = mag_int(az, e.d_thr)
     v_par_m, v_lat = along_cross(ref, e.thr, az)
     v_par = v_par_m / NM
     mode = 'racetrack' if v_par < 0 and abs(v_lat) < AXIS_TOL_NM * NM else 'base'
@@ -501,13 +507,20 @@ def avion(e, alt, x0, z0):
     if d_faf <= 0:
         raise GeometrieImpossible('FAF au-dela du seuil')
     if e.ref.dme:
-        P.faf_dme = round(math.dist(ref, axis_point(e.thr, az, d_faf)) / NM, 1)
-        snap = axis_at_distance(e.thr, az, ref, P.faf_dme, d_faf)
-        if snap is None:
-            raise GeometrieImpossible(f'FAF : aucun point de l\'axe a D{P.faf_dme:.1f}')
-        d_faf = snap
+        # au dixieme de DME, vers l'exterieur (du cote oppose au seuil) : on intercepte la pente par en dessous (addendum 2, 2.4)
+        dme0 = math.dist(ref, axis_point(e.thr, az, d_faf)) / NM
+        best = None
+        for D in sorted({math.floor(round(dme0 * 10, 9)) / 10, math.ceil(round(dme0 * 10, 9)) / 10}):
+            snap = axis_at_distance(e.thr, az, ref, D, d_faf)
+            if snap is not None and snap >= d_faf - 1e-9 and (best is None or snap < best[1]):
+                best = (D, snap)
+        if best is None:
+            raise GeometrieImpossible(f'FAF : aucun point de l\'axe au dixieme de DME au-dela de {d_faf:.2f} NM')
+        P.faf_dme, d_faf = best
     else:
-        d_faf = round(d_faf, 1)
+        d_faf = math.ceil(round(d_faf * 10, 9)) / 10
+    if d_faf > FAF_MAX_NM:
+        raise GeometrieImpossible(f'FAF à {d_faf:.1f} NM du seuil (relief dans l\'axe), au-delà de {FAF_MAX_NM:g} NM')
     P.faf_nm, P.if_nm = d_faf, d_faf + INT_NM
     P.FAF, P.IF = axis_point(e.thr, az, P.faf_nm), axis_point(e.thr, az, P.if_nm)
     R = turn_radius_m(V_TURN_KT)
@@ -552,7 +565,7 @@ def avion(e, alt, x0, z0):
         P.hold_pts = P.out_pts
         P.hold_inb_az = az
         P.out_az = (az + 180.0) % 360.0
-        P.qdr_out = mag_int(az + 180.0, e.decl)
+        P.qdr_out = mag_int(az + 180.0, e.d_thr)
         P.l_out_nm = math.dist(P.a1[-1], o_end) / NM
         if e.ref.dme:
             P.out_dme = round(math.dist(ref, o_end) / NM, 1)
@@ -591,7 +604,7 @@ def helico(e, alt, x0, z0):
     polys = runway_polygons(e.runways)
     ndb = e.ref.pos
     az = e.az
-    crs = mag_int(az, e.decl)
+    crs = mag_int(az, e.d_thr)
     v_par_m, v_lat = along_cross(ndb, e.thr, az)
     tch = int(e.ils['tch']) if e.ils is not None else TCH_DEFAULT_FT
     P = Procedure('helico', e, 'base', '', '', crs, 0, [], [], 0.0, 0.0, tch=tch, v_par_nm=v_par_m / NM, v_lat_m=v_lat)

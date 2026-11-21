@@ -408,3 +408,94 @@ def test_samples_konya_10_9_and_beacons(charts, samples):
     ref = B.pick_reference(near, e.pos, e.az)
     assert (ref.kind, ref.callsign, ref.channel) == ('VOR/DME', 'KNY', 'CH49X')
     assert B.option3_ndb(near, ref).callsign == 'KNY'
+
+
+# ---------- addendum 2 ----------
+def test_runway_problems_and_theatre_stops():
+    e = SimpleNamespace(sens='09')
+    ok = SimpleNamespace(e=e, strict_parts={'virage de base': 120.0, 'intermédiaire': 900.0}, traversals=[('attente', 0, 1000.0)])
+    assert B.runway_problems('X', '11-1', ok) == []
+    low = SimpleNamespace(e=e, strict_parts={'virage de base': 120.0}, traversals=[('attente', 0, 999.0)])
+    cut = SimpleNamespace(e=e, strict_parts={'virage de base': 0.0}, traversals=[])
+    assert len(B.runway_problems('X', '11-1', low)) == 1 and 'virage de base' in B.runway_problems('X', '11-2', cut)[0]
+    with pytest.raises(B.Arret, match='traversée'):
+        B.check_plan(B.runway_problems('X', '11-1', low), {'sens': 10, 'tried_h': 0, 'ecarts': 0, 'ecarts_h': 0})
+    B.check_plan([], {'sens': 10, 'tried_h': 10, 'ecarts': 1, 'ecarts_h': 1})             # 2 sur 20 : 10 %, pas plus
+    with pytest.raises(B.Arret, match='plus de 10 %'):
+        B.check_plan([], {'sens': 10, 'tried_h': 10, 'ecarts': 1, 'ecarts_h': 2})         # les deux familles comptent
+
+
+def test_faf_beyond_the_limit_drops_the_direction_and_keeps_the_numbering(inputs, monkeypatch):
+    pl0 = B.plan_theatre('Syria', inputs.af, inputs.lua, inputs.alt, inputs.x0, inputs.z0, log=lambda *a: None, check=False)
+    faf = {s.end.name: s.avion.faf_nm for t in pl0.terrains for s in t.sens}
+    assert faf['01L'] < faf['19R']
+    limit = round((faf['01L'] + faf['19R']) / 2, 2)
+    monkeypatch.setattr(procedure, 'FAF_MAX_NM', limit)                # 19R est ecarte, 01L reste
+    lines = []
+    pl = B.plan_theatre('Syria', inputs.af, inputs.lua, inputs.alt, inputs.x0, inputs.z0, log=lines.append, check=False)
+    assert (f"approche LTAN_Konya 19R : écartée, FAF à {faf['19R']:.1f} NM du seuil (relief dans l'axe), au-delà de {limit:g} NM"
+            in lines)
+    (t,) = [t for t in pl.terrains if t.case_a]
+    assert [(s.end.name, s.index, s.index_h) for s in t.sens] == [('01L', '11-1', '11-1H'), ('19R', '', '11-2H')]
+    with pytest.raises(B.Arret, match='1 sens écartés sur 4 pages tentées'):
+        B.check_plan(pl.log, B.counts(pl))
+
+
+def test_too_many_dropped_directions_stop_and_write_nothing(inputs, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(procedure, 'FAF_MAX_NM', 1.0)
+    assert run(inputs, tmp_path / 'o') == 2
+    assert 'plus de 10 %' in capsys.readouterr().err and list((tmp_path / 'o').iterdir()) == []
+
+
+def test_airfield_without_aircraft_page_keeps_its_helicopter_pages(inputs, monkeypatch, tmp_path):
+    monkeypatch.setattr(procedure, 'FAF_MAX_NM', 1.0)                  # les deux sens avion sont ecartes
+    monkeypatch.setattr(B, 'check_plan', lambda crossing, c: None)
+    out = tmp_path / 'o'
+    assert run(inputs, out) == 0
+    d, h = inputs.d, inputs.h
+    with zipfile.ZipFile(out / inputs.af.name) as z:
+        names = z.namelist()
+        assert not any('_11-' in n for n in names)                    # la page ILS de la base est retiree, aucune page avion
+        assert len(PdfReader(io.BytesIO(z.read(f'{d}pdf/LTAN_Konya_charts.pdf'))).pages) == 1 + 2      # 10-9, 11-1H, 11-2H
+    with zipfile.ZipFile(out / inputs.he.name) as z:
+        assert f'{h}svg/LTAN_Konya_11-1H.svg' in z.namelist() and f'{h}svg/LTAN_Konya_11-2H.svg' in z.namelist()
+
+
+def test_unexpected_error_exits_2_with_one_line(inputs, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(B, 'plan_theatre', lambda *a, **k: (_ for _ in ()).throw(RuntimeError('boom\non two lines')))
+    assert run(inputs, tmp_path / 'o') == 2
+    err = capsys.readouterr().err
+    assert err == 'ARRET : RuntimeError : boom on two lines\n'
+
+
+def test_second_rename_failure_leaves_nothing(inputs, monkeypatch, tmp_path):
+    from pathlib import Path as _P
+    real = _P.replace
+    calls = []
+
+    def flaky(self, target):
+        calls.append(target)
+        if len(calls) == 2:
+            raise OSError('disk full')
+        return real(self, target)
+    monkeypatch.setattr(_P, 'replace', flaky)
+    out = tmp_path / 'o'
+    assert run(inputs, out) == 2
+    assert list(out.iterdir()) == []
+
+
+def terrain_with(ends, beacons, ils=()):
+    return B.Terrain('T', '', None, 'T', (0.0, 0.0), 0.0, [], ends, beacons, {n: object() for n in ils}, [])
+
+
+def test_choose_sens_parallel_runways():
+    # 01L et 01R paralleles (300 m), au nord ; la balise est dans l'axe de 01R, 1 km avant son seuil
+    l = B.End('01L', (0.0, -300.0), (3000.0, -300.0), 0.0, 0)
+    r = B.End('01R', (0.0, 0.0), (3000.0, 0.0), 0.0, 1)
+    l19 = B.End('19R', (3000.0, -300.0), (0.0, -300.0), 180.0, 0)
+    r19 = B.End('19L', (3000.0, 0.0), (0.0, 0.0), 180.0, 1)
+    ndb = Balise('NDB', 'N', '400', -1000.0, 0.0)
+    sens = B.choose_sens(terrain_with([l, r, l19, r19], [ndb]))
+    assert [(s.number, s.end.name) for s in sens] == [('01', '01R'), ('19', '19L')]       # seuil le plus proche de la balise
+    sens = B.choose_sens(terrain_with([l, r, l19, r19], [ndb], ils=('01L',)))
+    assert [(s.number, s.end.name) for s in sens] == [('01', '01L'), ('19', '19L')]       # la piste qui a une page ILS d'abord

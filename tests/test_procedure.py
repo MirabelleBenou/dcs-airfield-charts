@@ -231,3 +231,74 @@ def test_crossings_report_the_lowest_altitude_inside_the_polygon():
     out = P.crossings([(0.0, -100.0), (0.0, 100.0)], [poly], lambda c: 1000.0 + c[1])
     assert out == [(0, pytest.approx(975.0))]
     assert P.crossings([(0.0, 100.0), (0.0, 300.0)], [poly], lambda c: 0.0) == []
+
+
+# ---------- addendum 2 : declinaison au seuil, signes, egalites, FAF vers l'exterieur, FAF au-dela de 10 NM ----------
+def hand_mag(a, b, decl):
+    """Cap magnetique de a vers b, calcule a la main : azimut grille (atan2(dz, dx)) - declinaison, arrondi, 0 a 359."""
+    return int(round((math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])) - decl) % 360.0)) % 360
+
+
+def entree_d(ref, ndb=None, decl=3.0, gamma=-4.0, decl_thr=4.0, runways=(RUNWAY,)):
+    return Entree('36', (-1500.0, 0.0), (1500.0, 0.0), 0.0, 50.0, list(runways), 660, 660, decl, gamma, ref, ndb, None, decl_thr)
+
+
+def test_racetrack_bearings_with_declination_and_convergence():
+    vor = Balise('VOR/DME', 'TST', '113.00', -1800.0, 0.0)
+    ndb = Balise('NDB', 'TS', '400', -1500.0, 1000.0)                  # a l'est du seuil
+    p = P.avion(entree_d(vor, ndb), relief(), X0, Z0)
+    assert p.mode == 'racetrack'
+    assert p.crs == 356                                # finale 000 grille, declinaison au seuil 4 E
+    assert p.qdr_out == 176                            # eloignement de l'hippodrome : reciproque de l'axe, declinaison au seuil
+    assert p.qdm_thr == 87                             # NDB plein est du seuil (090 grille), declinaison a la balise 3 E
+    assert p.qdm_faf == hand_mag(p.FAF, ndb.pos, 3.0)
+    assert p.msa == msa.msa_terrain(relief(), X0, Z0, vor.x, vor.z, -4.0, 3.0)      # la convergence ne sert qu'a la MSA
+
+
+def test_base_turn_bearings_and_radials_with_declination():
+    vor = Balise('VOR/DME', 'TST', '113.00', 500.0, 1500.0)            # hors de l'axe (1 500 m), au-dela du seuil
+    p = P.avion(entree_d(vor), relief(), X0, Z0)
+    assert p.mode == 'base' and p.crs == 356
+    assert p.qdr_out == hand_mag(vor.pos, p.T, 3.0)                    # QDR de l'eloignement depuis la balise : declinaison a la balise
+    assert p.rad_thr == hand_mag(vor.pos, (-1500.0, 0.0), 3.0) == 214
+    assert p.rad_faf == hand_mag(vor.pos, p.FAF, 3.0)
+
+
+def test_helico_bearings_with_declination():
+    ndb = Balise('NDB', 'TS', '400', -1500.0, 1000.0)
+    p = P.helico(entree_d(ndb, decl=3.0, gamma=-4.0, decl_thr=4.0), relief(), X0, Z0)
+    assert p.crs == 356 and p.qdm_thr == 87
+    assert p.qdm_faf == hand_mag(p.FAF, ndb.pos, 3.0)
+    assert p.qdr_out == hand_mag(ndb.pos, p.T, 3.0)
+
+
+def test_ties_go_right_for_the_hold_and_the_racetrack():
+    hs, _, d = P._hold_pick((0.0, 0.0), 30.0, 4000.0, 1000.0, [])
+    assert hs == 1 and d[1] == d[-1]
+    vor = Balise('VOR/DME', 'TST', '113.00', -1800.0, 0.0)            # dans l'axe : les deux cotes sont a la meme distance
+    p = P.avion(entree_d(vor, decl=0.0, gamma=0.0, decl_thr=0.0), relief(), X0, Z0)
+    assert p.mode == 'racetrack' and abs(p.dist_sides['RIGHT'] - p.dist_sides['LEFT']) < 1.0
+    assert p.turn == 'RIGHT' and p.hold_turns == 'RIGHT TURNS'
+
+
+def test_faf_is_rounded_outward():
+    ndb = Balise('NDB', 'TS', '400', 1800.0, 900.0)
+    p = P.avion(entree_d(ndb), relief(), X0, Z0)
+    raw = (p.int_ft - 660 - 50) / (P.TAN3 * P.FT * NM)
+    assert p.faf_nm >= raw and p.faf_nm == math.ceil(raw * 10) / 10
+    vor = Balise('VOR/DME', 'TST', '113.00', 1800.0, 400.0)
+    p = P.avion(entree_d(vor), relief(), X0, Z0)
+    raw = (p.int_ft - 660 - 50) / (P.TAN3 * P.FT * NM)
+    assert p.faf_nm >= raw - 1e-9
+    assert math.dist(vor.pos, p.FAF) / NM == pytest.approx(p.faf_dme, abs=1e-6)
+    assert p.faf_dme == math.ceil(math.dist(vor.pos, P.axis_point((-1500.0, 0.0), 0.0, raw)) / NM * 10) / 10
+
+
+def test_faf_beyond_10_nm_drops_the_runway_direction():
+    alt = relief()
+    alt[:, :] = 1400.0                                  # sol haut tout le long de l'axe : intermediaire a 5 600 ft
+    vor = Balise('VOR/DME', 'TST', '113.00', 1800.0, 400.0)
+    with pytest.raises(P.GeometrieImpossible, match=r"^FAF à 1\d\.\d NM du seuil \(relief dans l'axe\), au-delà de 10 NM$"):
+        P.avion(entree_d(vor), alt, X0, Z0)
+    ndb = Balise('NDB', 'TS', '400', 1800.0, 700.0)
+    assert P.helico(entree_d(ndb), alt, X0, Z0).faf_nm == 3.1       # la page helicoptere n'est pas concernee

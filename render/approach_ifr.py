@@ -608,6 +608,15 @@ ALTS = sorted({(dx, dy) for dx in (0, -3, 3, -6, 6, -9, 9, -12, 12, -16, 16, -20
               key=lambda o: (o[0] ** 2 + (2 * o[1]) ** 2, o))          # places de repli d'une etiquette du profil, de la plus proche a la plus loin
 
 
+def table_columns(faf_nm, max_cols=8):
+    """Colonnes du tableau (NM du seuil) : le FAF, puis une colonne par NM entier jusqu'a 1 NM inclus ; au-dela de `max_cols`
+    colonnes, une par 2 NM, en gardant toujours le FAF et 1 NM (addendum 2, 2.5)."""
+    ints = [d for d in range(int(math.floor(faf_nm)), 0, -1) if d < faf_nm - 1e-6]
+    if 1 + len(ints) > max_cols:
+        ints = [d for d in ints if d % 2 == 1]
+    return [faf_nm] + ints
+
+
 def _profile_avion(doc, site, P, frame, log):
     e = P.e
     ref = e.ref
@@ -682,14 +691,14 @@ def _profile_avion(doc, site, P, frame, log):
     # tableau : distance, altitude, DME
     TY = PB + 2.2
     doc.add(R, rect(X0, TY, X1 - X0, 4.6, BAND))
-    cols = ([P.faf_nm] + [d for d in range(int(math.floor(P.faf_nm)), 0, -1) if d < P.faf_nm - 0.3])[:8]
+    cols = table_columns(P.faf_nm)
     doc.add(R, text(8.0, TY + 3.2, 'NM FROM THR', pt(5.4), 'regular', INK2))
     cx0 = 34.0
     cp = (X1 - 6.0 - cx0) / max(1, len(cols) - 1)
     for n_, d in enumerate(cols):
         x = cx0 + n_ * cp
         doc.add(R, text(x, TY + 3.2, f'{d:.1f} FAF' if n_ == 0 else str(int(d)), pt(7.0), 'bold', INK, 'middle'))
-        a_ft = P.int_ft if n_ == 0 else int(round(P.gp_alt(d) / 10.0)) * 10
+        a_ft = P.int_ft if n_ == 0 else int(math.ceil(round(P.gp_alt(d) / 10.0, 9))) * 10      # a la dizaine superieure
         doc.add(R, text(x, TY + 8.8, str(a_ft), pt(7.2), 'regular', INK, 'middle'))
         if ref.dme:
             doc.add(R, text(x, TY + 13.8, f'{P.dme(procedure.axis_point(e.thr, e.az, d)):.1f}', pt(7.2), 'regular', INK, 'middle'))

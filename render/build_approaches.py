@@ -364,6 +364,7 @@ class Terrain:
     ils: dict                     # sens -> IlsPage (pages ILS de la base)
     ils_names: list               # noms des pages 11-x de la base
     sens: list = field(default_factory=list)
+    table: dict = field(default_factory=dict)       # nom d'extremite -> MAG HDG du tableau de la 10-9
 
     @property
     def case_a(self):
@@ -420,7 +421,7 @@ def read_terrain(z, stem, folder, pages, terrain_dcs, proj, beacons, year):
             p = read_ils_page(z.read(name).decode('utf-8'), f'{stem}_{suffix}')
             ils[p.sens] = p
             ils_names.append(f'{stem}_{suffix}')
-    return Terrain(stem, folder, hd, ap.name, pos, gap, rws, ends, near, ils, ils_names)
+    return Terrain(stem, folder, hd, ap.name, pos, gap, rws, ends, near, ils, ils_names, table=dict(read_table(svg)))
 
 
 def choose_sens(t):
@@ -453,10 +454,14 @@ def thr_ft_of(t, e, alt, x0, z0):
 
 
 def entree(t, e, ref, ndb, ils, proj, alt, x0, z0, year):
+    """L'entree de `procedure` : declinaison et convergence a la balise (radiales, QDM, MSA), declinaison au seuil (CRS de
+    finale, interrompue, eloignement de l'hippodrome) : 4.2.4, « au point dont on parle »."""
     lat, lon = proj.to_latlon(*ref.pos)
+    tlat, tlon = proj.to_latlon(*e.pos)
     return Entree(e.name, e.pos, e.other, e.az, t.runways[e.rw].width, [r.corners for r in t.runways], thr_ft_of(t, e, alt, x0, z0),
                   t.header.elev_ft, geo.declination(lat, lon, year), proj.convergence(*ref.pos), ref, ndb,
-                  {'s_gs': ils.s_gs, 'tch': ils.tch, 'loc': ils.loc} if ils is not None else None)
+                  {'s_gs': ils.s_gs, 'tch': ils.tch, 'loc': ils.loc} if ils is not None else None,
+                  geo.declination(tlat, tlon, year))
 
 
 def _alts(P):
@@ -506,7 +511,7 @@ def plan_theatre(theatre, zip_af, beacons_path, alt, x0, z0, year=1985.0, log=pr
                     s.index = f'11-{n_a}'
                 except GeometrieImpossible as err:
                     s.ecart = str(err)
-                    log(f'approche {stem} {e.name} : sens écarté, {err}')
+                    log(f'approche {stem} {e.name} : écartée, {err}')
                 except (ValueError, msa_error()) as err:
                     raise Arret(f'{stem} {e.name} : relief : {err}') from None
                 ndbs = [b for b in t.beacons if b.kind == 'NDB']
@@ -520,7 +525,7 @@ def plan_theatre(theatre, zip_af, beacons_path, alt, x0, z0, year=1985.0, log=pr
                     s.index_h = f'11-{n_h}H'
                 except GeometrieImpossible as err:
                     s.ecart_h = str(err)
-                    log(f'approche {stem} {e.name} (hélicoptère) : sens écarté, {err}')
+                    log(f'approche {stem} {e.name} (hélicoptère) : écartée, {err}')
                 except (ValueError, msa_error()) as err:
                     raise Arret(f'{stem} {e.name} : relief : {err}') from None
             for s in t.sens:
@@ -528,26 +533,36 @@ def plan_theatre(theatre, zip_af, beacons_path, alt, x0, z0, year=1985.0, log=pr
                     if P is None:
                         continue
                     log(journal_line(t, idx, P))
-                    for n, d in P.strict_parts.items():
-                        if d <= 0:
-                            crossing.append(f'{stem} {idx} {P.e.sens} ({n} qui coupe une piste)')
-                    for n, _, h in P.traversals:
-                        if h < procedure.TRAVERSAL_MIN_FT:
-                            crossing.append(f'{stem} {idx} {P.e.sens} ({n} a {h:.0f} ft au-dessus de l\'AD ELEV)')
+                    crossing.extend(runway_problems(stem, idx, P))
     for k in kept:
         log(f'page ILS gardée : {k}')
     pl = Plan(canon, terrains, kept, crossing)
     c = counts(pl)
     log(f'théâtre {canon} : {c["charted"]} terrains chartés, {c["case_a"]} du cas A, {c["pages_a"]} pages avion, '
-        f'{c["terrains_h"]} terrains et {c["pages_h"]} pages hélicoptère, {c["ecarts"]} sens écartés (avion) et {c["ecarts_h"]} '
-        f'(hélicoptère) sur {c["sens"]}, {c["ils_removed"]} pages ILS retirées, {c["ils_kept"]} gardées')
-    if not check:
-        return pl
+        f'{c["terrains_h"]} terrains et {c["pages_h"]} pages hélicoptère, {c["ecarts"]} sens écartés (avion) sur {c["sens"]} et '
+        f'{c["ecarts_h"]} (hélicoptère) sur {c["tried_h"]}, {c["ils_removed"]} pages ILS retirées, {c["ils_kept"]} gardées')
+    if check:
+        check_plan(crossing, c)
+    return pl
+
+
+def runway_problems(stem, idx, P):
+    """Addendum 1 : les cas d'arret d'une page : un segment strict (virage de base, virages de l'hippodrome, intermediaire) qui
+    coupe une piste, une traversee a moins de AD ELEV + 1 000 ft."""
+    out = [f'{stem} {idx} {P.e.sens} ({n} qui coupe une piste)' for n, d in P.strict_parts.items() if d <= 0]
+    out += [f'{stem} {idx} {P.e.sens} ({n} a {h:.0f} ft au-dessus de l\'AD ELEV)' for n, _, h in P.traversals
+            if h < procedure.TRAVERSAL_MIN_FT]
+    return out
+
+
+def check_plan(crossing, c):
+    """Arrets du theatre : une traversee hors de l'addendum 1 ; plus de 10 % de sens ecartes, les deux familles comptees
+    (addendum 2, 2.1 : ecartes avion + helicoptere sur les pages tentees)."""
     if crossing:
         raise Arret(f'traversée de piste hors de l\'addendum 1 : {"; ".join(crossing)}')
-    if c['sens'] and c['ecarts'] > 0.10 * c['sens']:
-        raise Arret(f'{c["ecarts"]} sens écartés sur {c["sens"]} (plus de 10 %)')
-    return pl
+    tried = c['sens'] + c['tried_h']
+    if tried and c['ecarts'] + c['ecarts_h'] > 0.10 * tried:
+        raise Arret(f'{c["ecarts"] + c["ecarts_h"]} sens écartés sur {tried} pages tentées (plus de 10 %)')
 
 
 def msa_error():
@@ -562,6 +577,7 @@ def counts(pl):
             'terrains_h': sum(1 for t in ta if any(s.helico is not None for s in t.sens)),
             'pages_h': sum(1 for s in sens if s.helico is not None), 'sens': len(sens),
             'ecarts': sum(1 for s in sens if s.ecart), 'ecarts_h': sum(1 for s in sens if s.ecart_h),
+            'tried_h': sum(1 for s in sens if s.helico is not None or s.ecart_h),
             'ils_removed': sum(len(t.ils_names) for t in ta), 'ils_kept': len(pl.kept_ils)}
 
 
@@ -753,8 +769,15 @@ def write_zips(pl, zip_af, zip_he, rendered, recueils, out_dir):
                         if n in names:
                             raise Arret(f'{n} existe deja dans le zip helicopters')
                         _write_file(zout, _zinfo(n, like[t.stem]), p)
-        for tmp, dst in zip(temps, targets):
-            tmp.replace(dst)
+        done = []
+        try:
+            for tmp, dst in zip(temps, targets):
+                tmp.replace(dst)
+                done.append(dst)
+        except BaseException:
+            for p in done:                         # les deux zips ensemble, ou rien
+                p.unlink(missing_ok=True)
+            raise
     except BaseException:
         for p in temps:
             p.unlink(missing_ok=True)
@@ -828,8 +851,11 @@ def main(argv=None):
         return 1
     try:
         run(a)
-    except (Arret, dcsdata.DataError, zipfile.BadZipFile, OSError) as e:
+    except Arret as e:
         print(f'ARRET : {e}', file=sys.stderr)
+        return 2
+    except Exception as e:                         # addendum 2, 2.6 : toute autre erreur, une ligne, code 2
+        print(f'ARRET : {type(e).__name__} : {" ".join(str(e).split())}', file=sys.stderr)
         return 2
     return 0
 
