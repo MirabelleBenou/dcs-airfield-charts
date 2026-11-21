@@ -1,0 +1,2143 @@
+{
+ "theatre": "Syria",
+ "sources": {
+  "konya_10-8": {
+   "zip": "airfields",
+   "file": "svg/LTAN_Konya_10-8.svg"
+  },
+  "konya_10-9": {
+   "zip": "airfields",
+   "file": "svg/LTAN_Konya_10-9.svg"
+  },
+  "konya_10-9A": {
+   "zip": "airfields",
+   "file": "svg/LTAN_Konya_10-9A.svg"
+  },
+  "konya_11-1": {
+   "zip": "airfields",
+   "file": "svg/LTAN_Konya_11-1.svg"
+  },
+  "konya_11-1H": {
+   "zip": "helicopters",
+   "file": "svg/LTAN_Konya_11-1H.svg"
+  },
+  "naqoura_10-9": {
+   "zip": "helicopters",
+   "file": "svg/Naqoura_10-9.svg"
+  },
+  "directory_p11": {
+   "zip": "helicopters",
+   "file": "heliports/Syria_heliports_directory_p11.jpg",
+   "size": [
+    1748,
+    2480
+   ]
+  }
+ },
+ "pages": [
+  {
+   "id": "cover",
+   "kind": "cover",
+   "title": "DCS Airfield Charts — Reading guide",
+   "subtitle": "How to read the charts, and how to use them in flight with your aircraft",
+   "line": "For the charts of release <TAG> (Syria and Cold War Germany). For DCS World only — not for real-world navigation.",
+   "background": "konya_10-9",
+   "background_opacity": 0.12
+  },
+  {
+   "id": "contents",
+   "kind": "contents",
+   "title": "Contents",
+   "groups": [
+    {
+     "heading": "Part 1 — Reading the charts",
+     "entries": [
+      {
+       "num": "1",
+       "name": "About these charts",
+       "ref": "ch1"
+      },
+      {
+       "num": "2",
+       "name": "The pages of an airfield",
+       "ref": "ch2"
+      },
+      {
+       "num": "3",
+       "name": "Vicinity 10-8",
+       "ref": "ch3"
+      },
+      {
+       "num": "4",
+       "name": "Airfield 10-9",
+       "ref": "ch4"
+      },
+      {
+       "num": "5",
+       "name": "Parking 10-9A",
+       "ref": "ch5"
+      },
+      {
+       "num": "6",
+       "name": "Helicopter bases and heliports",
+       "ref": "ch6a"
+      },
+      {
+       "num": "7",
+       "name": "Instrument approach 11-x",
+       "ref": "ch7"
+      },
+      {
+       "num": "8",
+       "name": "Helicopter approach 11-xH",
+       "ref": "ch8"
+      },
+      {
+       "num": "9",
+       "name": "MSA",
+       "ref": "ch9"
+      }
+     ]
+    },
+    {
+     "heading": "Part 2 — Flying with the charts",
+     "entries": [
+      {
+       "num": "10",
+       "name": "A flight with the charts",
+       "ref": "ch10"
+      },
+      {
+       "num": "11",
+       "name": "Your aircraft (overview, then one page per aircraft)",
+       "ref": "ch11-0"
+      }
+     ]
+    },
+    {
+     "heading": "Appendices",
+     "entries": [
+      {
+       "num": "A",
+       "name": "Abbreviations",
+       "ref": "annexA"
+      },
+      {
+       "num": "B",
+       "name": "Limits and credits",
+       "ref": "annexB"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch1",
+   "kind": "text",
+   "part": 1,
+   "num": "1",
+   "title": "About these charts",
+   "paragraphs": [
+    "**Built from DCS, for DCS.** Every chart is drawn from the game itself: the pavement, buildings and parking stands from the F10 map, the runways, beacons and frequencies from the DCS World files, the ground from the terrain read in DCS. Taxiway names come from OpenStreetMap, or from the signs read in DCS. Where DCS and the real world disagree, the chart follows DCS: what you see on the chart is what you will find in the game.",
+    "**Two norths.** The top of every page is the north of the DCS map grid — the north of the F10 map. Every heading, bearing and radial printed on a chart is **magnetic**, computed for the year 1985. The magnetic variation is printed on each page (VAR 3°E at Konya): magnetic heading = grid heading − variation when it is east.",
+    "**Units.** Altitudes and elevations in feet; distances in nautical miles (NM); runway lengths in feet and metres. Helicopter pages add metres and kilometres, and heights above the airfield (QFE) in metres, for aircraft whose instruments are metric.",
+    "**What is not on the charts.** Minima (DCS publishes none), obstacles, real procedures. The approaches are standard patterns laid on the DCS beacons and the DCS terrain: plausible, not official.",
+    "**Where to get them.** One PDF per airfield in the repository (`downloads/`), and two zips per theatre attached to the latest release: every page as PDF, as PNG sized for the DCS kneeboard, and as SVG.",
+    "**On the kneeboard.** Copy the PNG pages of the airfields you need into `Saved Games\\DCS\\Kneeboard\\` (pages for every aircraft) or into a subfolder of it named after one aircraft (pages for that aircraft only); older installations use `Saved Games\\DCS.openbeta\\`. The subfolder takes the module's name inside DCS, which is not always its commercial name. You can also attach the pages to the mission in the Mission Editor. Name them so they sort in the order you want (`01_…`, `02_…`)."
+   ],
+   "cited": [
+    {
+     "block": "ch1, Two norths",
+     "page": "konya_10-9",
+     "strings": [
+      "VAR 3°E"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch2",
+   "kind": "strip",
+   "part": 1,
+   "num": "2",
+   "title": "The pages of an airfield",
+   "thumbs": [
+    {
+     "source": "konya_10-8",
+     "code": "10-8",
+     "name": "Vicinity",
+     "line": "The airfield in its surroundings, on the F10 map: to find it and recognise it."
+    },
+    {
+     "source": "konya_10-9",
+     "code": "10-9",
+     "name": "Airfield",
+     "line": "The airfield itself: runways, taxiways, frequencies, beacons."
+    },
+    {
+     "source": "konya_10-9A",
+     "code": "10-9A, 10-9B",
+     "name": "Parking",
+     "line": "Every parking stand with its DCS number, when the 10-9 has no room for them."
+    },
+    {
+     "source": "konya_11-1",
+     "code": "11-1, 11-2…",
+     "name": "Approach",
+     "line": "An instrument approach for aircraft, one runway direction per page."
+    },
+    {
+     "source": "konya_11-1H",
+     "code": "11-1H, 11-2H…",
+     "name": "Approach",
+     "line": "The same for helicopters: NDB only, one altitude, metric heights."
+    }
+   ],
+   "text": "Not every airfield has every page. An airfield without its own beacon within 3 NM has no approach page. A helicopter base has a 10-8 and a 10-9; the other heliports are in the heliport directory (chapter 6). The PDF of an airfield holds all its pages in this order."
+  },
+  {
+   "id": "ch3",
+   "kind": "anatomy",
+   "part": 1,
+   "num": "3",
+   "title": "Vicinity — 10-8 (Konya)",
+   "source": "konya_10-8",
+   "pins": [
+    {
+     "n": 1,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "KONYA",
+      "nudge": [
+       -14.0,
+       -1.7
+      ]
+     },
+     "badge": [
+      -9,
+      -3
+     ],
+     "title": "Same header as the 10-9",
+     "text": "Elevation, position, variation, tower and navaids are repeated, so this page can be used alone."
+    },
+    {
+     "n": 2,
+     "target": {
+      "kind": "point",
+      "layer": "F10 map",
+      "at": [
+       24.0,
+       120.0
+      ]
+     },
+     "badge": [
+      -6,
+      0
+     ],
+     "title": "The F10 map, lightened",
+     "text": "Exactly what you see on the F10 map in the game, so you can match the two."
+    },
+    {
+     "n": 3,
+     "target": {
+      "kind": "text",
+      "layer": "Runway bearings",
+      "text": "197.4°",
+      "occurrence": 1,
+      "nudge": [
+       0.0,
+       -1.3
+      ]
+     },
+     "badge": [
+      6,
+      -4
+     ],
+     "title": "Runways",
+     "text": "Each with its magnetic heading, at the threshold where you land."
+    },
+    {
+     "n": 4,
+     "target": {
+      "kind": "point",
+      "layer": "Navaids",
+      "at": [
+       81.04,
+       62.44
+      ]
+     },
+     "badge": [
+      -5,
+      -5
+     ],
+     "title": "Beacons",
+     "text": "At their real place, with ident and frequency or channel."
+    },
+    {
+     "n": 5,
+     "target": {
+      "kind": "text",
+      "layer": "Towns",
+      "text": "KARATAY CITY PARK 11 km",
+      "nudge": [
+       0.1,
+       1.4
+      ]
+     },
+     "badge": [
+      8,
+      -8
+     ],
+     "title": "Towns within 20 km",
+     "text": "Off the page: a triangle at the edge, in the direction of the town, with its distance from the airfield."
+    },
+    {
+     "n": 6,
+     "target": {
+      "kind": "point",
+      "layer": "Frame & grid",
+      "at": [
+       11.9,
+       93.6
+      ]
+     },
+     "badge": [
+      -4.4,
+      0
+     ],
+     "title": "Latitude and longitude",
+     "text": "One tick per minute."
+    },
+    {
+     "n": 7,
+     "target": {
+      "kind": "point",
+      "layer": "Frame & grid",
+      "at": [
+       91.04,
+       165.6
+      ]
+     },
+     "badge": [
+      -5,
+      0
+     ],
+     "title": "Scale",
+     "text": "In feet and metres; the 10-8 covers a few kilometres around the airfield."
+    },
+    {
+     "n": 8,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "LENGTH × WIDTH",
+      "nudge": [
+       -1.2,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Runway table",
+     "text": "As on the 10-9."
+    }
+   ],
+   "use": [
+    "On arrival, the 10-8 tells you what the airfield looks like from the air: the town on one side, the motorway on the other, the shape of the runways.",
+    "With the F10 map open, the page and the map match: use them together to plan your join.",
+    "The towns at the edge give you a line feature to fly to before you see the runway."
+   ],
+   "cited": [
+    {
+     "block": "ch3, pin 5",
+     "page": "konya_10-8",
+     "strings": [
+      "KARATAY CITY PARK 11 km"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch4",
+   "kind": "anatomy",
+   "part": 1,
+   "num": "4",
+   "title": "Airfield — 10-9 (Konya)",
+   "source": "konya_10-9",
+   "zoom": {
+    "region": [
+     0,
+     4,
+     148,
+     36
+    ],
+    "frame": [
+     1.25,
+     4,
+     146.75,
+     36
+    ],
+    "scale": 1.1,
+    "caption": "THE HEADER, ENLARGED",
+    "frame_label": "1–7 · ENLARGED BELOW"
+   },
+   "pins": [
+    {
+     "n": 1,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "LTAN",
+      "nudge": [
+       -1.0,
+       -1.4
+      ]
+     },
+     "badge": [
+      -4.0,
+      0.0
+     ],
+     "title": "Airfield",
+     "text": "ICAO code (when it has one), DCS theatre, name and type of page.",
+     "on": "zoom"
+    },
+    {
+     "n": 2,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "10-9",
+      "nudge": [
+       1.2,
+       -1.4
+      ]
+     },
+     "badge": [
+      4.0,
+      0.0
+     ],
+     "title": "Page number",
+     "text": "10-9 is the airfield chart; v1 is the layout of the page.",
+     "on": "zoom"
+    },
+    {
+     "n": 3,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "ELEV 3407 FT",
+      "nudge": [
+       -1.0,
+       -1.0
+      ]
+     },
+     "badge": [
+      -4.0,
+      0.0
+     ],
+     "title": "Elevation",
+     "text": "Of the airfield, in feet, as DCS gives it.",
+     "on": "zoom"
+    },
+    {
+     "n": 4,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "ARP N37°58.7' E032°33.7'",
+      "nudge": [
+       -0.78,
+       -1.0
+      ]
+     },
+     "badge": [
+      0.0,
+      -4.4
+     ],
+     "title": "Position",
+     "text": "The airfield reference point three ways: decimal minutes, degrees-minutes-seconds and MGRS to 10 m. Pick the one your navigation system takes.",
+     "on": "zoom"
+    },
+    {
+     "n": 5,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "VAR 3°E (1985)",
+      "nudge": [
+       14.65,
+       -1.0
+      ]
+     },
+     "badge": [
+      4.0,
+      0.0
+     ],
+     "title": "Magnetic variation",
+     "text": "For 1985. Every heading on the chart is magnetic.",
+     "on": "zoom"
+    },
+    {
+     "n": 6,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "KONYA TOWER",
+      "nudge": [
+       -2.5,
+       -1.0
+      ]
+     },
+     "badge": [
+      -4.0,
+      0.0
+     ],
+     "title": "Tower",
+     "text": "Its frequencies on every band DCS gives: VHF, UHF, FM, HF.",
+     "on": "zoom"
+    },
+    {
+     "n": 7,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "NAVAIDS",
+      "nudge": [
+       -2.5,
+       -1.0
+      ]
+     },
+     "badge": [
+      -4.0,
+      0.0
+     ],
+     "title": "Navaids",
+     "text": "The beacons of the airfield: type, ident, frequency or channel. Part 2 tells which ones your aircraft can use.",
+     "on": "zoom"
+    },
+    {
+     "n": 8,
+     "target": {
+      "kind": "point",
+      "layer": "Navaids",
+      "at": [
+       61.5,
+       44.2
+      ]
+     },
+     "badge": [
+      -3.6,
+      2.8
+     ],
+     "title": "Beacons on the plan",
+     "text": "Each at its real place: NDB (dotted circle), VOR/DME (hexagon), TACAN."
+    },
+    {
+     "n": 9,
+     "target": {
+      "kind": "text",
+      "layer": "Runway bearings",
+      "text": "197.4°",
+      "occurrence": 1,
+      "nudge": [
+       -0.15,
+       -2.43
+      ]
+     },
+     "badge": [
+      6.0,
+      -3.6
+     ],
+     "title": "Runway heading",
+     "text": "Magnetic, beside the threshold where you land in that direction."
+    },
+    {
+     "n": 10,
+     "target": {
+      "kind": "text",
+      "layer": "Taxiway labels",
+      "text": "B",
+      "nudge": [
+       1.88,
+       -0.29
+      ]
+     },
+     "badge": [
+      5.0,
+      0.0
+     ],
+     "title": "Taxiway names",
+     "text": "Real names, from OpenStreetMap or read on the signs in DCS. No name: none found."
+    },
+    {
+     "n": 11,
+     "target": {
+      "kind": "point",
+      "layer": "Parking",
+      "at": [
+       117.2,
+       80.0
+      ]
+     },
+     "badge": [
+      5.6,
+      -2.0
+     ],
+     "title": "Parking stands",
+     "text": "Every stand at its place. Their DCS numbers are on the parking pages 10-9A, 10-9B."
+    },
+    {
+     "n": 12,
+     "target": {
+      "kind": "point",
+      "layer": "Frame & grid",
+      "at": [
+       12.0,
+       87.6
+      ]
+     },
+     "badge": [
+      -4.4,
+      0.0
+     ],
+     "title": "Latitude and longitude",
+     "text": "One tick per minute: 37-59 is 37°59' N, 032-34 is 32°34' E."
+    },
+    {
+     "n": 13,
+     "target": {
+      "kind": "point",
+      "layer": "Frame & grid",
+      "at": [
+       21.0,
+       150.5
+      ]
+     },
+     "badge": [
+      -4.4,
+      0.0
+     ],
+     "title": "North",
+     "text": "The top of the page is the DCS map grid north; the arrow shows magnetic north."
+    },
+    {
+     "n": 14,
+     "target": {
+      "kind": "point",
+      "layer": "Frame & grid",
+      "at": [
+       92.6,
+       166.3
+      ]
+     },
+     "badge": [
+      -4.6,
+      0.0
+     ],
+     "title": "Scale",
+     "text": "In feet above, in metres below."
+    },
+    {
+     "n": 15,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "RWY",
+      "nudge": [
+       -1.0,
+       -0.82
+      ]
+     },
+     "badge": [
+      -4.0,
+      0.0
+     ],
+     "title": "Runway table",
+     "text": "Each runway direction: magnetic heading, length and width, threshold elevation, ILS ident and frequency."
+    },
+    {
+     "n": 16,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "PARKING: 152 (48 SHELTERED)",
+      "nudge": [
+       1.2,
+       -0.82
+      ]
+     },
+     "badge": [
+      4.0,
+      0.0
+     ],
+     "title": "Parking and legend",
+     "text": "How many stands, how many in shelters; the three symbols below."
+    },
+    {
+     "n": 17,
+     "target": {
+      "kind": "text",
+      "layer": "Footer",
+      "text": "NOT FOR REAL-WORLD NAVIGATION",
+      "nudge": [
+       1.2,
+       -0.8
+      ]
+     },
+     "badge": [
+      4.0,
+      0.0
+     ],
+     "title": "Sources",
+     "text": "Where the data comes from. These charts are for DCS only."
+    }
+   ],
+   "use": [
+    "Before the flight, copy the tower frequency and the beacons your aircraft can use (6, 7) into your radio presets.",
+    "Find your stand on the 10-9A with the number the mission gives, then plan your taxi with the taxiway names (10).",
+    "For the runway in use, the table (15) gives its heading, its length and the elevation of its threshold: your altimeter minus that elevation is your height above the runway.",
+    "Your navigation system wants coordinates? Take the airfield position (4) in the format it uses."
+   ],
+   "cited": [
+    {
+     "block": "ch4, header and pins",
+     "page": "konya_10-9",
+     "strings": [
+      "KNY 390",
+      "KNY 111.20",
+      "IKNY 108.90",
+      "KON 88X",
+      "VAR 3°E",
+      "132.400",
+      "37-59",
+      "032-34"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch5",
+   "kind": "anatomy",
+   "part": 1,
+   "num": "5",
+   "title": "Parking — 10-9A (Konya)",
+   "source": "konya_10-9A",
+   "pins": [
+    {
+     "n": 1,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "10-9A",
+      "nudge": [
+       1.2,
+       -1.0
+      ]
+     },
+     "badge": [
+      4,
+      0
+     ],
+     "title": "Parking page",
+     "text": "When the 10-9 has no room for the stand numbers, they are here, on one or more pages (10-9A, 10-9B…)."
+    },
+    {
+     "n": 2,
+     "target": {
+      "kind": "text",
+      "layer": "Insets",
+      "text": "P2 · 87–124",
+      "nudge": [
+       -1.2,
+       -1.0
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Insets",
+     "text": "Each frame enlarges one area; its title gives the stands it holds (here 87 to 124)."
+    },
+    {
+     "n": 3,
+     "target": {
+      "kind": "text",
+      "layer": "Insets",
+      "text": "1:9329",
+      "nudge": [
+       1.2,
+       -1.0
+      ]
+     },
+     "badge": [
+      4,
+      0
+     ],
+     "title": "Scale of the inset",
+     "text": "Insets have different scales; compare distances only inside one frame."
+    },
+    {
+     "n": 4,
+     "target": {
+      "kind": "text",
+      "layer": "Insets",
+      "text": "110",
+      "nudge": [
+       -0.2,
+       -0.6
+      ]
+     },
+     "badge": [
+      -5,
+      3
+     ],
+     "title": "Stand number",
+     "text": "The number DCS gives the stand, the one the Mission Editor and the mission briefing use."
+    },
+    {
+     "n": 5,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "OPEN",
+      "nudge": [
+       -2.4,
+       -0.9
+      ]
+     },
+     "badge": [
+      -3,
+      -6
+     ],
+     "title": "Stand type",
+     "text": "Open, shelter (hardened aircraft shelter or hangar), helicopter only."
+    },
+    {
+     "n": 6,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "PARKING NUMBERS AS IN DCS",
+      "nudge": [
+       1.2,
+       -0.9
+      ]
+     },
+     "badge": [
+      4,
+      -5
+     ],
+     "title": "Numbers as in DCS",
+     "text": "Including the numbers DCS repeats at some bases."
+    }
+   ],
+   "use": [
+    "Your mission gives you a stand number: find its inset by the ranges in the inset titles, then the stand.",
+    "From the stand, follow the pavement to the taxiway names of the 10-9."
+   ],
+   "cited": [
+    {
+     "block": "ch5, pins 2 and 3",
+     "page": "konya_10-9A",
+     "strings": [
+      "87–124",
+      "1:9329"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch6a",
+   "kind": "anatomy",
+   "part": 1,
+   "num": "6",
+   "title": "A helicopter base — 10-9 (Naqoura)",
+   "refs": [
+    "ch6a"
+   ],
+   "source": "naqoura_10-9",
+   "pins": [
+    {
+     "n": 1,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "HELICOPTER BASE",
+      "nudge": [
+       13.5,
+       -1.0
+      ]
+     },
+     "badge": [
+      6,
+      2.5
+     ],
+     "title": "Helicopter base",
+     "text": "A base without a runway is drawn on the softened F10 map."
+    },
+    {
+     "n": 2,
+     "target": {
+      "kind": "point",
+      "layer": "Parking",
+      "at": [
+       100.59,
+       86.85
+      ]
+     },
+     "badge": [
+      -6,
+      -6
+     ],
+     "title": "Pad",
+     "text": "Each pad circled in red at its real size, with its DCS number."
+    },
+    {
+     "n": 3,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "NAQOURA",
+      "nudge": [
+       -14.0,
+       -1.7
+      ]
+     },
+     "badge": [
+      -8,
+      -3
+     ],
+     "title": "Header",
+     "text": "As on any 10-9."
+    }
+   ],
+   "use": [
+    "Pick your pad by its number, as the mission gives it; the F10 background lets you recognise the place from the air."
+   ]
+  },
+  {
+   "id": "ch6b",
+   "kind": "anatomy",
+   "part": 1,
+   "num": "6",
+   "title": "The heliport directory (Syria, page 11)",
+   "refs": [
+    "ch6b"
+   ],
+   "source": "directory_p11",
+   "pins": [
+    {
+     "n": 1,
+     "target": {
+      "kind": "image",
+      "at": [
+       18.5,
+       25.0
+      ]
+     },
+     "badge": [
+      7,
+      0
+     ],
+     "title": "Heliport",
+     "text": "Its DCS name; the number of pads on the right."
+    },
+    {
+     "n": 2,
+     "target": {
+      "kind": "image",
+      "at": [
+       33.4,
+       58.4
+      ]
+     },
+     "badge": [
+      -6,
+      6
+     ],
+     "title": "Pads",
+     "text": "Circled in red, with their DCS numbers."
+    },
+    {
+     "n": 3,
+     "target": {
+      "kind": "image",
+      "at": [
+       23.1,
+       87.6
+      ]
+     },
+     "badge": [
+      0,
+      -7
+     ],
+     "title": "Same scale everywhere",
+     "text": "Every plan of the directory is at the same scale: sizes compare from one heliport to the next."
+    },
+    {
+     "n": 4,
+     "target": {
+      "kind": "image",
+      "at": [
+       35.5,
+       94.4
+      ]
+     },
+     "badge": [
+      6,
+      -0.5
+     ],
+     "title": "Position",
+     "text": "Latitude and longitude of the heliport."
+    },
+    {
+     "n": 5,
+     "target": {
+      "kind": "image",
+      "at": [
+       30.5,
+       98.9
+      ]
+     },
+     "badge": [
+      6,
+      1.0
+     ],
+     "title": "Nearest town",
+     "text": "Distance and direction from a town you can find on the map."
+    },
+    {
+     "n": 6,
+     "target": {
+      "kind": "image",
+      "at": [
+       122.8,
+       96.5
+      ]
+     },
+     "badge": [
+      -6,
+      0
+     ],
+     "title": "Elevation and pad size"
+    },
+    {
+     "n": 7,
+     "target": {
+      "kind": "image",
+      "at": [
+       89.3,
+       183.2
+      ]
+     },
+     "badge": [
+      6,
+      0
+     ],
+     "title": "Split heliport",
+     "text": "When pads are far apart, two frames, with the distance between them."
+    }
+   ],
+   "use": [
+    "The directory has an index at the end, by name. Enter the position in your navigation system, or fly to the town given and look for the pads in the direction given."
+   ]
+  },
+  {
+   "id": "ch7",
+   "kind": "anatomy",
+   "part": 1,
+   "num": "7",
+   "title": "Instrument approach — 11-x (Konya 11-1, RWY 01L)",
+   "source": "konya_11-1",
+   "zoom": {
+    "region": [
+     4,
+     125.5,
+     144,
+     184.5
+    ],
+    "frame": [
+     6,
+     127,
+     142,
+     183
+    ],
+    "scale": 1.3,
+    "page": "next",
+    "frame_label_pos": "inside",
+    "caption": "THE PROFILE AND THE DESCENT TABLE, ENLARGED",
+    "frame_label": "11–12 · ENLARGED OVERLEAF"
+   },
+   "pins": [
+    {
+     "n": 1,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "ILS OR VOR/DME OR NDB RWY 01L",
+      "nudge": [
+       -26.0,
+       -1.2
+      ]
+     },
+     "badge": [
+      -5,
+      -2.5
+     ],
+     "title": "Approach name",
+     "text": "The beacons the approach can be flown with, and the runway."
+    },
+    {
+     "n": 2,
+     "target": {
+      "kind": "text",
+      "layer": "Frame & grid",
+      "text": "ILS, VOR/DME OR ADF REQUIRED",
+      "nudge": [
+       0.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -5,
+      -2.5
+     ],
+     "title": "Equipment required",
+     "text": "What your aircraft must have. No match, no approach: see Part 2."
+    },
+    {
+     "n": 3,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "RWY 01L",
+      "nudge": [
+       -1.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Runway band",
+     "text": "Localizer, the beacons, final course and threshold elevation."
+    },
+    {
+     "n": 4,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "FIXES",
+      "nudge": [
+       -1.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Fixes",
+     "text": "Final approach fix (FAF) and missed approach point (MAPt), for each way of flying it: DME distance, or NDB bearing and timing."
+    },
+    {
+     "n": 5,
+     "target": {
+      "kind": "text",
+      "layer": "Runway bearings",
+      "text": "HOLD 7200",
+      "nudge": [
+       1.0,
+       -1.0
+      ]
+     },
+     "badge": [
+      5,
+      -3
+     ],
+     "title": "Holding",
+     "text": "Its altitude, inbound course and turn direction; one minute legs, max speed."
+    },
+    {
+     "n": 6,
+     "target": {
+      "kind": "text",
+      "layer": "Runway bearings",
+      "text": "R-210",
+      "nudge": [
+       -10.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      -1.5
+     ],
+     "title": "Outbound and base turn",
+     "text": "The outbound radial, its limit (DME) or its time by speed category, then the turn onto final."
+    },
+    {
+     "n": 7,
+     "target": {
+      "kind": "text",
+      "layer": "Runway bearings",
+      "text": "FAF D5.6",
+      "nudge": [
+       -0.6,
+       -0.8
+      ]
+     },
+     "badge": [
+      -7,
+      -4
+     ],
+     "title": "Final",
+     "text": "On the runway axis, from the FAF down to the threshold."
+    },
+    {
+     "n": 8,
+     "target": {
+      "kind": "point",
+      "layer": "Runway bearings",
+      "at": [
+       80.21,
+       77.13
+      ]
+     },
+     "badge": [
+      -6,
+      0
+     ],
+     "title": "Missed approach",
+     "text": "Dashed, back to the hold."
+    },
+    {
+     "n": 9,
+     "target": {
+      "kind": "text",
+      "layer": "Towns",
+      "text": "6400",
+      "nudge": [
+       -1.0,
+       -0.4
+      ]
+     },
+     "badge": [
+      -3,
+      4
+     ],
+     "title": "Terrain",
+     "text": "The relief read in DCS, with the highest points named."
+    },
+    {
+     "n": 10,
+     "target": {
+      "kind": "text",
+      "layer": "Insets",
+      "text": "MSA 25 NM KNY",
+      "nudge": [
+       -13.5,
+       -0.6
+      ]
+     },
+     "badge": [
+      -5,
+      -3
+     ],
+     "title": "Minimum sector altitude",
+     "text": "See chapter 9."
+    },
+    {
+     "n": 11,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "PROFILE",
+      "nudge": [
+       -1.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Profile",
+     "text": "The same approach seen from the side: altitudes at each fix.",
+     "on": "zoom"
+    },
+    {
+     "n": 12,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "NM FROM THR",
+      "nudge": [
+       -1.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Descent table",
+     "text": "Distance from the threshold, altitude, and DME reading at each mile.",
+     "on": "zoom"
+    },
+    {
+     "n": 13,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "MISSED APPROACH",
+      "nudge": [
+       -1.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Missed approach in words"
+    },
+    {
+     "n": 14,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "NO MINIMA — NOT PUBLISHED BY DCS",
+      "nudge": [
+       -17.0,
+       0.0
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "No minima",
+     "text": "DCS publishes none: decide your own."
+    },
+    {
+     "n": 15,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "Not a real approach chart: DCS gives no procedure and no minima. Final on the runway axis; tracks offset from the runways. NDB users: same tracks on NDB KNY, MAPt at THR timed.",
+      "nudge": [
+       -1.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Notes",
+     "text": "How the page was built, and the conditions for each way of flying it."
+    }
+   ],
+   "use": [
+    "First check the equipment line (2): if your aircraft cannot receive the beacon named, take another page or fly visually.",
+    "Before the descent: set the beacon, the final course and the altitudes of the hold and of the FAF.",
+    "Join the hold over the beacon, leave it outbound on the radial (6), turn at the limit, intercept the final (7), and descend after the FAF following the table (12).",
+    "At the MAPt without the runway in sight: fly the missed approach (8, 13)."
+   ],
+   "cited": [
+    {
+     "block": "ch7, pins 1, 2, 6, 10",
+     "page": "konya_11-1",
+     "strings": [
+      "R-210",
+      "MSA 25 NM KNY",
+      "ILS OR VOR/DME OR NDB RWY 01L",
+      "ILS, VOR/DME OR ADF REQUIRED"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch8",
+   "kind": "anatomy",
+   "part": 1,
+   "num": "8",
+   "title": "Helicopter approach — 11-xH (Konya 11-1H, RWY 01L)",
+   "source": "konya_11-1H",
+   "pins": [
+    {
+     "n": 1,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "COPTER NDB RWY 01L",
+      "nudge": [
+       -19.0,
+       -1.2
+      ]
+     },
+     "badge": [
+      -5,
+      -2.5
+     ],
+     "title": "Helicopter approach",
+     "text": "NDB only."
+    },
+    {
+     "n": 2,
+     "target": {
+      "kind": "text",
+      "layer": "Frame & grid",
+      "text": "ADF REQUIRED",
+      "nudge": [
+       -1.0,
+       -0.8
+      ]
+     },
+     "badge": [
+      -3,
+      4
+     ],
+     "title": "Equipment",
+     "text": "A radio compass: the one beacon every DCS helicopter with radio navigation has."
+    },
+    {
+     "n": 3,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "CAT H",
+      "nudge": [
+       -1.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "One altitude",
+     "text": "The whole procedure is flown at one altitude (here 4700 ft, QFE 400 m), at 80 kt · 150 km/h."
+    },
+    {
+     "n": 4,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "QFE",
+      "nudge": [
+       -1.0,
+       -0.9
+      ]
+     },
+     "badge": [
+      0,
+      4.6
+     ],
+     "title": "Height above the airfield",
+     "text": "In metres, for metric altimeters set to the airfield pressure (QFE)."
+    },
+    {
+     "n": 5,
+     "target": {
+      "kind": "text",
+      "layer": "Runway bearings",
+      "text": "HOLD 4700 FT · QFE 400 M",
+      "nudge": [
+       1.0,
+       -1.0
+      ]
+     },
+     "badge": [
+      5,
+      -3
+     ],
+     "title": "Holding",
+     "text": "Over the NDB; you leave it straight ahead onto the outbound course."
+    },
+    {
+     "n": 6,
+     "target": {
+      "kind": "text",
+      "layer": "Runway bearings",
+      "text": "203°",
+      "nudge": [
+       -6.0,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      -2.5
+     ],
+     "title": "Outbound",
+     "text": "A bearing from the NDB and a time at 80 kt."
+    },
+    {
+     "n": 7,
+     "target": {
+      "kind": "text",
+      "layer": "Runway bearings",
+      "text": "FAF",
+      "nudge": [
+       -0.8,
+       -0.9
+      ]
+     },
+     "badge": [
+      -5,
+      -3
+     ],
+     "title": "FAF",
+     "text": "The end of the base turn; check the bearing to the NDB (QDM) given."
+    },
+    {
+     "n": 8,
+     "target": {
+      "kind": "text",
+      "layer": "Header",
+      "text": "LANDING",
+      "nudge": [
+       -1.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Landing",
+     "text": "On the runway, or visually on a helipad of the 10-9."
+    },
+    {
+     "n": 9,
+     "target": {
+      "kind": "text",
+      "layer": "Runway table",
+      "text": "GS KT",
+      "nudge": [
+       -1.5,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Timing and descent",
+     "text": "Time from FAF to MAPt and vertical speed for each ground speed, in ft/min and m/s."
+    },
+    {
+     "n": 10,
+     "target": {
+      "kind": "text",
+      "layer": "Insets",
+      "text": "MSA 25 NM (46 KM) KNY",
+      "nudge": [
+       -17.0,
+       -0.5
+      ]
+     },
+     "badge": [
+      -5,
+      -3
+     ],
+     "title": "MSA",
+     "text": "In feet and metres."
+    }
+   ],
+   "use": [
+    "Set QFE: the heights in metres are then your altimeter readings.",
+    "Tune the NDB; fly the hold, the outbound for the time given, the base turn, and the final on the runway axis.",
+    "From the FAF, start the timing for your ground speed (9); at the MAPt land on the runway or go to a pad visually."
+   ],
+   "cited": [
+    {
+     "block": "ch8, pins 1, 3, 6 and fiche",
+     "page": "konya_11-1H",
+     "strings": [
+      "COPTER NDB RWY 01L",
+      "4700 FT",
+      "QFE 400 M",
+      "203°",
+      "3:40",
+      "150 KM/H",
+      "017°"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch9",
+   "kind": "zoom_only",
+   "part": 1,
+   "num": "9",
+   "title": "Minimum sector altitude",
+   "source": "konya_11-1",
+   "region": [
+    113.0,
+    44.4,
+    141.0,
+    75.4
+   ],
+   "scale": 4.64,
+   "pins": [
+    {
+     "n": 1,
+     "target": {
+      "kind": "text",
+      "layer": "Insets",
+      "text": "MSA 25 NM KNY",
+      "nudge": [
+       -6.0,
+       -0.9
+      ]
+     },
+     "badge": [
+      -4,
+      0
+     ],
+     "title": "Centre and radius",
+     "text": "Around the beacon named, out to 25 NM (46 km).",
+     "on": "zoom"
+    },
+    {
+     "n": 2,
+     "target": {
+      "kind": "text",
+      "layer": "Insets",
+      "text": "7200",
+      "nudge": [
+       -1.2,
+       -3.0
+      ]
+     },
+     "badge": [
+      10,
+      -9
+     ],
+     "title": "Four sectors",
+     "text": "The minimum altitude in each.",
+     "on": "zoom"
+    },
+    {
+     "n": 3,
+     "target": {
+      "kind": "text",
+      "layer": "Insets",
+      "text": "180°",
+      "nudge": [
+       -2.4,
+       -0.9
+      ]
+     },
+     "badge": [
+      -7,
+      -1
+     ],
+     "title": "Bearings to the beacon",
+     "text": "A sector is given by the magnetic bearing **to** the beacon: coming from the north you fly about 180°, so the north sector sits under 180°, at the top.",
+     "on": "zoom"
+    }
+   ],
+   "text": "Each value is 1000 ft above the highest ground of the sector (2000 ft where the ground reaches 1500 m), rounded up to 100 ft, on the ground read in DCS. Obstacles are not counted. Every airfield, heliport and pad also has its MSA in the files `downloads/msa/`, even without an approach page.",
+   "cited": [
+    {
+     "block": "ch9, pin 1",
+     "page": "konya_11-1",
+     "strings": [
+      "MSA 25 NM KNY"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch10",
+   "kind": "flight",
+   "part": 2,
+   "num": "10",
+   "title": "A flight with the charts",
+   "steps": [
+    {
+     "thumbs": [
+      "konya_10-8",
+      "konya_10-9",
+      "konya_10-9A",
+      "konya_11-1"
+     ],
+     "text": "**Prepare.** Put the 10-8, 10-9, 10-9A and the approach pages your aircraft can fly into your kneeboard (chapter 1). Copy the tower frequency and the beacons into your presets."
+    },
+    {
+     "thumbs": [
+      "konya_10-9A"
+     ],
+     "text": "**Start.** The mission gives your stand: find it on the 10-9A."
+    },
+    {
+     "thumbs": [
+      "konya_10-9"
+     ],
+     "text": "**Taxi.** Follow the taxiway names to the runway in use; the runway table gives its heading."
+    },
+    {
+     "thumbs": [
+      "konya_10-9"
+     ],
+     "text": "**Depart.** Check the elevation of the threshold and your heading against the table."
+    },
+    {
+     "thumbs": [
+      "konya_10-8"
+     ],
+     "text": "**Return.** The 10-8 shows what to look for; the MSA keeps you clear of the ground in cloud."
+    },
+    {
+     "thumbs": [
+      "konya_11-1",
+      "konya_11-1H"
+     ],
+     "text": "**Approach.** Pick the approach page your aircraft can fly (Part 2, chapter 11) and follow it."
+    },
+    {
+     "thumbs": [
+      "konya_10-9",
+      "konya_10-9A"
+     ],
+     "text": "**Land and park.** Back to the 10-9 and the 10-9A."
+    }
+   ]
+  },
+  {
+   "id": "ch11-0",
+   "kind": "overview",
+   "part": 2,
+   "num": "",
+   "title": "11.0 Overview",
+   "refs": [
+    "ch11-0"
+   ],
+   "caption": "Which approach each aircraft can fly",
+   "header": [
+    "aircraft",
+    "NDB (radio compass)",
+    "VOR",
+    "ILS",
+    "TACAN",
+    "approach pages"
+   ],
+   "col_x": [
+    12,
+    46,
+    82,
+    99,
+    116,
+    134
+   ],
+   "rows": [
+    [
+     "Mi-24P",
+     "yes",
+     "—",
+     "—",
+     "—",
+     "11-xH"
+    ],
+    [
+     "UH-1H",
+     "yes",
+     "yes",
+     "yes",
+     "—",
+     "11-xH; 11-x with NDB and ILS"
+    ],
+    [
+     "AH-64D",
+     "yes",
+     "—",
+     "—",
+     "—",
+     "11-xH"
+    ],
+    [
+     "OH-58D",
+     "—",
+     "—",
+     "—",
+     "—",
+     "none: visual, 10-8, 10-9, directory"
+    ],
+    [
+     "MiG-21bis",
+     "by its own channels",
+     "—",
+     "—",
+     "—",
+     "11-x with an NDB, if the beacon is in its list"
+    ],
+    [
+     "F-5E",
+     "—",
+     "—",
+     "—",
+     "yes",
+     "11-x on a TACAN"
+    ],
+    [
+     "Mirage F1EE",
+     "—",
+     "yes",
+     "yes",
+     "yes",
+     "11-x on a VOR/DME or TACAN; ILS"
+    ],
+    [
+     "F-4E",
+     "—",
+     "yes",
+     "yes",
+     "yes",
+     "11-x on a VOR/DME or TACAN; ILS"
+    ],
+    [
+     "A-10C II",
+     "—",
+     "—",
+     "yes",
+     "yes",
+     "11-x on a TACAN; ILS"
+    ]
+   ],
+   "note": "Read the equipment line of each approach page (chapter 7, pin 2). The table says what the aircraft can receive in DCS; your module's manual says how to tune it."
+  },
+  {
+   "id": "ch11-1",
+   "kind": "fiche",
+   "part": 2,
+   "num": "",
+   "title": "11.1 Mi-24P",
+   "items": [
+    "**Can receive**: NDB (ARK-15M, ARK-U2). No VOR, no ILS, no DME, no TACAN.",
+    "**Your pages**: the 11-xH, built for it: NDB only, one altitude, heights in metres above the airfield, 80 kt · 150 km/h.",
+    "**Example**: Konya 11-1H. Set QFE; tune NDB KNY 390; fly the hold at 400 m QFE; outbound 203° for 3:40 at 150 km/h; base turn left; final 017°; land on 01L or on a pad of the 10-9.",
+    "**Note**: the Doppler counts distance from a point you set; the chart does not use it."
+   ],
+   "example": "konya_11-1H",
+   "example_caption": "Konya 11-1H, reduced",
+   "cited": [
+    {
+     "block": "fiche 11.1",
+     "page": "konya_11-1H",
+     "strings": [
+      "KNY 390",
+      "203°",
+      "3:40",
+      "150 KM/H",
+      "017°"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch11-2",
+   "kind": "fiche",
+   "part": 2,
+   "num": "",
+   "title": "11.2 UH-1H",
+   "items": [
+    "**Can receive**: NDB (AN/ARN-83); VOR, localizer and glide slope (AN/ARN-82). No DME, no TACAN.",
+    "**Your pages**: the 11-xH. Where the runway has an ILS, the 11-x of that runway too, flown the NDB way (CAT A timing) with the final on the localizer and the glide slope.",
+    "**Example**: Konya 11-1H; or Konya 11-1: hold and outbound on NDB KNY 390, final on IKNY 108.90."
+   ],
+   "example": "konya_11-1H",
+   "example_caption": "Konya 11-1H, reduced",
+   "cited": [
+    {
+     "block": "fiche 11.2",
+     "page": "konya_11-1",
+     "strings": [
+      "KNY 390",
+      "IKNY 108.90"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch11-3",
+   "kind": "fiche",
+   "part": 2,
+   "num": "",
+   "title": "11.3 AH-64D",
+   "items": [
+    "**Can receive**: NDB, its only radio navigation aid. GPS and inertial navigation.",
+    "**Your pages**: the 11-xH (ADF required).",
+    "**Example**: Konya 11-1H."
+   ],
+   "example": "konya_11-1H",
+   "example_caption": "Konya 11-1H, reduced"
+  },
+  {
+   "id": "ch11-4",
+   "kind": "fiche",
+   "part": 2,
+   "num": "",
+   "title": "11.4 OH-58D",
+   "items": [
+    "**Can receive**: no radio navigation aid on our pages. GPS and inertial navigation.",
+    "**Your pages**: 10-8 and 10-9 to find and recognise the place; the heliport directory for the pads (positions to enter in the GPS); the MSA files to stay above the ground in bad weather. No approach page."
+   ],
+   "example": "konya_10-9",
+   "example_caption": "Konya 10-9, reduced"
+  },
+  {
+   "id": "ch11-5",
+   "kind": "fiche",
+   "part": 2,
+   "num": "",
+   "title": "11.5 MiG-21bis",
+   "items": [
+    "**Can receive**: NDB (ARK) and RSBN/PRMG — but **by the channels of its own list**, not by the beacons of the map.",
+    "**Your pages**: an 11-x whose title names an NDB, when that beacon is in the module's list. The channel numbers are on the module's own kneeboard pages; our pages give where the beacons are and how the approach runs.",
+    "**Note**: the RSBN of the module is not the RSBN of the map files: do not take an RSBN channel from our pages."
+   ]
+  },
+  {
+   "id": "ch11-6",
+   "kind": "fiche",
+   "part": 2,
+   "num": "",
+   "title": "11.6 F-5E",
+   "items": [
+    "**Can receive**: TACAN. Its ADF works on the UHF radio only, not on NDB. No VOR, no ILS.",
+    "**Your pages**: an 11-x built on a TACAN (TACAN in the title). Where a TACAN stands on the same place as the VOR/DME of the page, as at Konya (TACAN KON 240 m from VOR/DME KNY), you can fly the page on the TACAN: radials and distances differ by about 0.1 NM.",
+    "**Otherwise**: TACAN to the field, then visually with the 10-8."
+   ],
+   "example": "konya_11-1",
+   "example_caption": "Konya 11-1, reduced",
+   "cited": [
+    {
+     "block": "fiche 11.6",
+     "page": "konya_11-1",
+     "strings": [
+      "TACAN KON",
+      "VOR/DME KNY"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch11-7",
+   "kind": "fiche",
+   "part": 2,
+   "num": "",
+   "title": "11.7 Mirage F1EE",
+   "items": [
+    "**Can receive**: TACAN, VOR, ILS. No radio compass.",
+    "**Your pages**: an 11-x on a VOR/DME or a TACAN; the ILS where the runway has one.",
+    "**Example**: Konya 11-1 on VOR/DME KNY 111.20, final on IKNY 108.90."
+   ],
+   "example": "konya_11-1",
+   "example_caption": "Konya 11-1, reduced",
+   "cited": [
+    {
+     "block": "fiche 11.7",
+     "page": "konya_11-1",
+     "strings": [
+      "KNY 111.20",
+      "IKNY 108.90"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "ch11-8",
+   "kind": "fiche",
+   "part": 2,
+   "num": "",
+   "title": "11.8 F-4E",
+   "items": [
+    "**Can receive**: TACAN, VOR, ILS. Its ADF is the UHF radio's: no NDB.",
+    "**Your pages**: an 11-x on a VOR/DME or a TACAN; the ILS where the runway has one.",
+    "**Example**: Konya 11-1."
+   ],
+   "example": "konya_11-1",
+   "example_caption": "Konya 11-1, reduced"
+  },
+  {
+   "id": "ch11-9",
+   "kind": "fiche",
+   "part": 2,
+   "num": "",
+   "title": "11.9 A-10C II",
+   "items": [
+    "**Can receive**: TACAN and ILS. No VOR; the ADF does not work. EGI (GPS and inertial).",
+    "**Your pages**: an 11-x on a TACAN; the ILS where the runway has one.",
+    "**Example**: Konya 11-1 with TACAN KON (see the F-5E note), final on IKNY 108.90."
+   ],
+   "example": "konya_11-1",
+   "example_caption": "Konya 11-1, reduced",
+   "cited": [
+    {
+     "block": "fiche 11.9",
+     "page": "konya_11-1",
+     "strings": [
+      "TACAN KON",
+      "IKNY 108.90"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "annex",
+   "kind": "annex",
+   "part": "annex",
+   "num": "",
+   "title": "Appendices",
+   "refs": [
+    "annexA",
+    "annexB"
+   ],
+   "sections": [
+    {
+     "heading": "Appendix A — Abbreviations",
+     "paragraphs": [
+      [
+       [
+        "ADF",
+        "automatic direction finder (radio compass)"
+       ],
+       [
+        "ARP",
+        "airfield reference point"
+       ],
+       [
+        "CAT H",
+        "helicopter category"
+       ],
+       [
+        "CRS",
+        "course"
+       ],
+       [
+        "DME",
+        "distance measuring equipment"
+       ],
+       [
+        "ELEV",
+        "elevation"
+       ],
+       [
+        "FAF",
+        "final approach fix"
+       ],
+       [
+        "GP",
+        "glide path"
+       ],
+       [
+        "GS",
+        "ground speed"
+       ],
+       [
+        "HAS",
+        "hardened aircraft shelter"
+       ],
+       [
+        "IAS",
+        "indicated airspeed"
+       ],
+       [
+        "IF",
+        "intermediate fix"
+       ],
+       [
+        "ILS",
+        "instrument landing system"
+       ],
+       [
+        "LOC",
+        "localizer"
+       ],
+       [
+        "MAG HDG",
+        "magnetic heading"
+       ],
+       [
+        "MAPt",
+        "missed approach point"
+       ],
+       [
+        "MGRS",
+        "military grid reference system"
+       ],
+       [
+        "MSA",
+        "minimum sector altitude"
+       ],
+       [
+        "NDB",
+        "non-directional beacon"
+       ],
+       [
+        "QDM",
+        "magnetic bearing to a beacon"
+       ],
+       [
+        "QDR",
+        "magnetic bearing from a beacon"
+       ],
+       [
+        "QFE",
+        "pressure at the airfield (altimeter reads height)"
+       ],
+       [
+        "QNH",
+        "pressure at sea level (altimeter reads altitude)"
+       ],
+       [
+        "R-",
+        "radial"
+       ],
+       [
+        "RSBN/PRMG",
+        "Soviet navigation and landing aids"
+       ],
+       [
+        "RWY",
+        "runway"
+       ],
+       [
+        "TACAN",
+        "tactical air navigation"
+       ],
+       [
+        "THR",
+        "threshold"
+       ],
+       [
+        "VAR",
+        "magnetic variation"
+       ],
+       [
+        "VOR",
+        "VHF omnidirectional range."
+       ]
+      ]
+     ]
+    },
+    {
+     "heading": "Appendix B — Limits and credits",
+     "paragraphs": [
+      "**Limits.** For DCS World only, not for real-world navigation. No minima. The MSA counts the ground, not the obstacles. The approaches are standard patterns on DCS data, not published procedures. The aircraft table reflects the modules as documented in November 2026; a module update can change it.",
+      "**Credits.** Data: DCS World and its files (Eagle Dynamics), read with pydcs; taxiway names © OpenStreetMap contributors (ODbL); ICAO codes from OurAirports; magnetic field IGRF-14; font Barlow Condensed (SIL OFL). Relief read in DCS: non-commercial use. DCS Airfield Charts is written with Claude (Anthropic)."
+     ]
+    }
+   ]
+  }
+ ]
+}
