@@ -2,7 +2,7 @@
 
 Airfield charts for DCS World, built from the game's own data.
 
-**Status: work in progress.** The DCS F10 map (Alt mode) draws all the pavement of an airfield as flat fills, along with buildings, guidance lines and parking numbers. This repository contains the tool that captures that map, base by base, in the DCS terrain frame (`x` North, `z` East, in metres). The whole Syria theatre (80 airbases, 144 heliports) and the whole Cold War Germany theatre (119 airbases, 108 heliports) are captured. The renderer, which turns a capture into an A5 chart (page 10-9, plus parking pages 10-9A, 10-9B… when needed, and an approach page 11-1, 11-2… for each runway end with an ILS in DCS), is in `render/` (see "Rendering charts").
+**Status: work in progress.** The DCS F10 map (Alt mode) draws all the pavement of an airfield as flat fills, along with buildings, guidance lines and parking numbers. This repository contains the tool that captures that map, base by base, in the DCS terrain frame (`x` North, `z` East, in metres). The whole Syria theatre (80 airbases, 144 heliports) and the whole Cold War Germany theatre (119 airbases, 108 heliports) are captured. The renderer, which turns a capture into an A5 chart (page 10-9, plus parking pages 10-9A, 10-9B… when needed, and instrument approach pages for each runway direction with a beacon: 11-1, 11-2… for aircraft, 11-1H, 11-2H… for helicopters; see "Approach charts"), is in `render/` (see "Rendering charts").
 
 The goal is to share a complete set of charts for every airfield, as PDF and PNG, ready for print and for the DCS kneeboard.
 

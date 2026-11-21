@@ -5,7 +5,7 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
-## Unreleased
+## AC-V1.9.0 — 21 November 2026
 
 **An approach chart for every runway with a beacon, for aircraft and for helicopters.**
 
@@ -13,7 +13,6 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Helicopter pages** (`11-1H`, `11-2H`…, in the *helicopters* zip and in the airfield PDF) for every airfield with an NDB: NDB only, one altitude for the whole procedure, 80 kt · 150 km/h, heights above the airfield in metres (QFE) beside altitudes in feet, distances in NM and km, landing on the runway or visually on a helipad of the 10-9.
 - The base turn and the intermediate approach keep clear of the runways; the holding and the outbound leg may pass over the airfield, never lower than 1,000 ft above it. When the beacon is off the runway axis, the page gives the bearings to the beacon (QDM) to check at the final approach fix and at the threshold.
 - New tool `render/build_approaches.py`: rebuilds the two zips of a theatre from the zips of the previous release, the DCS beacons and the relief grid, with no F10 capture.
-<!-- After the release: rebuild and deposit the Route Planner sheets (render/build_fiches.py) and the Mission Plan airfield plans (render/build_plans.py) from the new zips. -->
 
 **Terrain relief as web map tiles.**
 
