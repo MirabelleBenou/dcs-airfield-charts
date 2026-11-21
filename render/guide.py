@@ -758,6 +758,8 @@ def layout_zoom_only(spec, pins, emb, part_label, title):
     z = spec['scale']
     zw, zh = (x1 - x0) * z, (y1 - y0) * z
     zx, zy = MX0, CY + 1.0
+    if spec.get('caption'):
+        pg.add(t_el(MX0, zy - 2.4, spec['caption'], 7.5, 'bold', INK2, spacing=0.4))
     pg.add(f'<rect x="{zx:.2f}" y="{zy:.2f}" width="{zw:.2f}" height="{zh:.2f}" fill="#FFFFFF" stroke="{RULE}" '
            f'stroke-width="0.3"/>', emb.svg(key, zx, zy, zw, zh, f'{x0} {y0} {x1 - x0} {y1 - y0}'))
     for p in pins:
