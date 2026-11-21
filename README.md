@@ -8,6 +8,8 @@ The goal is to share a complete set of charts for every airfield, as PDF and PNG
 
 ## Download the charts
 
+**New to these charts?** Start with the reading guide, [DCS_Airfield_Charts_Reading_Guide.pdf](downloads/DCS_Airfield_Charts_Reading_Guide.pdf?raw=true) (A4): how to read every page of an airfield, how to fly with them, and which approach pages your aircraft can fly.
+
 **Syria — 78 of the 80 airfields and helicopter bases, plus every heliport** (magnetic declination for 1985), rendered with no manual drawing.
 
 - One PDF per airfield and helicopter base (all its pages): see the list in [`downloads/syria/`](downloads/syria/README.md).
@@ -72,6 +74,7 @@ What a chart shows: pavement, runways and their markings, buildings and hardened
 | `render/` | the renderer: vectorises a captured base (pavement, buildings, runways), reads the game facts through pydcs, lays out the A5 pages and exports SVG, PDF and PNG; `build_chart.py` renders a base, `fetch_osm.py` downloads real taxiway names from OpenStreetMap; fonts in `render/fonts/` |
 | `tests/` | `python -m pytest`; the tests that need captured samples or DCS files run when `DCS_CHARTS_SAMPLES` points to a folder holding them, and are skipped otherwise |
 | `downloads/` | the published charts: one PDF per airfield in `downloads/<theatre>/` (with its index), and a zip per theatre holding every page as PDF, PNG and SVG |
+| `downloads/DCS_Airfield_Charts_Reading_Guide.pdf` | the reading guide (A4, English): how to read every page of an airfield, how to fly with the charts, and which approach pages each aircraft can fly; rebuilt from the zips of a release by `render/build_guide.py` |
 | `downloads/parkings/` | every parking stand of every DCS theatre, with the identifiers a mission file uses, its position and the aircraft it takes (JSON, from pydcs; see its README) |
 | `downloads/navaids/` | the ICAO code of every DCS airfield that has one, and the radio beacons of Caucasus, Cold War Germany and Syria (JSON; see its README) |
 
@@ -177,6 +180,14 @@ python -I render/build_plans.py <Theatre> --zips <airfields zip> <helicopters zi
 ```
 
 Input: the same zips and `airfields.json`, and the parking stands of `downloads/parkings/`. Each chart is matched to its airfield as above; its stands are then fitted to the circles of its Parking layer (least squares, accepted only when every stand meets one circle within 0.01 mm). Output: `<folder>/<key>/` with `index.json` (format `dcs-plans-v1`: the scale and offset that place each page on the DCS map frame) and one SVG per airfield reduced to pavement, runways, runway markings and buildings, without text, and `<folder>/DCS_Airfield_Charts_<Theatre>_1985_plans.zip` with the same files at its root; with `--shelters`, also the stands drawn as hardened shelters (`downloads/parkings/shelters/`). The tool stops, writing nothing, on any mismatch, and never overwrites.
+
+The reading guide, `downloads/DCS_Airfield_Charts_Reading_Guide.pdf`, is built from the same zips, by laying numbered notes on the real pages of Konya (LTAN), of the helicopter base Naqoura and of the heliport directory:
+
+```
+python -I render/build_guide.py --zips <Syria airfields zip> <Syria helicopters zip> --edition AC-V1.9.0 --out <file.pdf> [--pins <file>]
+```
+
+Input: the Syria *airfields* and *helicopters* zips of a release. The texts of the guide, and the page, the target and the offset of every note, are in `render/data/guide/guide.json`. A note points either at the text of an element of the page (found in the SVG by its layer and its exact text) or at a point that must hold ink of its layer; the directory, a picture with no text, is the one page whose notes are placed by coordinates, without a check. Every figure the guide quotes from a page (a frequency, an altitude, a bearing) is read again in the text of that page, and each text is measured with the real width of the font. Output: the A4 PDF, with fixed metadata (the same inputs give the same bytes); `--pins` also writes the list of notes with the point each one resolves to. The tool stops, writing nothing, when the target of a note is no longer on its page (a page that changed), when a quoted figure is no longer on its page, or when a text does not fit its zone; it never overwrites an existing file.
 
 The header line of every chart page gives the airfield reference point three ways: degrees and decimal minutes, degrees-minutes-seconds, and MGRS to 10 m. `render/republish.py` applies every correction the renderer knows to the charts of a release zip, without the F10 captures: the coordinates line, the end label of the scale bar, the magnetic headings and north arrows, the nearest-town line of the heliport directory, the placement of bearing, navaid and grid labels, the PNG size of pages drawn on the F10 map:
 
