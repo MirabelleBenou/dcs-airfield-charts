@@ -1,5 +1,18 @@
 {
  "theatre": "Syria",
+ "labels": {
+  "parts": {
+   "1": "PART 1 · READING THE CHARTS",
+   "2": "PART 2 · FLYING WITH THE CHARTS",
+   "annex": "APPENDICES",
+   "contents": "DCS AIRFIELD CHARTS · READING GUIDE"
+  },
+  "footer_left": "DCS AIRFIELD CHARTS · READING GUIDE · example: Konya (LTAN), Syria, {tag}",
+  "footer_right": "NOT FOR REAL-WORLD NAVIGATION",
+  "how_to_use": "HOW TO USE IT",
+  "pdf_title": "DCS Airfield Charts — Reading guide",
+  "pdf_author": "DCS Airfield Charts"
+ },
  "sources": {
   "konya_10-8": {
    "zip": "airfields",
@@ -209,10 +222,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "KONYA",
-      "nudge": [
-       -14.0,
-       -1.7
-      ]
+      "at": "start"
      },
      "badge": [
       -9,
@@ -244,15 +254,12 @@
       "kind": "text",
       "layer": "Runway bearings",
       "text": "197.4°",
-      "occurrence": 1,
-      "nudge": [
-       0.0,
-       -1.3
-      ]
+      "at": "middle",
+      "occurrence": 1
      },
      "badge": [
-      6,
-      -4
+      6.1,
+      -3.5
      ],
      "title": "Runways",
      "text": "Each with its magnetic heading, at the threshold where you land."
@@ -280,10 +287,7 @@
       "kind": "text",
       "layer": "Towns",
       "text": "KARATAY CITY PARK 11 km",
-      "nudge": [
-       0.1,
-       1.4
-      ]
+      "at": "middle"
      },
      "badge": [
       8,
@@ -332,10 +336,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "LENGTH × WIDTH",
-      "nudge": [
-       -1.2,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -391,10 +392,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "LTAN",
-      "nudge": [
-       -1.0,
-       -1.4
-      ]
+      "at": "start"
      },
      "badge": [
       -4.0,
@@ -410,10 +408,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "10-9",
-      "nudge": [
-       1.2,
-       -1.4
-      ]
+      "at": "end"
      },
      "badge": [
       4.0,
@@ -429,10 +424,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "ELEV 3407 FT",
-      "nudge": [
-       -1.0,
-       -1.0
-      ]
+      "at": "start"
      },
      "badge": [
       -4.0,
@@ -448,14 +440,11 @@
       "kind": "text",
       "layer": "Header",
       "text": "ARP N37°58.7' E032°33.7'",
-      "nudge": [
-       -0.78,
-       -1.0
-      ]
+      "at": "start"
      },
      "badge": [
-      0.0,
-      -4.4
+      -0.0,
+      -4.5
      ],
      "title": "Position",
      "text": "The airfield reference point three ways: decimal minutes, degrees-minutes-seconds and MGRS to 10 m. Pick the one your navigation system takes.",
@@ -467,10 +456,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "VAR 3°E (1985)",
-      "nudge": [
-       14.65,
-       -1.0
-      ]
+      "at": "end"
      },
      "badge": [
       4.0,
@@ -486,10 +472,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "KONYA TOWER",
-      "nudge": [
-       -2.5,
-       -1.0
-      ]
+      "at": "start"
      },
      "badge": [
       -4.0,
@@ -505,10 +488,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "NAVAIDS",
-      "nudge": [
-       -2.5,
-       -1.0
-      ]
+      "at": "start"
      },
      "badge": [
       -4.0,
@@ -541,11 +521,8 @@
       "kind": "text",
       "layer": "Runway bearings",
       "text": "197.4°",
-      "occurrence": 1,
-      "nudge": [
-       -0.15,
-       -2.43
-      ]
+      "at": "middle",
+      "occurrence": 1
      },
      "badge": [
       6.0,
@@ -560,10 +537,7 @@
       "kind": "text",
       "layer": "Taxiway labels",
       "text": "B",
-      "nudge": [
-       1.88,
-       -0.29
-      ]
+      "at": "end"
      },
      "badge": [
       5.0,
@@ -617,8 +591,8 @@
       ]
      },
      "badge": [
-      -4.4,
-      0.0
+      -3.4,
+      -2.9
      ],
      "title": "North",
      "text": "The top of the page is the DCS map grid north; the arrow shows magnetic north."
@@ -646,10 +620,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "RWY",
-      "nudge": [
-       -1.0,
-       -0.82
-      ]
+      "at": "start"
      },
      "badge": [
       -4.0,
@@ -664,10 +635,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "PARKING: 152 (48 SHELTERED)",
-      "nudge": [
-       1.2,
-       -0.82
-      ]
+      "at": "end"
      },
      "badge": [
       4.0,
@@ -682,10 +650,7 @@
       "kind": "text",
       "layer": "Footer",
       "text": "NOT FOR REAL-WORLD NAVIGATION",
-      "nudge": [
-       1.2,
-       -0.8
-      ]
+      "at": "end"
      },
      "badge": [
       4.0,
@@ -713,7 +678,8 @@
       "VAR 3°E",
       "132.400",
       "37-59",
-      "032-34"
+      "032-34",
+      "v1"
      ]
     }
    ]
@@ -732,10 +698,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "10-9A",
-      "nudge": [
-       1.2,
-       -1.0
-      ]
+      "at": "end"
      },
      "badge": [
       4,
@@ -750,10 +713,7 @@
       "kind": "text",
       "layer": "Insets",
       "text": "P2 · 87–124",
-      "nudge": [
-       -1.2,
-       -1.0
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -768,14 +728,11 @@
       "kind": "text",
       "layer": "Insets",
       "text": "1:9329",
-      "nudge": [
-       1.2,
-       -1.0
-      ]
+      "at": "end"
      },
      "badge": [
-      4,
-      0
+      3.2,
+      3.8
      ],
      "title": "Scale of the inset",
      "text": "Insets have different scales; compare distances only inside one frame."
@@ -786,14 +743,11 @@
       "kind": "text",
       "layer": "Insets",
       "text": "110",
-      "nudge": [
-       -0.2,
-       -0.6
-      ]
+      "at": "start"
      },
      "badge": [
-      -5,
-      3
+      -3.0,
+      0.5
      ],
      "title": "Stand number",
      "text": "The number DCS gives the stand, the one the Mission Editor and the mission briefing use."
@@ -804,10 +758,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "OPEN",
-      "nudge": [
-       -2.4,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -3,
@@ -822,10 +773,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "PARKING NUMBERS AS IN DCS",
-      "nudge": [
-       1.2,
-       -0.9
-      ]
+      "at": "end"
      },
      "badge": [
       4,
@@ -867,14 +815,11 @@
       "kind": "text",
       "layer": "Header",
       "text": "HELICOPTER BASE",
-      "nudge": [
-       13.5,
-       -1.0
-      ]
+      "at": "end"
      },
      "badge": [
-      6,
-      2.5
+      5.4,
+      1.0
      ],
      "title": "Helicopter base",
      "text": "A base without a runway is drawn on the softened F10 map."
@@ -902,10 +847,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "NAQOURA",
-      "nudge": [
-       -14.0,
-       -1.7
-      ]
+      "at": "start"
      },
      "badge": [
       -8,
@@ -1079,10 +1021,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "ILS OR VOR/DME OR NDB RWY 01L",
-      "nudge": [
-       -26.0,
-       -1.2
-      ]
+      "at": "start"
      },
      "badge": [
       -5,
@@ -1097,14 +1036,11 @@
       "kind": "text",
       "layer": "Frame & grid",
       "text": "ILS, VOR/DME OR ADF REQUIRED",
-      "nudge": [
-       0.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
-      -5,
-      -2.5
+      -5.0,
+      2.0
      ],
      "title": "Equipment required",
      "text": "What your aircraft must have. No match, no approach: see Part 2."
@@ -1115,10 +1051,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "RWY 01L",
-      "nudge": [
-       -1.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1133,10 +1066,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "FIXES",
-      "nudge": [
-       -1.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1151,10 +1081,7 @@
       "kind": "text",
       "layer": "Runway bearings",
       "text": "HOLD 7200",
-      "nudge": [
-       1.0,
-       -1.0
-      ]
+      "at": "end"
      },
      "badge": [
       5,
@@ -1169,14 +1096,11 @@
       "kind": "text",
       "layer": "Runway bearings",
       "text": "R-210",
-      "nudge": [
-       -10.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
-      -4,
-      -1.5
+      -3.5,
+      -2.0
      ],
      "title": "Outbound and base turn",
      "text": "The outbound radial, its limit (DME) or its time by speed category, then the turn onto final."
@@ -1187,10 +1111,7 @@
       "kind": "text",
       "layer": "Runway bearings",
       "text": "FAF D5.6",
-      "nudge": [
-       -0.6,
-       -0.8
-      ]
+      "at": "start"
      },
      "badge": [
       -7,
@@ -1222,10 +1143,7 @@
       "kind": "text",
       "layer": "Towns",
       "text": "6400",
-      "nudge": [
-       -1.0,
-       -0.4
-      ]
+      "at": "start"
      },
      "badge": [
       -3,
@@ -1240,10 +1158,7 @@
       "kind": "text",
       "layer": "Insets",
       "text": "MSA 25 NM KNY",
-      "nudge": [
-       -13.5,
-       -0.6
-      ]
+      "at": "start"
      },
      "badge": [
       -5,
@@ -1258,10 +1173,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "PROFILE",
-      "nudge": [
-       -1.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1277,10 +1189,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "NM FROM THR",
-      "nudge": [
-       -1.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1296,10 +1205,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "MISSED APPROACH",
-      "nudge": [
-       -1.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1313,10 +1219,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "NO MINIMA — NOT PUBLISHED BY DCS",
-      "nudge": [
-       -17.0,
-       0.0
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1331,10 +1234,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "Not a real approach chart: DCS gives no procedure and no minima. Final on the runway axis; tracks offset from the runways. NDB users: same tracks on NDB KNY, MAPt at THR timed.",
-      "nudge": [
-       -1.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1377,10 +1277,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "COPTER NDB RWY 01L",
-      "nudge": [
-       -19.0,
-       -1.2
-      ]
+      "at": "start"
      },
      "badge": [
       -5,
@@ -1395,10 +1292,7 @@
       "kind": "text",
       "layer": "Frame & grid",
       "text": "ADF REQUIRED",
-      "nudge": [
-       -1.0,
-       -0.8
-      ]
+      "at": "start"
      },
      "badge": [
       -3,
@@ -1413,10 +1307,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "CAT H",
-      "nudge": [
-       -1.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1431,10 +1322,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "QFE",
-      "nudge": [
-       -1.0,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       0,
@@ -1449,10 +1337,7 @@
       "kind": "text",
       "layer": "Runway bearings",
       "text": "HOLD 4700 FT · QFE 400 M",
-      "nudge": [
-       1.0,
-       -1.0
-      ]
+      "at": "end"
      },
      "badge": [
       5,
@@ -1467,10 +1352,7 @@
       "kind": "text",
       "layer": "Runway bearings",
       "text": "203°",
-      "nudge": [
-       -6.0,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1485,10 +1367,7 @@
       "kind": "text",
       "layer": "Runway bearings",
       "text": "FAF",
-      "nudge": [
-       -0.8,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -5,
@@ -1503,10 +1382,7 @@
       "kind": "text",
       "layer": "Header",
       "text": "LANDING",
-      "nudge": [
-       -1.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1521,10 +1397,7 @@
       "kind": "text",
       "layer": "Runway table",
       "text": "GS KT",
-      "nudge": [
-       -1.5,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1539,10 +1412,7 @@
       "kind": "text",
       "layer": "Insets",
       "text": "MSA 25 NM (46 KM) KNY",
-      "nudge": [
-       -17.0,
-       -0.5
-      ]
+      "at": "start"
      },
      "badge": [
       -5,
@@ -1567,6 +1437,7 @@
       "QFE 400 M",
       "203°",
       "3:40",
+      "80 KT",
       "150 KM/H",
       "017°"
      ]
@@ -1595,10 +1466,7 @@
       "kind": "text",
       "layer": "Insets",
       "text": "MSA 25 NM KNY",
-      "nudge": [
-       -6.0,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -4,
@@ -1614,14 +1482,11 @@
       "kind": "text",
       "layer": "Insets",
       "text": "7200",
-      "nudge": [
-       -1.2,
-       -3.0
-      ]
+      "at": "end"
      },
      "badge": [
-      10,
-      -9
+      7,
+      -8
      ],
      "title": "Four sectors",
      "text": "The minimum altitude in each.",
@@ -1633,10 +1498,7 @@
       "kind": "text",
       "layer": "Insets",
       "text": "180°",
-      "nudge": [
-       -2.4,
-       -0.9
-      ]
+      "at": "start"
      },
      "badge": [
       -7,
@@ -1839,6 +1701,7 @@
       "QFE 400 M",
       "203°",
       "3:40",
+      "80 KT",
       "150 KM/H",
       "017°"
      ]

@@ -8,6 +8,7 @@ L'outil s'arrete, sans rien ecrire, quand une page qu'il annote n'a plus ce qu'u
 un texte du guide n'est plus sur sa page, ou quand un texte deborde de sa zone.
 """
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -25,22 +26,75 @@ def parse_args(argv):
     return ap.parse_args(argv)
 
 
+def check_destination(path, name):
+    """Une destination valide : elle n'existe pas (lien compris) et son dossier existe ou peut etre cree sous un dossier
+    existant et inscriptible. GuideError sinon."""
+    if os.path.lexists(path):
+        raise guide.GuideError(f'{name} {path} existe deja : l\'outil n\'ecrase rien')
+    anc = path.parent
+    while not os.path.lexists(anc) and anc != anc.parent:
+        anc = anc.parent
+    if not anc.is_dir():
+        raise guide.GuideError(f'{name} {path} : {anc} n\'est pas un dossier')
+    if not os.access(anc, os.W_OK | os.X_OK):
+        raise guide.GuideError(f'{name} {path} : le dossier {anc} n\'est pas inscriptible')
+
+
+def check_destinations(out, pins):
+    """Les deux destinations (dossiers parents compris) se controlent avant toute ecriture."""
+    if pins is not None and out.resolve() == pins.resolve():
+        raise guide.GuideError(f'--pins et --out designent le meme fichier ({out.resolve()}) : l\'outil n\'ecrase rien')
+    check_destination(out, '--out')
+    if pins is not None:
+        check_destination(pins, '--pins')
+
+
+def write_all(files):
+    """Ecrit chaque (chemin, octets) en creation exclusive ; si une ecriture echoue, tout ce que cet appel a cree
+    (fichiers, puis dossiers) est retire : un arret n'ecrit rien."""
+    made_files, made_dirs = [], []
+    try:
+        for path, data in files:
+            missing, d = [], path.parent
+            while not d.exists():
+                missing.append(d)
+                d = d.parent
+            for m in reversed(missing):
+                m.mkdir()
+                made_dirs.append(m)
+            with open(path, 'xb') as f:
+                made_files.append(path)
+                f.write(data)
+    except BaseException:
+        for f in made_files:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+        for d in reversed(made_dirs):
+            try:
+                d.rmdir()
+            except OSError:
+                pass
+        raise
+
+
 def main(argv):
     args = parse_args(argv)
     out = Path(args.out)
     pins_path = Path(args.pins) if args.pins else None
     try:
-        for target in (out, pins_path):
-            if target is not None and target.exists():
-                raise guide.GuideError(f'{target} existe deja : l\'outil n\'ecrase rien')
+        check_destinations(out, pins_path)
         g = guide.build({'airfields': args.zips[0], 'helicopters': args.zips[1]}, args.edition)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(g.pdf)
+        files = [(out, g.pdf)]
         if pins_path is not None:
-            pins_path.parent.mkdir(parents=True, exist_ok=True)
-            pins_path.write_text(guide.pins_report(g), encoding='utf-8')
+            files.append((pins_path, guide.pins_report(g).encode('utf-8')))
+        write_all(files)
     except (guide.GuideError, OSError) as e:
         print(f'ARRET : {e}', file=sys.stderr)
+        return 1
+    except Exception as e:                                    # jamais une trace Python : l'arret nomme l'erreur
+        print(f'ARRET : erreur inattendue ({type(e).__name__} : {e})', file=sys.stderr)
         return 1
     print(guide.summary(g))
     return 0

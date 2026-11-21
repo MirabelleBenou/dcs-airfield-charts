@@ -2,13 +2,18 @@
 release. Il annote les vraies pages de Konya (LTAN, Syria), la 10-9 de Naqoura et une page de l'annuaire des heliports,
 puis dit quel appareil peut voler quelle approche. La logique est ici ; la commande est `render/build_guide.py`.
 
-- Les textes, les pastilles et leurs cibles vivent dans `render/data/guide/guide.json`, pas dans le code.
+- Les textes, les pastilles et leurs cibles vivent dans `render/data/guide/guide.json`, pas dans le code ; les textes fixes
+  (ligne de partie, pied de page, « HOW TO USE IT », titre du PDF) sont sous `labels`.
 - Une pastille vise soit un TEXTE d'une page SVG (couche + texte exact d'un element `text`, halos ignores, transformations
-  appliquees), soit un POINT (couche rendue seule : il doit y avoir de l'encre a moins de 0,5 mm), soit, pour l'annuaire
-  (une image sans texte), un point de la page, sans controle de cible.
-- Chaque chiffre cite par un texte du guide est relu dans le texte de la page qu'il cite.
-- Le texte se mesure avec les avances reelles des glyphes (`render.fonts`) ; un texte qui deborde de sa zone arrete l'outil,
-  jamais de reduction de corps.
+  appliquees ; le point dessine est choisi dans la boite du texte : `at` = start, middle ou end), soit un POINT (couche
+  rendue seule : il doit y avoir de l'encre a moins de 0,5 mm), soit, pour l'annuaire (une image sans texte), un point de
+  la page, sans controle de cible. Le disque d'une pastille ne recouvre aucun texte de la page source ; le point dessine
+  est controle la ou il est dessine ; une pastille « zoom » dont le point sort de la zone agrandie arrete l'outil.
+- Chaque chiffre cite par un texte du guide est cherche, element `text` par element, dans la page qu'il cite (frontieres de
+  mot, casse ignoree).
+- Le texte se mesure avec les avances reelles des glyphes (`render.fonts`), espacement des lettres compris ; un texte qui
+  deborde de sa zone arrete l'outil, jamais de reduction de corps. Toute erreur de lecture (page, JPEG, donnees) est un arret
+  qui nomme la page ou l'entree.
 - Un arret ne produit aucun fichier. Mêmes entrees, mêmes octets.
 """
 import base64
@@ -18,6 +23,7 @@ import math
 import re
 import tempfile
 import zipfile
+import zlib
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path, PurePosixPath
@@ -38,12 +44,10 @@ S = 0.8                                   # echelle de la page source sur les pa
 CX, CY = 12.0, 31.0                       # coin de la page source sur la page A4
 COL_X = CX + PAGE_W * S + 7.0             # colonne des legendes
 LEGEND_PT, USE_PT, BODY_PT = 7.0, 9.5, 9.5
+LINE_ASCENT, LINE_DESCENT = 1.0, 0.2      # boite de ligne de Barlow Condensed (hhea ascent 1000, descent -200 / 1000), en corps
 INK_RADIUS_MM = 0.5                       # encre a moins de 0,5 mm d'une cible-point
 INK_PX_PER_MM = 10                        # couche rendue seule a 0,1 mm par pixel
-PDF_TITLE = 'DCS Airfield Charts — Reading guide'
-PDF_AUTHOR = 'DCS Airfield Charts'
-FOOTER_LEFT = 'DCS AIRFIELD CHARTS · READING GUIDE · example: Konya (LTAN), Syria, {tag}'
-FOOTER_RIGHT = 'NOT FOR REAL-WORLD NAVIGATION'
+FOOTER_GAP_MM = 6.0                       # espace minimal entre les deux moities du pied de page
 
 SVG_NS = 'http://www.w3.org/2000/svg'
 INK_NS = 'http://www.inkscape.org/namespaces/inkscape'
@@ -56,6 +60,20 @@ LABEL = f'{{{INK_NS}}}label'
 
 class GuideError(Exception):
     """Cas d'arret du cadrage 6 : l'outil s'arrete sans rien ecrire."""
+
+
+# Les textes fixes du guide (ligne de partie, pied de page, « HOW TO USE IT », titre et auteur du PDF) sont dans le fichier de
+# donnees (`labels`) ; `build` les pose ici le temps de la composition.
+_LABELS = {}
+
+
+def label(*path):
+    v = _LABELS
+    for k in path:
+        if not isinstance(v, dict) or k not in v:
+            raise GuideError(f'donnees du guide : textes fixes « labels.{".".join(path)} » manquant')
+        v = v[k]
+    return v
 
 
 # --------------------------------------------------------------------------------------------------------- transformations
@@ -106,10 +124,49 @@ class TextEl:
     y: float
     anchor: str
     order: int
+    m: tuple = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)      # transformation de l'element vers la page (parents compris)
+    lx: float = 0.0   # ancre locale (avant transformation)
+    ly: float = 0.0
+    size: float = 0.0           # corps local, mm
+    weight: str = 'regular'
+    spacing: float = 0.0        # espacement des lettres local, mm
+
+    def width(self):
+        """Largeur locale du texte, mm : avances reelles des glyphes + espacement des lettres."""
+        return fonts.text_width(self.text, self.weight, self.size, self.spacing)
+
+    def corners(self):
+        """La boite du texte : 4 coins dans la page (mm), transformations comprises. Horizontalement : de l'ancre selon le
+        `text-anchor` et la largeur mesuree ; verticalement : la boite de ligne de la police (hhea de Barlow Condensed :
+        1,0 corps au-dessus de la ligne de base, 0,2 en dessous)."""
+        w = self.width()
+        x0 = {'middle': self.lx - w / 2, 'end': self.lx - w}.get(self.anchor, self.lx)
+        top, bot = self.ly - LINE_ASCENT * self.size, self.ly + LINE_DESCENT * self.size
+        return [apply(self.m, x, y) for x, y in ((x0, top), (x0 + w, top), (x0 + w, bot), (x0, bot))]
+
+    def box(self):
+        """Boite englobante (x0, y0, x1, y1) de la page, mm."""
+        c = self.corners()
+        xs, ys = [p[0] for p in c], [p[1] for p in c]
+        return (min(xs), min(ys), max(xs), max(ys))
+
+    def point_at(self, where):
+        """Point du texte, au milieu de la hauteur des capitales (donc dans la boite) : `start`, `middle` ou `end` de la ligne ; page, mm."""
+        w = self.width()
+        x0 = {'middle': self.lx - w / 2, 'end': self.lx - w}.get(self.anchor, self.lx)
+        fx = {'start': 0.0, 'middle': 0.5, 'end': 1.0}[where]
+        return apply(self.m, x0 + fx * w, self.ly - fonts.CAP_HEIGHT * self.size / 2)
 
 
 def _norm_ws(s):
     return ' '.join(s.split())
+
+
+def _num(el, name, default, where):
+    try:
+        return float(el.attrib.get(name, default))
+    except ValueError:
+        raise GuideError(f'{where} : attribut {name}="{el.attrib.get(name)}" illisible')
 
 
 class SvgPage:
@@ -135,13 +192,21 @@ class SvgPage:
 
             def walk(e, layer, m):
                 for c in e:
-                    mm = _mul(m, parse_transform(c.attrib.get('transform')))
+                    where = f'page {self.name}, couche « {layer} »'
+                    try:
+                        mm = _mul(m, parse_transform(c.attrib.get('transform')))
+                    except (ValueError, IndexError):
+                        raise GuideError(f'{where} : transformation illisible « {c.attrib.get("transform")} »')
                     if _local(c.tag) == 'text':
                         if c.attrib.get('class') == 'halo':
                             continue
-                        x, y = apply(mm, float(c.attrib.get('x', 0)), float(c.attrib.get('y', 0)))
-                        out.append(TextEl(layer, _norm_ws(''.join(c.itertext())), x, y,
-                                          c.attrib.get('text-anchor', 'start'), len(out)))
+                        txt = _norm_ws(''.join(c.itertext()))
+                        where = f'{where}, texte « {txt} »'
+                        lx, ly = _num(c, 'x', 0, where), _num(c, 'y', 0, where)
+                        x, y = apply(mm, lx, ly)
+                        weight = 'bold' if c.attrib.get('font-weight') in ('bold', '700', '800', '900') else 'regular'
+                        out.append(TextEl(layer, txt, x, y, c.attrib.get('text-anchor', 'start'), len(out), mm, lx, ly,
+                                          _num(c, 'font-size', 0, where), weight, _num(c, 'letter-spacing', 0, where)))
                     else:
                         walk(c, layer, mm)
 
@@ -229,18 +294,29 @@ class Sources:
         full = self._members[d['zip']].get(d['file'])
         if full is None:
             raise GuideError(f'page {name} : {d["file"]} absente du zip {d["zip"]}')
-        return z.read(full)
+        try:
+            return z.read(full)
+        except (zipfile.BadZipFile, zlib.error, OSError, RuntimeError, EOFError) as e:
+            raise GuideError(f'page {name} : {d["file"]} illisible dans le zip {d["zip"]} ({e})')
 
     def svg(self, name):
         if name not in self._svg:
-            self._svg[name] = SvgPage(name, self.member(name).decode('utf-8'))
+            try:
+                text = self.member(name).decode('utf-8')
+            except UnicodeDecodeError as e:
+                raise GuideError(f'page {name} : le SVG n\'est pas de l\'UTF-8 ({e})')
+            self._svg[name] = SvgPage(name, text)
         return self._svg[name]
 
     def image(self, name):
         """(octets JPEG, largeur, hauteur) d'une page-image ; les dimensions sont controlees."""
         from PIL import Image
         data = self.member(name)
-        im = Image.open(io.BytesIO(data))
+        try:
+            im = Image.open(io.BytesIO(data))
+            im.load()
+        except Exception as e:                      # JPEG corrompu ou tronque : l'outil s'arrete en nommant la page
+            raise GuideError(f'page {name} : {self.defs[name]["file"]} n\'est pas un JPEG lisible ({e})')
         want = tuple(self.defs[name]['size'])
         if im.size != want:
             raise GuideError(f'page {name} : {self.defs[name]["file"]} mesure {im.size[0]} × {im.size[1]}, '
@@ -249,7 +325,10 @@ class Sources:
 
 
 def load_data(path=DATA_FILE):
-    return json.loads(Path(path).read_text(encoding='utf-8'))
+    try:
+        return json.loads(Path(path).read_text(encoding='utf-8'))
+    except (OSError, ValueError) as e:
+        raise GuideError(f'fichier de donnees du guide illisible : {path} ({e})')
 
 
 # --------------------------------------------------------------------------------------------------------- texte mesure
@@ -332,6 +411,14 @@ def wrap_plain(text, width, size_pt, weight, where, spacing=0.0):
 
 
 # ------------------------------------------------------------------------------------------------------- dessin (SVG)
+def fit(where, text, weight, size_pt, limit, spacing=0.0):
+    """Mesure `text` (glyphes reels, espacement des lettres compris) ; GuideError nommant `where` s'il depasse `limit` mm."""
+    w = tw(text, weight, size_pt, spacing)
+    if w > limit + 1e-6:
+        raise GuideError(f'{where} : « {text} » deborde de sa zone ({w:.1f} mm, limite {limit:.1f} mm)')
+    return w
+
+
 def t_el(x, y, s, size_pt, weight='normal', fill=INK, anchor='start', spacing=None):
     ls = f' letter-spacing="{spacing}"' if spacing else ''
     return (f'<text x="{x:.2f}" y="{y:.2f}" font-family="{FAMILY}" font-size="{size_pt * PT:.3f}" font-weight="{weight}" '
@@ -363,7 +450,7 @@ class Page:
 def block_text(page, name, runs, x, y, width, bottom, size_pt, lead, fill=INK, spacing=None):
     """Un bloc de texte dans la zone [y, bottom] : le texte qui deborde arrete l'outil (jamais de reduction de corps)."""
     where = f'page {page.id}, bloc « {name} »'
-    lines = wrap_runs(runs, width, size_pt, where)
+    lines = wrap_runs(runs, width, size_pt, where, spacing or 0.0)
     end = y + lead * (len(lines) - 1) if lines else y
     if end > bottom + 1e-6:
         raise GuideError(f'{where} : le texte deborde de sa zone ({end:.1f} mm, limite {bottom:.1f} mm ; '
@@ -374,20 +461,67 @@ def block_text(page, name, runs, x, y, width, bottom, size_pt, lead, fill=INK, s
 
 
 # ------------------------------------------------------------------------------------------------------------- pastilles
+PIN_R = 2.1 + 0.175                       # rayon exterieur d'une pastille (disque + liseré blanc), mm de la page A4
+DOT_TOLERANCE_MM = 2.0                    # le point dessine : dans la boite du texte ou a 2 mm au plus de son bord
+AT_CHOICES = ('start', 'middle', 'end')
+
+
+def _seg_dist(px, py, ax, ay, bx, by):
+    dx, dy = bx - ax, by - ay
+    n = dx * dx + dy * dy
+    t = 0.0 if n == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / n))
+    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+
+def box_distance(x, y, corners):
+    """Distance (mm) du point au quadrilatere `corners` (rectangle eventuellement tourne) ; 0 s'il est dedans."""
+    cr = [(corners[(i + 1) % 4][0] - corners[i][0]) * (y - corners[i][1]) -
+          (corners[(i + 1) % 4][1] - corners[i][1]) * (x - corners[i][0]) for i in range(4)]
+    if all(c >= -1e-9 for c in cr) or all(c <= 1e-9 for c in cr):
+        return 0.0
+    return min(_seg_dist(x, y, *corners[i], *corners[(i + 1) % 4]) for i in range(4))
+
+
 @dataclass
 class Pin:
     n: int
     on: str                 # 'page' (la page source, a S) ou 'zoom'
     kind: str               # 'text', 'point' ou 'image'
     layer: str
-    aim: tuple              # point vise, mm de la page source (nudge applique)
-    anchor: tuple           # ancre de l'element (texte) ou point (autres), mm de la page source
+    aim: tuple              # point dessine, mm de la page source
+    box: tuple              # quadrilatere controle (4 coins, mm de la page source) ; () si la cible n'est pas un texte
     badge: tuple            # decalage de la pastille, mm de la page A4
     title: str
     text: str
     check: str              # 'texte', 'encre' ou 'aucun'
     page_key: str
     spec_id: str
+    target_text: str = ''
+    at: str = ''
+
+
+def check_drawn(pin, x, y):
+    """Le point dessine (x, y), mm de la page source, est la ou la cible a ete controlee : dans la boite du texte ou a 2 mm
+    au plus de son bord (une cible-encre : a 0,5 mm du point ou l'encre a ete trouvee). Sinon arret nomme."""
+    where = f'page {pin.spec_id} ({pin.page_key}), pastille {pin.n} : '
+    if pin.check == 'texte':
+        d = box_distance(x, y, list(pin.box))
+        if d > DOT_TOLERANCE_MM + 1e-9:
+            raise GuideError(f'{where}le point dessine ({x:.2f}, {y:.2f}) est a {d:.2f} mm du texte « {pin.target_text} » '
+                             f'(limite {DOT_TOLERANCE_MM} mm)')
+    elif pin.check == 'encre':
+        d = math.hypot(x - pin.aim[0], y - pin.aim[1])
+        if d > INK_RADIUS_MM + 1e-9:
+            raise GuideError(f'{where}le point dessine ({x:.2f}, {y:.2f}) est a {d:.2f} mm du point ou l\'encre de la '
+                             f'couche « {pin.layer} » a ete controlee (limite {INK_RADIUS_MM} mm)')
+
+
+def _frame(spec):
+    """Ce qu'une page d'anatomie montre : (echelle de la page source ou None, (region, echelle) du zoom ou None)."""
+    if spec['kind'] == 'zoom_only':
+        return None, (list(spec['region']), spec['scale'])
+    z = spec.get('zoom')
+    return S, ((list(z['region']), z['scale']) if z else None)
 
 
 def resolve_pins(sources, spec):
@@ -397,42 +531,92 @@ def resolve_pins(sources, spec):
     is_image = sources.defs[key].get('size') is not None
     if is_image:
         sources.image(key)                       # le fichier existe et garde ses dimensions
+    page_scale, zoom = _frame(spec)
     for p in spec['pins']:
         where = f'page {spec["id"]} ({key}), pastille {p["n"]} : '
         tg = p['target']
-        nudge = tuple(tg.get('nudge', (0.0, 0.0)))
+        on = p.get('on', 'page')
+        if on not in ('page', 'zoom'):
+            raise GuideError(f'{where}« on » inconnu : « {on} » (attendu : page ou zoom)')
+        if on == 'zoom' and zoom is None:
+            raise GuideError(f'{where}pastille « on: zoom » sur une page qui n\'a pas de zoom')
+        if on == 'page' and page_scale is None:
+            raise GuideError(f'{where}pastille « on: page » sur une page qui ne montre que le zoom')
+        if 'nudge' in tg:
+            raise GuideError(f'{where}« nudge » n\'existe plus : choisir at = start, middle ou end')
+        box, tgt_text, at = (), '', ''
         if tg['kind'] == 'text':
             el = sources.svg(key).find_text(tg['layer'], tg['text'], tg.get('occurrence'), where)
-            anchor = (el.x, el.y)
-            aim = (el.x + nudge[0], el.y + nudge[1])
+            at = tg.get('at', 'middle')
+            if at not in AT_CHOICES:
+                raise GuideError(f'{where}« at » inconnu : « {at} » (attendu : start, middle ou end)')
+            aim = el.point_at(at)
+            box, tgt_text = tuple(el.corners()), el.text
             check = 'texte'
         elif tg['kind'] == 'point':
-            anchor = aim = tuple(tg['at'])
-            if not sources.svg(key).has_ink(tg['layer'], *anchor):
+            aim = tuple(tg['at'])
+            if not sources.svg(key).has_ink(tg['layer'], *aim):
                 raise GuideError(f'{where}cible introuvable : pas d\'encre de la couche « {tg["layer"]} » a moins de '
-                                 f'{INK_RADIUS_MM} mm du point {anchor} de la page {key}')
+                                 f'{INK_RADIUS_MM} mm du point {aim} de la page {key}')
             check = 'encre'
         elif tg['kind'] == 'image':
             if not is_image:
                 raise GuideError(f'{where}cible « image » sur une page qui a un SVG')
-            anchor = aim = tuple(tg['at'])
+            aim = tuple(tg['at'])
             check = 'aucun'
         else:
             raise GuideError(f'{where}sorte de cible inconnue : {tg["kind"]}')
-        out.append(Pin(p['n'], p.get('on', 'page'), tg['kind'], tg.get('layer', ''), aim, anchor, tuple(p['badge']),
-                       p['title'], p.get('text', ''), check, key, spec['id']))
+        pin = Pin(p['n'], on, tg['kind'], tg.get('layer', ''), tuple(aim), box, tuple(p['badge']), p['title'],
+                  p.get('text', ''), check, key, spec['id'], tgt_text, at)
+        _check_pin_geometry(sources, spec, pin, page_scale, zoom, is_image, where)
+        out.append(pin)
     return out
 
 
+def _check_pin_geometry(sources, spec, pin, page_scale, zoom, is_image, where):
+    """La pastille reste dans sa page (ou dans la zone agrandie) et son disque ne recoupe aucun texte de la page source."""
+    if pin.on == 'zoom':
+        (x0, y0, x1, y1), z = zoom
+        if not (x0 <= pin.aim[0] <= x1 and y0 <= pin.aim[1] <= y1):
+            raise GuideError(f'{where}le point vise ({pin.aim[0]:.2f}, {pin.aim[1]:.2f}) sort de la zone agrandie '
+                             f'[{x0}, {y0}, {x1}, {y1}]')
+        scale, region = z, (x0, y0, x1, y1)
+    else:
+        if not (0 <= pin.aim[0] <= PAGE_W and 0 <= pin.aim[1] <= PAGE_H):
+            raise GuideError(f'{where}le point vise ({pin.aim[0]:.2f}, {pin.aim[1]:.2f}) sort de la page '
+                             f'({PAGE_W:g} × {PAGE_H:g} mm)')
+        scale, region = page_scale, (0.0, 0.0, PAGE_W, PAGE_H)
+    cx, cy = pin.aim[0] + pin.badge[0] / scale, pin.aim[1] + pin.badge[1] / scale
+    if pin.on == 'page' and not (0 <= cx <= PAGE_W and 0 <= cy <= PAGE_H):
+        raise GuideError(f'{where}la pastille ({cx:.2f}, {cy:.2f}) sort de la page ({PAGE_W:g} × {PAGE_H:g} mm)')
+    if is_image:
+        return                                           # l'annuaire n'a pas de texte : rien a recouvrir
+    r = PIN_R / scale
+    for t in sources.svg(spec['source']).texts():
+        c = t.corners()
+        xs, ys = [q[0] for q in c], [q[1] for q in c]
+        if max(xs) < region[0] or min(xs) > region[2] or max(ys) < region[1] or min(ys) > region[3]:
+            continue                                     # texte hors de la zone montree
+        if box_distance(cx, cy, c) < r:
+            raise GuideError(f'{where}le disque de la pastille (centre {cx:.2f}, {cy:.2f} ; rayon {r:.2f} mm de la page) '
+                             f'recouvre le texte « {t.text} » (couche « {t.layer} »)')
+
+
 def check_cited(sources, cited):
-    """Chaque chaine citee par un texte du guide est relue dans le texte de sa page (casse ignoree). Retourne le nombre."""
+    """Chaque chaine citee par un texte du guide est cherchee, element `text` par element `text`, dans la page qu'elle cite :
+    casse ignoree, espaces normalises, frontieres (ni lettre, chiffre, `_` ni point avant ou apres). Retourne le nombre."""
     n = 0
     for c in cited:
-        text = sources.svg(c['page']).page_text().casefold()
-        for s in c['strings']:
-            if _norm_ws(s).casefold() not in text:
-                raise GuideError(f'chiffre cite absent de sa page : « {s} » ({c["block"]}) n\'est pas dans le texte de la '
-                                 f'page {c["page"]} : le texte du guide contredit la release')
+        try:
+            page, strings, block = c['page'], c['strings'], c['block']
+        except KeyError as e:
+            raise GuideError(f'chiffres cites : entree {c!r} sans la cle {e}')
+        texts = [t.text for t in sources.svg(page).texts()]
+        for s in strings:
+            pat = re.compile(r'(?<![\w.])' + re.escape(_norm_ws(s)) + r'(?![\w.])', re.IGNORECASE)
+            if not any(pat.search(t) for t in texts):
+                raise GuideError(f'chiffre cite absent de sa page : « {s} » ({block}) n\'est dans aucun element de texte de '
+                                 f'la page {page} : le texte du guide contredit la release')
             n += 1
     return n
 
@@ -478,6 +662,17 @@ def draw_pin(pg, tx, ty, px, py, n):
            t_el(px, py + 1.05, str(n), 7.2, 'bold', '#FFFFFF', 'middle'))
 
 
+def place_pin(pg, p, ox, oy, rx, ry, scale):
+    """Dessine la pastille `p` dont le point (rx, ry) de la page source est en (ox, oy) sur la page A4, a l'echelle `scale`.
+    Le point dessine est controle la ou il est dessine ; la pastille reste dans la page A4."""
+    tx, ty = ox + (p.aim[0] - rx) * scale, oy + (p.aim[1] - ry) * scale
+    check_drawn(p, rx + (tx - ox) / scale, ry + (ty - oy) / scale)
+    bx, by = tx + p.badge[0], ty + p.badge[1]
+    if not (PIN_R <= bx <= W - PIN_R and PIN_R <= by <= H - PIN_R):
+        raise GuideError(f'page {p.spec_id} ({p.page_key}), pastille {p.n} : la pastille sort de la page A4')
+    draw_pin(pg, tx, ty, bx, by, p.n)
+
+
 def draw_legend(pg, pins, x, y, width, limit, title_pt=7.2):
     """Colonne de legendes : pastille, titre en capitales grasses, texte en INK2. `limit` : bas de la zone (mm)."""
     for p in pins:
@@ -501,8 +696,10 @@ def draw_legend(pg, pins, x, y, width, limit, title_pt=7.2):
 def draw_use(pg, items, y0, numbered=None):
     """« HOW TO USE IT » et ses points numerotes (un seul point : un paragraphe sans numero)."""
     numbered = len(items) > 1 if numbered is None else numbered
+    heading = label('how_to_use')
+    fit('« how to use it »', heading, 'bold', 9, MX1 - MX0, 0.4)
     pg.add(f'<line x1="{MX0}" y1="{y0 - 5:.2f}" x2="{MX1}" y2="{y0 - 5:.2f}" stroke="{RULE}" stroke-width="0.3"/>',
-           t_el(MX0, y0, 'HOW TO USE IT', 9, 'bold', spacing=0.4))
+           t_el(MX0, y0, heading, 9, 'bold', spacing=0.4))
     y = y0 + 6
     for i, item in enumerate(items, 1):
         runs = parse_rich(item)
@@ -535,7 +732,7 @@ def layout_anatomy(spec, pins, emb, part_label, title):
         zx = (W - zw) / 2
         fx0, fy0, fx1, fy1 = zoom.get('frame', zoom['region'])
         lab = zoom['frame_label']
-        lw = tw(lab, 'bold', 6.2, 0.2)
+        lw = fit(f'page {spec["id"]}, etiquette du cadre', lab, 'bold', 6.2, PAGE_W * S, 0.2)
         if zoom.get('frame_label_pos') == 'inside':
             lx, ly = CX + fx1 * S - 1.0, CY + fy0 * S + 3.4
             bg = f'<rect x="{lx - lw - 0.8:.2f}" y="{ly - 2.2:.2f}" width="{lw + 1.8:.2f}" height="3.2" fill="#FFFFFF"/>'
@@ -548,6 +745,7 @@ def layout_anatomy(spec, pins, emb, part_label, title):
                f'height="{(fy1 - fy0) * S:.2f}" fill="none" stroke="{PIN}" stroke-width="0.3" stroke-dasharray="1 0.8"/>',
                t_el(lx, ly, lab, 6.2, 'bold', PIN, 'end', spacing=0.2))
         if same:
+            fit(f'page {spec["id"]}, legende du zoom', zoom['caption'], 'bold', 7.5, MX1 - MX0, 0.4)
             pg.add(t_el(MX0, zy - 2.2, zoom['caption'], 7.5, 'bold', INK2, spacing=0.4),
                    f'<rect x="{zx:.2f}" y="{zy:.2f}" width="{zw:.2f}" height="{zh:.2f}" fill="#FFFFFF" stroke="{RULE}" '
                    f'stroke-width="0.3"/>',
@@ -556,10 +754,9 @@ def layout_anatomy(spec, pins, emb, part_label, title):
         if p.on == 'zoom':
             if not same:
                 continue
-            tx, ty = zx + (p.aim[0] - x0) * z, zy + (p.aim[1] - y0) * z
+            place_pin(pg, p, zx, zy, x0, y0, z)
         else:
-            tx, ty = CX + p.aim[0] * S, CY + p.aim[1] * S
-        draw_pin(pg, tx, ty, tx + p.badge[0], ty + p.badge[1], p.n)
+            place_pin(pg, p, CX, CY, 0.0, 0.0, S)
     col = [p for p in pins if p.on == 'page' or same]
     draw_legend(pg, col, COL_X, CY + 1.5, MX1 - COL_X - 5.5, CY + PAGE_H * S + 1)
     y_use = (zy + zh + 12) if same else (CY + PAGE_H * S + 14)
@@ -578,14 +775,14 @@ def layout_zoom_page(spec, pins, emb, part_label, title, zoom):
     z = zoom['scale']
     zw, zh = (x1 - x0) * z, (y1 - y0) * z
     zx, zy = (W - zw) / 2, 40.0
+    fit(f'page {spec["id"]}, legende du zoom', zoom['caption'], 'bold', 7.5, MX1 - MX0, 0.4)
     pg.add(t_el(MX0, zy - 2.2, zoom['caption'], 7.5, 'bold', INK2, spacing=0.4),
            f'<rect x="{zx:.2f}" y="{zy:.2f}" width="{zw:.2f}" height="{zh:.2f}" fill="#FFFFFF" stroke="{RULE}" '
            f'stroke-width="0.3"/>',
            emb.svg(key, zx, zy, zw, zh, f'{x0} {y0} {x1 - x0} {y1 - y0}'))
     zp = [p for p in pins if p.on == 'zoom']
     for p in zp:
-        tx, ty = zx + (p.aim[0] - x0) * z, zy + (p.aim[1] - y0) * z
-        draw_pin(pg, tx, ty, tx + p.badge[0], ty + p.badge[1], p.n)
+        place_pin(pg, p, zx, zy, x0, y0, z)
     y = zy + zh + 12
     half = (MX1 - MX0 - 8) / 2
     for i in range(0, len(zp), 2):
@@ -609,9 +806,7 @@ def layout_cover(cfg, emb, edition):
     pg.add(f'<g opacity="{cfg["background_opacity"]}">', emb.svg(cfg['background'], (W - pw) / 2, 0, pw, ph), '</g>')
     pg.add(f'<rect x="{MX0}" y="86" width="2.2" height="52" fill="{PIN}"/>')
     y = 100.0
-    lines = wrap_runs([(cfg['title'], 'bold')], 120, 38, 'page cover, bloc « title »')
-    els, y = draw_lines(lines, MX0 + 8, y, 38, 15.0, INK)
-    pg.add(*els)
+    y = block_text(pg, 'title', [(cfg['title'], 'bold')], MX0 + 8, y, 120, 140, 38, 15.0, INK)
     y = block_text(pg, 'cover', [(cfg['subtitle'], 'regular')], MX0 + 8, y + 2, 160, 160, 16, 6.8, INK2)
     line = cfg['line'].replace('<TAG>', edition)
     block_text(pg, 'line', [(line, 'regular')], MX0 + 8, y + 8, 160, 190, 11, 5.0, INK2)
@@ -640,8 +835,11 @@ def layout_strip(spec, emb, part_label, title):
         x = MX0 + i * (w + gap)
         thumb(pg, emb, th['source'], x, y0, w)
         y = y0 + h + 6.0
+        where = f'page {pg.id}, vignette {th["code"]}'
+        fit(where + ', code', th['code'], 'bold', 11, w)
         pg.add(t_el(x, y, th['code'], 11, 'bold', INK))
         y += 4.4
+        fit(where + ', nom', th['name'].upper(), 'bold', 7.2, w, 0.2)
         pg.add(t_el(x, y, th['name'].upper(), 7.2, 'bold', INK2, spacing=0.2))
         y += 4.0
         lines = wrap_runs([(th['line'], 'regular')], w, 8, f'page {pg.id}, vignette {th["code"]}')
@@ -677,14 +875,18 @@ def layout_flight(spec, emb, part_label, title):
         x = cx + tw_img + 5.0
         width = cw - tw_img - 5.0
         runs = parse_rich(st['text'])
+        if cy + ih > BODY_BOTTOM:
+            raise GuideError(f'page {pg.id}, etape {i + 1} : les vignettes passent sous le pied de page '
+                             f'({cy + ih:.1f} mm, limite {BODY_BOTTOM:.1f} mm)')
         pg.add(t_el(x, cy + 3.5, f'{i + 1}', 20, 'bold', PIN))
-        block_text(pg, f'etape {i + 1}', runs, x, cy + 11.0, width, cy + rh - 6, 10.5, 4.6)
+        block_text(pg, f'etape {i + 1}', runs, x, cy + 11.0, width, min(cy + rh - 6, BODY_BOTTOM), 10.5, 4.6)
     return [pg]
 
 
 def layout_overview(spec, part_label, title):
     """11.0 : le tableau des appareils et sa note."""
     pg = Page(spec['id'], part_label, title)
+    fit(f'page {pg.id}, titre du tableau', spec['caption'].upper(), 'bold', 8, MX1 - MX0, 0.4)
     pg.add(t_el(MX0, 38, spec['caption'].upper(), 8, 'bold', INK2, spacing=0.4))
     xs = spec['col_x']
     widths = [xs[i + 1] - xs[i] - 3 for i in range(len(xs) - 1)] + [MX1 - xs[-1] - 1]
@@ -692,8 +894,12 @@ def layout_overview(spec, part_label, title):
     head_h = 12.0
     pg.add(f'<rect x="{MX0}" y="{y}" width="{MX1 - MX0}" height="{head_h}" fill="{BAND}"/>')
     for x, wd, hd in zip(xs, widths, spec['header']):
-        lines = wrap_runs([(hd, 'bold')], wd, 8.5, f'page {pg.id}, en-tete « {hd} »')
-        els, _ = draw_lines(lines, x + 1.5, y + 5.0 - (len(lines) - 1) * 1.8, 8.5, 3.6, INK)
+        lines = wrap_runs([(hd, 'bold')], wd - 1.5, 8.5, f'page {pg.id}, en-tete « {hd} »')
+        first = y + 5.0 - (len(lines) - 1) * 1.8
+        if first < y + 3.0 or first + (len(lines) - 1) * 3.6 > y + head_h - 1.0:
+            raise GuideError(f'page {pg.id}, en-tete « {hd} » : {len(lines)} lignes ne tiennent pas dans la bande '
+                             f'de {head_h:g} mm')
+        els, _ = draw_lines(lines, x + 1.5, first, 8.5, 3.6, INK)
         pg.add(*els)
     y += head_h
     pg.add(f'<line x1="{MX0}" y1="{y}" x2="{MX1}" y2="{y}" stroke="{INK}" stroke-width="0.4"/>')
@@ -708,6 +914,8 @@ def layout_overview(spec, part_label, title):
                                 INK if c == 0 or cell not in ('—',) else INK2)
             pg.add(*els)
         y += row_h
+        if y > BODY_BOTTOM:
+            raise GuideError(f'page {pg.id}, tableau : la ligne {r + 1} passe sous le pied de page ({y:.1f} mm)')
         pg.add(f'<line x1="{MX0}" y1="{y}" x2="{MX1}" y2="{y}" stroke="{RULE}" stroke-width="0.25"/>')
     block_text(pg, 'note sous le tableau', parse_rich(spec['note']), MX0, y + 9, MX1 - MX0, BODY_BOTTOM, 11, 5.0, INK2)
     return [pg]
@@ -726,6 +934,9 @@ def layout_fiche(spec, emb, part_label, title):
     if ex:
         x = MX1 - img_w
         h = thumb(pg, emb, ex, x, 38.0, img_w)
+        fit(f'page {pg.id}, legende de la vignette', spec['example_caption'], 'regular', 7.5, img_w)
+        if 38.0 + h + 4.5 > BODY_BOTTOM:
+            raise GuideError(f'page {pg.id}, vignette : sa legende passe sous le pied de page')
         pg.add(t_el(x, 38.0 + h + 4.5, spec['example_caption'], 7.5, 'normal', INK2))
     return [pg]
 
@@ -734,6 +945,7 @@ def layout_annex(spec, part_label, title):
     pg = Page(spec['id'], part_label, title)
     y = 40.0
     for sec in spec['sections']:
+        fit(f'page {pg.id}, titre de section', sec['heading'], 'bold', 14, MX1 - MX0)
         pg.add(t_el(MX0, y, sec['heading'], 14, 'bold', INK))
         pg.add(f'<line x1="{MX0}" y1="{y + 2.2:.2f}" x2="{MX1}" y2="{y + 2.2:.2f}" stroke="{RULE}" stroke-width="0.3"/>')
         y += 9.0
@@ -759,12 +971,12 @@ def layout_zoom_only(spec, pins, emb, part_label, title):
     zw, zh = (x1 - x0) * z, (y1 - y0) * z
     zx, zy = MX0, CY + 1.0
     if spec.get('caption'):
+        fit(f'page {spec["id"]}, legende du zoom', spec['caption'], 'bold', 7.5, MX1 - MX0, 0.4)
         pg.add(t_el(MX0, zy - 2.4, spec['caption'], 7.5, 'bold', INK2, spacing=0.4))
     pg.add(f'<rect x="{zx:.2f}" y="{zy:.2f}" width="{zw:.2f}" height="{zh:.2f}" fill="#FFFFFF" stroke="{RULE}" '
            f'stroke-width="0.3"/>', emb.svg(key, zx, zy, zw, zh, f'{x0} {y0} {x1 - x0} {y1 - y0}'))
     for p in pins:
-        tx, ty = zx + (p.aim[0] - x0) * z, zy + (p.aim[1] - y0) * z
-        draw_pin(pg, tx, ty, tx + p.badge[0], ty + p.badge[1], p.n)
+        place_pin(pg, p, zx, zy, x0, y0, z)
     lx = zx + zw + 7.0
     draw_legend(pg, pins, lx, zy + 1.5, MX1 - lx - 5.5, zy + zh)
     block_text(pg, 'texte du chapitre', parse_rich(spec['text']), MX0, zy + zh + 14, MX1 - MX0, BODY_BOTTOM, 11, 5.0)
@@ -776,13 +988,20 @@ def layout_contents(spec, entries, part_label, title):
     pg = Page(spec['id'], part_label, title)
     y = 42.0
     for grp in spec['groups']:
+        fit(f'page {pg.id}, titre de groupe', grp['heading'].upper(), 'bold', 9, MX1 - MX0, 0.5)
         pg.add(t_el(MX0, y, grp['heading'].upper(), 9, 'bold', INK2, spacing=0.5))
         y += 3.0
         pg.add(f'<line x1="{MX0}" y1="{y:.2f}" x2="{MX1}" y2="{y:.2f}" stroke="{INK}" stroke-width="0.4"/>')
         y += 8.0
         for e in grp['entries']:
             num, name, ref = e['num'], e['name'], e['ref']
+            if ref not in entries:
+                raise GuideError(f'page {pg.id}, ligne « {name} » : la page « {ref} » n\'existe pas dans le guide')
             page_no = entries[ref]
+            fit(f'page {pg.id}, numero de ligne', num, 'bold', 12, 12.0)
+            if y > BODY_BOTTOM:
+                raise GuideError(f'page {pg.id}, ligne « {name} » : le sommaire passe sous le pied de page '
+                                 f'({y:.1f} mm, limite {BODY_BOTTOM:.1f} mm)')
             right = tw(str(page_no), 'bold', 12)
             if tw(name, 'regular', 12) + 14 > MX1 - MX0 - right - 6:
                 raise GuideError(f'page {pg.id}, ligne « {name} » : trop longue pour le sommaire')
@@ -797,26 +1016,35 @@ def layout_contents(spec, entries, part_label, title):
 
 
 # ----------------------------------------------------------------------------------------------------------- assemblage
-PART_LABELS = {1: 'PART 1 · READING THE CHARTS', 2: 'PART 2 · FLYING WITH THE CHARTS',
-               'annex': 'APPENDICES', 'contents': 'DCS AIRFIELD CHARTS · READING GUIDE'}
+def footer_texts(edition):
+    """Les deux moities du pied de page ; elles ne se recoupent pas, quelle que soit la longueur de l'edition."""
+    left = label('footer_left').format(tag=edition)
+    right = label('footer_right')
+    wl, wr = tw(left, 'regular', 7), tw(right, 'bold', 7)
+    if wl + wr + FOOTER_GAP_MM > MX1 - MX0:
+        raise GuideError(f'pied de page : les deux moities ({wl:.1f} + {wr:.1f} mm) ne tiennent pas dans '
+                         f'{MX1 - MX0:.0f} mm avec l\'edition « {edition} » ; edition trop longue')
+    return left, right
 
 
 def page_svg(pg, number, edition):
     """La page A4 complete en SVG : en-tete, contenu, pied (sauf la couverture, qui n'en a pas)."""
     e = [f'<svg xmlns="{SVG_NS}" xmlns:xlink="{XLINK_NS}" width="{W:g}mm" height="{H:g}mm" viewBox="0 0 {W:g} {H:g}">',
          f'<rect width="{W:g}" height="{H:g}" fill="#FFFFFF"/>']
+    footer = footer_texts(edition)
     if not pg.cover:
         if tw(pg.title, 'bold', 20) > MX1 - MX0 - 16:
             raise GuideError(f'page {pg.id}, bloc « titre » : « {pg.title} » deborde de sa zone '
                              f'({tw(pg.title, "bold", 20):.1f} mm, limite {MX1 - MX0 - 16:.1f} mm)')
+        fit(f'page {pg.id}, ligne de partie', pg.part, 'regular', 8, MX1 - MX0, 0.6)
         e += [t_el(MX0, 14, pg.part, 8, 'normal', INK2, spacing=0.6), t_el(MX0, 22.5, pg.title, 20, 'bold'),
               t_el(MX1, 22.5, str(number), 20, 'bold', INK2, 'end'),
               f'<line x1="{MX0}" y1="25.5" x2="{MX1}" y2="25.5" stroke="{INK}" stroke-width="0.5"/>']
     e += pg.els
     if not pg.cover:
         e += [f'<line x1="{MX0}" y1="285" x2="{MX1}" y2="285" stroke="{INK}" stroke-width="0.3"/>',
-              t_el(MX0, 289.5, FOOTER_LEFT.format(tag=edition), 7, 'normal', INK2),
-              t_el(MX1, 289.5, FOOTER_RIGHT, 7, 'bold', INK, 'end')]
+              t_el(MX0, 289.5, footer[0], 7, 'normal', INK2),
+              t_el(MX1, 289.5, footer[1], 7, 'bold', INK, 'end')]
     e.append('</svg>')
     return '\n'.join(e)
 
@@ -836,58 +1064,90 @@ def _title(spec):
 
 
 def _part(spec):
-    return PART_LABELS[spec['part']]
+    return label('parts', str(spec['part']))
+
+
+def _why(e):
+    return f'cle manquante {e}' if isinstance(e, KeyError) else f'{type(e).__name__} : {e}'
 
 
 def build(zips, edition, data=None):
-    """Compose le guide : retourne un Guide (le PDF en octets) ou leve GuideError ; n'ecrit rien."""
+    """Compose le guide : retourne un Guide (le PDF en octets) ou leve GuideError ; n'ecrit rien. Toute erreur de lecture
+    d'une page de la release ou des donnees devient une GuideError qui nomme la page ou l'entree."""
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', edition or ''):
         raise GuideError(f'edition invalide : « {edition} » (attendu : une version comme AC-V1.9.0)')
     data = data or load_data()
-    sources = Sources(zips, data['sources'])
-    for name in data['sources']:                          # une page absente des zips arrete l'outil en la nommant
-        sources.member(name)
+    try:
+        _LABELS.clear()
+        _LABELS.update(data['labels'])
+    except (KeyError, TypeError, ValueError) as e:
+        raise GuideError(f'donnees du guide : textes fixes « labels » illisibles ({_why(e)})')
+    try:
+        return _build(zips, edition, data)
+    finally:
+        _LABELS.clear()
+
+
+def _build(zips, edition, data):
+    try:
+        defs, specs = data['sources'], data['pages']
+        sources = Sources(zips, defs)
+        for name in defs:                                 # une page absente des zips arrete l'outil en la nommant
+            try:
+                sources.member(name)
+            except (KeyError, TypeError) as e:
+                raise GuideError(f'source {name} : entree illisible ({_why(e)})')
+    except (KeyError, TypeError, ValueError) as e:
+        raise GuideError(f'donnees du guide illisibles ({_why(e)})')
+    footer_texts(edition)                                 # les deux moities du pied de page tiennent
     emb = Embedder(sources)
     pages, refs, pins, cited_n = [], {}, [], 0
     contents_at = None
-    for spec in data['pages']:
-        kind = spec['kind']
-        if kind == 'contents':
-            contents_at = len(pages)
-            pages.append(None)
-            continue
-        if kind == 'cover':
-            made = layout_cover(spec, emb, edition)
-        elif kind == 'text':
-            made = layout_text(spec, _part(spec), _title(spec))
-        elif kind == 'strip':
-            made = layout_strip(spec, emb, _part(spec), _title(spec))
-        elif kind == 'anatomy':
-            ps = resolve_pins(sources, spec)
-            pins += ps
-            made = layout_anatomy(spec, ps, emb, _part(spec), _title(spec))
-        elif kind == 'zoom_only':
-            ps = resolve_pins(sources, spec)
-            pins += ps
-            made = layout_zoom_only(spec, ps, emb, _part(spec), _title(spec))
-        elif kind == 'flight':
-            made = layout_flight(spec, emb, _part(spec), _title(spec))
-        elif kind == 'overview':
-            made = layout_overview(spec, _part(spec), _title(spec))
-        elif kind == 'fiche':
-            made = layout_fiche(spec, emb, _part(spec), _title(spec))
-        elif kind == 'annex':
-            made = layout_annex(spec, _part(spec), _title(spec))
-        else:
-            raise GuideError(f'sorte de page inconnue : {kind}')
-        cited_n += check_cited(sources, spec.get('cited', []))
-        for r in spec.get('refs', [spec['id']]):
-            refs[r] = len(pages) + 1
-        pages += made
+    for spec in specs:
+        pid = spec.get('id', '?') if isinstance(spec, dict) else '?'
+        try:
+            kind = spec['kind']
+            if kind == 'contents':
+                contents_at = len(pages)
+                pages.append(None)
+                continue
+            if kind == 'cover':
+                made = layout_cover(spec, emb, edition)
+            elif kind == 'text':
+                made = layout_text(spec, _part(spec), _title(spec))
+            elif kind == 'strip':
+                made = layout_strip(spec, emb, _part(spec), _title(spec))
+            elif kind == 'anatomy':
+                ps = resolve_pins(sources, spec)
+                pins += ps
+                made = layout_anatomy(spec, ps, emb, _part(spec), _title(spec))
+            elif kind == 'zoom_only':
+                ps = resolve_pins(sources, spec)
+                pins += ps
+                made = layout_zoom_only(spec, ps, emb, _part(spec), _title(spec))
+            elif kind == 'flight':
+                made = layout_flight(spec, emb, _part(spec), _title(spec))
+            elif kind == 'overview':
+                made = layout_overview(spec, _part(spec), _title(spec))
+            elif kind == 'fiche':
+                made = layout_fiche(spec, emb, _part(spec), _title(spec))
+            elif kind == 'annex':
+                made = layout_annex(spec, _part(spec), _title(spec))
+            else:
+                raise GuideError(f'page {pid} : sorte de page inconnue : {kind}')
+            cited_n += check_cited(sources, spec.get('cited', []))
+            for r in spec.get('refs', [spec['id']]):
+                refs[r] = len(pages) + 1
+            pages += made
+        except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+            raise GuideError(f'page {pid} : donnees illisibles ({_why(e)})')
     if contents_at is None:
         raise GuideError('le fichier de donnees n\'a pas de sommaire')
-    cspec = data['pages'][[s['kind'] for s in data['pages']].index('contents')]
-    pages[contents_at] = layout_contents(cspec, refs, PART_LABELS['contents'], cspec['title'])[0]
+    cspec = specs[[s['kind'] for s in specs].index('contents')]
+    try:
+        pages[contents_at] = layout_contents(cspec, refs, label('parts', 'contents'), cspec['title'])[0]
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
+        raise GuideError(f'page {cspec.get("id", "contents")} : donnees illisibles ({_why(e)})')
     svgs = [page_svg(pg, i + 1, edition) for i, pg in enumerate(pages)]
     return Guide(render_pdf(svgs), len(pages), pins, cited_n, edition, refs)
 
@@ -901,12 +1161,18 @@ def render_pdf(svgs):
     with tempfile.TemporaryDirectory() as td:
         for i, svg in enumerate(svgs):
             p = Path(td) / f'p{i:02d}.pdf'
-            cairosvg.svg2pdf(bytestring=svg.encode('utf-8'), write_to=str(p))
+            try:
+                cairosvg.svg2pdf(bytestring=svg.encode('utf-8'), write_to=str(p))
+            except Exception as e:                  # une image incorporee illisible, un SVG que Cairo refuse
+                raise GuideError(f'page {i + 1} du guide : rendu impossible ({type(e).__name__} : {e})')
             if '<image' in svg or 'data:image' in svg:
-                export.jpeg_images_in_pdf(p)
+                try:
+                    export.jpeg_images_in_pdf(p)
+                except Exception as e:
+                    raise GuideError(f'page {i + 1} du guide : images illisibles ({type(e).__name__} : {e})')
             for page in PdfReader(str(p)).pages:
                 writer.add_page(page)
-    writer.add_metadata({'/Title': PDF_TITLE, '/Author': PDF_AUTHOR})
+    writer.add_metadata({'/Title': label('pdf_title'), '/Author': label('pdf_author')})
     buf = io.BytesIO()
     writer.write(buf)
     return buf.getvalue()
@@ -922,10 +1188,20 @@ def summary(g):
 
 
 def pins_report(g):
-    """Une ligne par pastille : page, numero, sorte de cible, point vise (mm de la page source)."""
-    rows = ['page\tsource\tn\tcible\tpoint_vise_mm']
+    """Une ligne par pastille : page, numero, sorte de cible, boite controlee (cible-texte : le rectangle du texte, mm de la
+    page source, englobant s'il est tourne), point dessine et son ecart a la boite (0 : dedans)."""
+    rows = ['page\tsource\tn\tcible\tboite_controlee_mm\tpoint_dessine_mm\tecart_mm']
     for p in g.pins:
         what = {'text': 'texte', 'point': 'encre', 'image': 'page-image'}[p.kind]
         lay = f' {p.layer}' if p.layer else ''
-        rows.append(f'{p.spec_id}\t{p.page_key}\t{p.n}\t{what}{lay}\t({p.aim[0]:.2f}, {p.aim[1]:.2f})')
+        if p.check == 'texte':
+            xs, ys = [c[0] for c in p.box], [c[1] for c in p.box]
+            box = f'({min(xs):.2f}, {min(ys):.2f}, {max(xs):.2f}, {max(ys):.2f})'
+            gap = f'{box_distance(p.aim[0], p.aim[1], list(p.box)):.2f}'
+            what += f'{lay} « {p.target_text} » ({p.at})'
+        elif p.check == 'encre':
+            box, gap, what = f'encre a moins de {INK_RADIUS_MM} mm', '0.00', what + lay
+        else:
+            box, gap = 'sans controle (annuaire)', '-'
+        rows.append(f'{p.spec_id}\t{p.page_key}\t{p.n}\t{what}\t{box}\t({p.aim[0]:.2f}, {p.aim[1]:.2f})\t{gap}')
     return '\n'.join(rows) + '\n'
