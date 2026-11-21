@@ -408,3 +408,42 @@ def test_republish_uses_the_engine_functions(monkeypatch):
     assert len(calls) == 1
     republish.complete_scale_bar(doc_svg(*old_bar_elements(elems, 750)), 'X_10-9', '10-9')
     assert len(calls) == 2 and calls[0][2] == calls[1][2] == 750
+
+
+# ---------- lot ac-approches-v1 : les pages helicoptere 11-xH ----------
+def test_republish_copies_the_helicopter_approach_pages_and_puts_them_after_the_11_x(tmp_path, capsys):
+    """Une page `<stem>_11-<n>H` est traitee comme une page 11-x : recopiee telle quelle (son elevation porte les metres), son PDF
+    entre dans le recueil apres les 11-x ; une chart qui n'a que des pages 11-xH (zip helicopters) n'a pas de recueil."""
+    lat, lon = konya_latlon()
+    bar300, _ = page.scale_block(BAR_X, BAR_Y, 38.0 / 300)
+    heli = five_fields(lat, lon, elev='ELEV 3392 FT · 1034 M')
+    pages = {'Konya_10-9': doc_svg('<rect x="1" y="1" width="2" height="2"/>', *five_fields(lat, lon), RULE, *bar300, frame_layer(0.0, 3.29)),
+             'Konya_11-1': doc_svg('<circle cx="5" cy="5" r="1"/>', *five_fields(lat, lon), RULE),
+             'Konya_11-1H': doc_svg('<circle cx="6" cy="6" r="1"/>', *heli, RULE),
+             'Konya_11-2': doc_svg('<circle cx="7" cy="7" r="1"/>', *five_fields(lat, lon), RULE),
+             'Other_11-1H': doc_svg('<circle cx="8" cy="8" r="1"/>', *heli, RULE)}
+    files = {}
+    for name, svg in pages.items():
+        s, p, n = export.export_page(svg, tmp_path / 'src' / name)
+        files[name] = (s.read_bytes(), p.read_bytes(), n.read_bytes())
+    export.merge_pdfs([tmp_path / 'src' / f'{n}.pdf' for n in ('Konya_10-9', 'Konya_11-1', 'Konya_11-2', 'Konya_11-1H')],
+                      tmp_path / 'src' / 'rec.pdf')
+    zin = tmp_path / 'in.zip'
+    with zipfile.ZipFile(zin, 'w') as z:
+        for name, (s, p, n) in files.items():
+            for sub, blob in (('pdf', p), ('png', n), ('svg', s)):
+                z.writestr(f'pack/{sub}/{name}.{sub}', blob)
+        z.writestr('pack/pdf/Konya_charts.pdf', (tmp_path / 'src' / 'rec.pdf').read_bytes())
+    out = tmp_path / 'out.zip'
+    assert run(zin, out) == 0
+    assert "pages d'approche 11-x : 4 recopiees telles quelles" in capsys.readouterr().out
+    with zipfile.ZipFile(zin) as a, zipfile.ZipFile(out) as b:
+        assert a.namelist() == b.namelist()
+        for name in ('Konya_11-1', 'Konya_11-1H', 'Konya_11-2', 'Other_11-1H'):
+            for sub in ('pdf', 'png', 'svg'):
+                assert b.read(f'pack/{sub}/{name}.{sub}') == a.read(f'pack/{sub}/{name}.{sub}')
+        rec = PdfReader(io.BytesIO(b.read('pack/pdf/Konya_charts.pdf')))
+        assert len(rec.pages) == 4
+        last = PdfReader(io.BytesIO(files['Konya_11-1H'][1])).pages[0].extract_text()
+        assert rec.pages[3].extract_text() == last and 'Other_charts' not in ' '.join(b.namelist())
+    assert republish._approach_key('11-1H') > republish._approach_key('11-2')

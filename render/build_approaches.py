@@ -110,13 +110,37 @@ def read_header(svg, stem):
     return Header(lines, icao[0][3] if icao else '', name[0][3], int(_ELEV.match(elev[0][3]).group(1)), lat, lon)
 
 
-def header_lines(hd, index, title):
-    """Les lignes d'en-tete de la 10-9, seuls le titre et le numero de page changent."""
+def header_row_lines(items):
+    """Les cinq champs de la ligne d'en-tete (textes donnes), places comme `page.header_row` : le premier en X0, le dernier
+    finissant en X1, ecarts egaux (4 mm au moins)."""
+    from render import page
+    from render.fonts import pt, text_width
+    from render.svgdoc import text
+    widths = [text_width(s, 'bold', pt(7.2)) for s in items]
+    gap = (page.X1 - page.X0 - sum(widths)) / (len(items) - 1)
+    if gap < page.HEADER_ROW_GAP_MIN:
+        raise Arret(f"ligne d'en-tete : ecart de {gap:.2f} mm entre les champs : {items}")
+    out, x = [], page.X0
+    for s, w in zip(items, widths):
+        out.append(text(x, page.HEADER_ROW_Y, s, pt(7.2), 'bold'))
+        x += w + gap
+    return out
+
+
+def header_lines(hd, index, title, elev_m=False):
+    """Les lignes d'en-tete de la 10-9, seuls le titre et le numero de page changent ; `elev_m` (page helicoptere, addendum 1,
+    2.3) : l'elevation porte aussi les metres (`ELEV 3407 FT · 1038 M`), la ligne est replacee comme `page.header_row`."""
     from render import page
     from render.fonts import pt
     from render.svgdoc import INK, INK2, text
     old_kind = text(page.PAGE_W / 2, 15.0, '', pt(6.5), 'regular', INK2, 'middle', spacing=0.8).split('>')[0]
     old_index = text(page.X1, 11.4, '10-9', pt(13), 'bold', INK, 'end')
+    row = [ln for ln in hd.lines if f'y="{page.HEADER_ROW_Y:g}"' in ln and ln.startswith('<text')]
+    items = [t[3] for t in texts('\n'.join(row))]
+    if len(items) != 5 or header_row_lines(items) != row:
+        raise Arret(f'ligne d\'en-tete de la 10-9 illisible : {items}')
+    if elev_m:
+        new_row = header_row_lines([f'{items[0]} · {int(round(hd.elev_ft * 0.3048))} M'] + items[1:])
     out, n_kind, n_index = [], 0, 0
     for ln in hd.lines:
         if ln == old_index:
@@ -125,6 +149,8 @@ def header_lines(hd, index, title):
         elif ln.startswith(old_kind + '>'):
             out.append(text(page.PAGE_W / 2, 15.0, title, pt(6.5), 'regular', INK2, 'middle', spacing=0.8))
             n_kind += 1
+        elif elev_m and ln in row:
+            out.append(new_row[row.index(ln)])
         else:
             out.append(ln)
     if (n_kind, n_index) != (1, 1):
@@ -439,11 +465,17 @@ def _alts(P):
     return f'attente {P.hold_ft}, initiale {P.init_ft}, intermediaire {P.int_ft}, interrompue {P.mis_ft} ft'
 
 
+def traversal_text(P):
+    if not P.traversals:
+        return 'traversées aucune'
+    return 'traversées ' + ' '.join(f'{n} {h:.0f} ft' for n, _, h in P.traversals)
+
+
 def journal_line(t, index, P):
     sch = {'base': 'virage de base', 'racetrack': 'hippodrome'}[P.mode]
     ref = P.e.ref
     return (f'approche {t.stem} {index} {P.e.sens} : {sch}, réf {ref.kind} {ref.callsign}, virage {P.turn}, attente {P.hold_turns}, '
-            f'{_alts(P)}, pistes {P.d_hold_rw:.0f} / {P.d_out_rw:.0f} m')
+            f'{_alts(P)}, pistes {P.d_hold_rw:.0f} / {P.d_out_rw:.0f} m, {traversal_text(P)}')
 
 
 def plan_theatre(theatre, zip_af, beacons_path, alt, x0, z0, year=1985.0, log=print, check=True):
@@ -496,8 +528,12 @@ def plan_theatre(theatre, zip_af, beacons_path, alt, x0, z0, year=1985.0, log=pr
                     if P is None:
                         continue
                     log(journal_line(t, idx, P))
-                    if min(P.d_hold_rw, P.d_out_rw, P.d_int_rw if P.famille == 'avion' else 1.0) <= 0:
-                        crossing.append(f'{stem} {idx} {P.e.sens} ({"attente" if P.d_hold_rw <= 0 else "eloignement"})')
+                    for n, d in P.strict_parts.items():
+                        if d <= 0:
+                            crossing.append(f'{stem} {idx} {P.e.sens} ({n} qui coupe une piste)')
+                    for n, _, h in P.traversals:
+                        if h < procedure.TRAVERSAL_MIN_FT:
+                            crossing.append(f'{stem} {idx} {P.e.sens} ({n} a {h:.0f} ft au-dessus de l\'AD ELEV)')
     for k in kept:
         log(f'page ILS gardée : {k}')
     pl = Plan(canon, terrains, kept, crossing)
@@ -508,7 +544,7 @@ def plan_theatre(theatre, zip_af, beacons_path, alt, x0, z0, year=1985.0, log=pr
     if not check:
         return pl
     if crossing:
-        raise Arret(f'segment avant le FAF qui coupe une piste : {"; ".join(crossing)}')
+        raise Arret(f'traversée de piste hors de l\'addendum 1 : {"; ".join(crossing)}')
     if c['sens'] and c['ecarts'] > 0.10 * c['sens']:
         raise Arret(f'{c["ecarts"]} sens écartés sur {c["sens"]} (plus de 10 %)')
     return pl
@@ -599,7 +635,7 @@ def render_pages(pl, alt, x0, z0, year, work, log=print):
                 if P is None:
                     continue
                 title = approach_ifr.title_helico(P) if P.famille == 'helico' else approach_ifr.title_avion(P)
-                site.header = header_lines(t.header, idx, title)
+                site.header = header_lines(t.header, idx, title, elev_m=P.famille == 'helico')
                 po = approach_ifr.build_page(site, P, idx, log)
                 ov = text_overlaps(po.svg)
                 po.info['overlaps'] = ov

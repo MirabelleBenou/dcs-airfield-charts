@@ -51,7 +51,10 @@ DME_KINDS = ('VOR/DME', 'TACAN', 'RSBN')
 
 
 class GeometrieImpossible(Exception):
-    """Le schema type ne se construit pas (balise dans le cercle du virage, hippodrome qui coupe une piste...) : le sens est ecarte."""
+    """Le schema type ne se construit pas (balise dans le cercle du virage, tangente absente...) : le sens est ecarte."""
+
+
+TRAVERSAL_MIN_FT = 1000           # addendum 1 : traversee d'une piste admise a AD ELEV + 1 000 ft au moins
 
 
 # ---------- vecteurs et caps ----------
@@ -400,6 +403,21 @@ class Procedure:
     dist_sides: dict = field(default_factory=dict)
     slope: float = SLOPE_DEG
     t_bt: float = 0.0             # helicoptere : duree de l'eloignement a 80 kt (min)
+    traversals: list = field(default_factory=list)      # [(segment, piste (indice), hauteur au-dessus de l'AD ELEV en ft)]
+    d_strict_rw: float = 0.0      # distance minimale aux pistes du virage de base (ou des virages de l'hippodrome) et de l'intermediaire
+    strict_parts: dict = field(default_factory=dict)    # nom -> distance minimale (m)
+
+    def out_alt(self, p):
+        """Altitude (ft) du profil de l'eloignement au point p, comme sur la page : de l'attente a la verticale de la balise a
+        l'altitude initiale au IF, lineaire en distance au seuil le long de l'axe (bornee aux deux altitudes)."""
+        if self.famille == 'helico':
+            return float(self.zone_ft)
+        d = -along_cross(p, self.e.thr, self.e.az)[0] / NM
+        d_v = -self.v_par_nm
+        if abs(self.if_nm - d_v) < 1e-9:
+            return float(self.init_ft)
+        a = self.hold_ft + (self.init_ft - self.hold_ft) * (d - d_v) / (self.if_nm - d_v)
+        return float(min(max(a, self.init_ft), self.hold_ft))
 
     def gp_alt(self, d_nm):
         """Altitude (ft) du plan de descente a d NM avant le seuil."""
@@ -412,6 +430,43 @@ class Procedure:
 
     def dme(self, p):
         return math.dist(self.e.ref.pos, p) / NM
+
+
+def crossings(pts, polys, alt_fn):
+    """[(piste, altitude minimale en ft)] des traversees de la polyligne `pts` sur les polygones des pistes ; l'altitude est celle
+    de `alt_fn` aux extremites des morceaux de la polyligne dans le polygone (elle varie lineairement le long d'un segment)."""
+    g = LineString(pts)
+    out = []
+    for k, poly in enumerate(polys):
+        inter = g.intersection(poly)
+        if inter.is_empty:
+            continue
+        coords = []
+        for part in getattr(inter, 'geoms', [inter]):
+            coords.extend(part.coords)
+        out.append((k, min(alt_fn(c) for c in coords)))
+    return out
+
+
+def check_runways(P, polys):
+    """Addendum 1 : traversees de l'attente, de l'eloignement ou de l'hippodrome (admises a AD ELEV + 1 000 ft au moins) et
+    distances aux pistes du virage de base, des virages de l'hippodrome et de l'intermediaire (aucune traversee admise)."""
+    elev = P.e.elev_ft
+    hold_alt = lambda c: float(P.hold_ft)
+    if P.mode == 'base':
+        segs = [('attente', P.hold_pts, hold_alt), ('éloignement', [P.e.ref.pos, P.T], P.out_alt)]
+        strict = {'virage de base': P.arc}
+    else:
+        segs = [('hippodrome', [P.e.ref.pos] + P.a1 + [P.T] + P.a2, P.out_alt)]
+        strict = {'virage d\'entrée de l\'hippodrome': P.a2, 'premier virage de l\'hippodrome': P.a1}
+    if P.famille == 'avion':
+        strict['intermédiaire'] = [P.IF, P.FAF]
+    P.traversals = []
+    for name, pts, fn in segs:
+        for k, a in crossings(pts, polys, fn):
+            P.traversals.append((name, k, a - elev))
+    P.strict_parts = {n: dist_runways(pts, polys) for n, pts in strict.items()}
+    P.d_strict_rw = min(P.strict_parts.values())
 
 
 def _hold_pick(beacon, inbound_az, leg_m, r, polys):
@@ -504,8 +559,6 @@ def avion(e, alt, x0, z0):
     P.d_hold_rw = dist_runways(P.hold_pts, polys)
     P.d_out_rw = dist_runways(P.out_pts, polys)
     P.d_int_rw = dist_runways([P.IF, P.FAF], polys)
-    if mode == 'racetrack' and min(P.d_hold_rw, P.d_out_rw) <= 0:
-        raise GeometrieImpossible('hippodrome qui coupe une piste')
     cor['hold'] = corridor(alt, x0, z0, P.hold_pts, HALF['hold'])
     cor['out'] = corridor(alt, x0, z0, P.out_pts, HALF['out'])
     P.mis_direct = v_par > AHEAD_NM
@@ -529,6 +582,7 @@ def avion(e, alt, x0, z0):
     if e.ref.kind != 'NDB' and abs(v_lat) > AXIS_TOL_NM * NM:
         P.rad_faf = mag_int(az_of(ref, P.FAF), e.decl)
         P.rad_thr = mag_int(az_of(ref, e.thr), e.decl)
+    check_runways(P, polys)
     return P
 
 
@@ -587,4 +641,5 @@ def helico(e, alt, x0, z0):
     P.slope = math.degrees(math.atan(rise / (HELI_FAF_NM * NM * FT)))
     P.qdm_faf = mag_int(az_of(P.FAF, ndb), e.decl)
     P.qdm_thr = mag_int(az_of(e.thr, ndb), e.decl)
+    check_runways(P, polys)
     return P

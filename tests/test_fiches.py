@@ -334,3 +334,17 @@ def test_unknown_theatre_stops(synthetic):
     af, he, aj = synthetic
     with pytest.raises(fiches.FichesError):
         fiches.build_package('Caucasus', af, he, aj, 'AC-V1.4.2')
+
+
+# ---------- lot ac-approches-v1 : les pages helicoptere 11-xH ----------
+def test_chart_pages_accept_the_helicopter_approach_pages(tmp_path):
+    af, he = tmp_path / 'airfields.zip', tmp_path / 'helicopters.zip'
+    with zipfile.ZipFile(af, 'w') as z:
+        for n in ('Konya_11-2', 'Konya_11-1', 'Konya_10-9'):
+            z.writestr(f'pack/png/{n}.png', b'x')
+    with zipfile.ZipFile(he, 'w') as z:
+        for n in ('Konya_11-2H', 'Konya_11-1H'):
+            z.writestr(f'heli/png/{n}.png', b'x')
+    pages = fiches.chart_pages([af, he])
+    assert [s for s, _ in pages['Konya']] == ['10-9', '11-1', '11-1H', '11-2', '11-2H']
+    assert dict(pages['Konya'])['11-1H'] == (he, 'heli/png/Konya_11-1H.png')

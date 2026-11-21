@@ -206,6 +206,19 @@ Tests: `python -m pytest` (see the table above for the tests that need samples).
 
 Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [OurAirports](https://github.com/davidmegginson/ourairports-data) (public domain) for the ICAO codes in `downloads/navaids/`; [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports.
 
+## Approach charts
+
+Every airfield of Syria and Cold War Germany whose own beacon (VOR/DME, VOR, NDB, TACAN or RSBN) is within 3 NM has an instrument approach page per runway direction:
+
+- `11-1`, `11-2`… (*airfields* zip): aircraft, standard patterns on the DCS beacons — holding, outbound leg, base turn or racetrack, final on the runway axis (the ILS final where the runway has one), missed approach, minimum sector altitudes;
+- `11-1H`, `11-2H`… (*helicopters* zip, and in the airfield PDF): helicopters, NDB only, one altitude, 80 kt · 150 km/h, heights in metres above the airfield.
+
+Altitudes are 1,000 ft above the highest ground of each segment (2,000 ft from 1,500 m), on the ground read in DCS. No minima: DCS gives none. These are not real approach charts.
+
+```
+python -I render/build_approaches.py <Theatre> --zips <airfields.zip> <helicopters.zip> --beacons <beacons.lua> --grille relief_<key>.npy --out <folder> [--annee 1985]
+```
+
 ## Terrain relief tiles
 
 `render/build_relief.py` turns the ground elevation read in DCS on a 100 m grid (the `relief` step of the unattended night) into web-map tiles (XYZ, Web Mercator, 256 px, zoom 6 to 11, native zoom 11) for one theatre, packed in a zip:

@@ -56,9 +56,17 @@ from render.svgdoc import INK, INK2, f                                # noqa: E4
 from render.update_coords import ROW_Y, UpdateError, _PAGE_NAME, _PAGE_SVG, _TEXT, _Y   # noqa: E402
 
 RepublishError = UpdateError
-_PAGE_NAME_ANY = re.compile(r'^(?P<stem>.+)_(?P<suffix>10-8|10-9[A-Z]*|11-\d+)$')       # `update_coords._PAGE_NAME` + les pages 11-x (lot ac-approche-ils) + la page 10-8 (lot ac-variante-contexte)
-_APPROACH = re.compile(r'^11-\d+$')
+_PAGE_NAME_ANY = re.compile(r'^(?P<stem>.+)_(?P<suffix>10-8|10-9[A-Z]*|11-\d+H?)$')       # `update_coords._PAGE_NAME` + les pages 11-x (lot ac-approche-ils) + la page 10-8 (lot ac-variante-contexte)
+_APPROACH = re.compile(r'^11-\d+H?$')                                               # lot ac-approches-v1 : et les pages helicoptere 11-xH
 _VICINITY = re.compile(r'^10-8$')                                                  # lot ac-variante-contexte : page des abords, recopiee telle quelle
+_ELEV_METRES = re.compile(r' · \d+ M$')                                             # page 11-xH : `ELEV 3407 FT · 1038 M`
+
+
+def _approach_key(suffix):
+    """Ordre des pages d'un recueil : ordre naturel des suffixes, les pages 11-xH apres les 11-x (lot ac-approches-v1)."""
+    return (suffix.endswith('H'), dcsdata.natural_key(suffix))
+
+
 BAR_WIDTH = '0.35'
 _LINE = re.compile(r'<line\b([^>]*?)/>')
 _ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
@@ -964,6 +972,8 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
         for n, (d, name, _, suffix) in enumerate(pages):
             if _APPROACH.match(suffix) or _VICINITY.match(suffix):      # page d'approche 11-x ou page 10-8 des abords : recopiee telle quelle
                 elev = header_elements(zin.read(f'{d}svg/{name}.svg').decode('utf-8'), name)[0][2]       # recopiee, mais lue en anglais seulement
+                if suffix.endswith('H'):
+                    elev = _ELEV_METRES.sub('', elev)
                 problem = page.elevation_text_problem(elev)
                 if problem:
                     raise RepublishError(f'{name} : {problem}')
@@ -1019,8 +1029,10 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
             res.added.setdefault(stem, []).append(name)
         for k, ((d, stem), members) in enumerate(charts.items()):
             members = members + [(_PAGE_NAME_ANY.match(a)['suffix'], a) for a in res.added.get(stem, [])]
-            members.sort(key=lambda t: dcsdata.natural_key(t[0]))
+            members.sort(key=lambda t: _approach_key(t[0]))
             entry = f'{d}pdf/{stem}_charts.pdf'
+            if entry not in names and all(not isinstance(n, str) and pages[n][3].endswith('H') for _, n in members):
+                continue                               # pages 11-xH seules (zip helicopters) : pas de recueil, recopiees telles quelles
             if entry not in names:
                 raise RepublishError(f'{stem} : recueil {entry} absent du zip')
             sources = []
