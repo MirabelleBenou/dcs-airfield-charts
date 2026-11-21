@@ -639,6 +639,8 @@ def render_pages(pl, alt, x0, z0, year, work, log=print):
                 po = approach_ifr.build_page(site, P, idx, log)
                 ov = text_overlaps(po.svg)
                 po.info['overlaps'] = ov
+                for name in po.info['failed']:
+                    log(f'étiquette sans place libre : {t.stem}_{idx} {name}')
                 for a, b in ov:
                     log(f'chevauchement : {t.stem}_{idx} « {a} » / « {b} »')
                 base = Path(work) / f'{t.stem}_{idx}'

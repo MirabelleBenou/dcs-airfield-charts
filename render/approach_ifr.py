@@ -56,12 +56,12 @@ def block_elems(lines, left, top, w, anchor):
     return out
 
 
-DIRS = [(math.cos(math.radians(a)), math.sin(math.radians(a))) for a in range(0, 360, 30)]
+DIRS = [(math.cos(math.radians(a)), math.sin(math.radians(a))) for a in range(0, 360, 15)]
 
 
 class Placer:
     """Placement par regle : autour du point d'ancrage, de la plus courte distance a la plus longue, dans les douze directions
-    rangees de la plus proche de la direction preferee a la plus eloignee ; la premiere place qui est dans le cadre et ne touche
+    rangees de la plus proche de la direction preferee a la plus eloignee (tous les 15 degres) ; la premiere place qui est dans le cadre et ne touche
     ni un obstacle (trajectoires, symboles, boites), ni une etiquette deja posee."""
 
     def __init__(self, frame, margin=0.8):
@@ -80,7 +80,7 @@ class Placer:
         gp = g.buffer(LABEL_PAD)
         return not any(gp.intersects(o) for o in self.obstacles) and not any(gp.intersects(o) for o in self.labels)
 
-    def place(self, name, lines, X, Y, pref=(1.0, 0.0), d0=1.4, steps=14, pitch=1.0):
+    def place(self, name, lines, X, Y, pref=(1.0, 0.0), d0=1.4, steps=30, pitch=1.0):
         """Retourne les elements du bloc ; s'il n'a aucune place libre, la position la plus proche (comptee dans `failed`)."""
         w, h = block_size(lines)
         n = math.hypot(*pref) or 1.0
@@ -580,8 +580,6 @@ def build_page(site, P, index, log=print):
     doc.add(L, text(X1, page.FOOTER_Y, page.FOOTER_RIGHT, pt(6.1), 'bold', INK, 'end'))
     svg = doc.render()
     failed = list(pl.failed) + list(prof_failed)
-    for name in failed:
-        log(f'etiquette sans place libre : {index} {name}')
     return PageOut(index, svg, {'title': title, 'scale_mm_per_nm': s * NM, 'failed': failed, 'frame': frame})
 
 
@@ -606,8 +604,8 @@ def _profile_place(doc, pl, layer, s, size, weight, fill, x, y, anchor, alts):
     return False
 
 
-ALTS = [(0, -1.5), (0, 1.5), (0, -3.0), (0, 3.0), (-3.0, 0), (3.0, 0), (-3, -2.5), (3, -2.5), (-3, 2.5), (3, 2.5), (0, -4.5), (0, 4.5),
-        (-6, 0), (6, 0), (-6, -3), (6, -3), (-6, 3), (6, 3), (0, -6), (0, 6)]
+ALTS = sorted({(dx, dy) for dx in (0, -3, 3, -6, 6, -9, 9, -12, 12, -16, 16, -20, 20) for dy in (0, -1.5, 1.5, -3, 3, -4.5, 4.5, -6, 6)} - {(0, 0)},
+              key=lambda o: (o[0] ** 2 + (2 * o[1]) ** 2, o))          # places de repli d'une etiquette du profil, de la plus proche a la plus loin
 
 
 def _profile_avion(doc, site, P, frame, log):
