@@ -851,8 +851,14 @@ def test_la_zone_du_hillshade_est_a_34_cases_pas_33_ni_35(projection):
     assert not proche[130 - 35, 130] and not proche[130, 130 + 35] and not proche[130 - 35, 130 + 35]
     assert int(proche.sum()) == 69 * 69
     assert relief.noeuds_proches_non_releves(np.zeros((10, 10))) is None
-    # le bord de la fenetre n'est pas un noeud non releve
-    assert relief.noeuds_proches_non_releves(np.where(np.arange(100)[:, None] < 0, np.nan, 1.0) + np.zeros((100, 100))) is None
+    # le bord de la fenetre n'est pas un noeud non releve : un seul noeud NaN au coin (0, 0) d'une fenetre de 100 x 100 marque
+    # exactement les 35 x 35 noeuds a 34 cases au plus du coin, et rien d'autre
+    coin = np.ones((100, 100))
+    coin[0, 0] = np.nan
+    proche = relief.noeuds_proches_non_releves(coin)
+    attendu = np.zeros((100, 100), bool)
+    attendu[:35, :35] = True
+    assert np.array_equal(proche, attendu) and int(proche.sum()) == 35 * 35
 
 
 def test_un_pixel_dont_un_noeud_a_poids_nul_est_nan_garde_son_elevation():
@@ -878,6 +884,46 @@ def test_sans_nan_le_hillshade_ne_change_pas(alt, projection, monkeypatch):
     r3 = relief.rendre_tuiles(alt.astype(np.float32), X0, Z0, EMPRISE, projection, tuiles)
     assert r3.keys() == r.keys() and all(set(r3[c]) == set(r[c]) and all(np.array_equal(r3[c][t], r[c][t]) for t in r[c])
                                           for c in relief.COUCHES)
+
+
+TROU2 = (70, 75, 30, 40)               # un second trou : noeuds i de 70 a 74, j de 30 a 39 (dans la marge d'un bloc, voir plus bas)
+
+
+def fenetres_des_blocs(niveaux, projection):
+    """Pour chaque bloc de `niveaux` : (boite des noeuds des pixels, fenetre de calcul) en (i_min, i_max, j_min, j_max) inclus,
+    comme le fait `relief.rendre_tuiles` (noeuds des pixels + MARGE_CASES, rognee a la grille)."""
+    out = []
+    for _, tuiles in sorted(relief.plan_blocs(tuiles_de_test(projection), niveaux).items()):
+        lo, hi = np.array([np.inf, np.inf]), np.array([-np.inf, -np.inf])
+        for t in tuiles:
+            X, Z = T.cartes_xz(relief.ZOOM_MAX, *t, projection)
+            f = ((X - X0) / 100.0, (Z - Z0) / 100.0)
+            lo, hi = np.minimum(lo, [f[0].min(), f[1].min()]), np.maximum(hi, [f[0].max(), f[1].max()])
+        pix = (math.floor(lo[0]), math.floor(hi[0]) + 1, math.floor(lo[1]), math.floor(hi[1]) + 1)
+        m = relief.MARGE_CASES
+        fen = (max(0, pix[0] - m), min(NI - 1, pix[1] + m), max(0, pix[2] - m), min(NJ - 1, pix[3] + m))
+        out.append((pix, fen))
+    return out
+
+
+def _croise(trou, boite):
+    """Vrai si les noeuds du trou (i0, i1, j0, j1 ; fin exclue) croisent la boite (bornes incluses)."""
+    i0, i1, j0, j1 = trou
+    return i1 - 1 >= boite[0] and i0 <= boite[1] and j1 - 1 >= boite[2] and j0 <= boite[3]
+
+
+@pytest.fixture(scope='module')
+def entrees_deux_trous(alt, tmp_path_factory):
+    """Comme `entrees_trou`, avec `TROU2` en plus : deux zones non relevees."""
+    d = tmp_path_factory.mktemp('entrees_deux_trous')
+    gauche, droite = csv_bloc(alt, 0, NI, 0, 131), csv_bloc(alt, 0, NI, 130, NJ)
+    for trou in (TROU, TROU2):
+        i0, i1, j0, j1 = trou
+        gauche = retirer_lignes(gauche, range(i0, i1), [j for j in range(j0, j1) if j < 131])
+        droite = retirer_lignes(droite, range(i0, i1), [j - 130 for j in range(j0, j1) if j >= 130])
+    z = ecrire_zip(d / 'trous.zip', {'out/relief/Syria/test_r0_c0_100m_export.csv': gauche,
+                                     'out/relief/Syria/test_r0_c1_100m_export.csv': droite})
+    return {'zip': z}
 
 
 @pytest.fixture(scope='module')
@@ -911,12 +957,19 @@ def test_la_grille_a_trou_est_lue_et_l_emprise_est_son_rectangle(alt, entrees_tr
         relief.construire_grille([entrees_trou['zip']], 'Syria', emprise=EMPRISE)             # la regle 4 vaut toujours
 
 
-def test_les_tuiles_d_une_grille_a_trou_ne_dependent_ni_des_blocs_ni_des_processus(entrees_trou, tmp_path, projection):
-    ref = construire_sans_regle(entrees_trou, tmp_path / 'ref')
+def test_les_tuiles_d_une_grille_a_trou_ne_dependent_ni_des_blocs_ni_des_processus(entrees_deux_trous, tmp_path, projection):
+    essais = ((2, 1), (3, 2), (1, 2))
+    # le second trou n'est, dans l'un des decoupages essayes, que dans la marge d'un bloc : dans la fenetre de calcul du bloc,
+    # hors de la boite des noeuds de ses pixels (donc hors des noeuds de ses propres pixels)
+    seulement_marge = [(niveaux, pix, fen) for niveaux, _ in essais for pix, fen in fenetres_des_blocs(niveaux, projection)
+                       if _croise(TROU2, fen) and not _croise(TROU2, pix)]
+    assert seulement_marge, 'le second trou doit tomber dans la seule marge d\'un bloc d\'un des decoupages essayes'
+    ref = construire_sans_regle(entrees_deux_trous, tmp_path / 'ref')
+    assert int(np.isnan(ref['grille'].alt).sum()) == 25 + 50
     de_reference = contenu(ref['out'])
     assert any(k.startswith('hillshade/11/') for k in de_reference) and any(k.startswith('elevation/6/') for k in de_reference)
-    for niveaux, processus in ((2, 1), (3, 2), (1, 2)):
-        b = construire_sans_regle(entrees_trou, tmp_path / f'n{niveaux}p{processus}', niveaux=niveaux, processus=processus)
+    for niveaux, processus in essais:
+        b = construire_sans_regle(entrees_deux_trous, tmp_path / f'n{niveaux}p{processus}', niveaux=niveaux, processus=processus)
         assert contenu(b['out']) == de_reference, (niveaux, processus)
         assert b['zip'].read_bytes() == ref['zip'].read_bytes()
     # et le trou y est : une tuile z11 de l'ombrage a des pixels transparents que la grille pleine n'a pas
@@ -982,3 +1035,67 @@ def test_grille_seule_n_ecrit_que_la_grille(entrees, tmp_path, monkeypatch, caps
     theatre_factice(monkeypatch, (X0, Z0, X0 + 1e6, Z0 + 1e6))
     assert build_relief.main(['Syria', '--entrees', str(entrees['zip']), '--out', str(tmp_path / 'autre'), '--grille-seule']) == 2
     assert 'aucune entree' in capsys.readouterr().err and not (tmp_path / 'autre').exists()
+
+
+# ------------------------------------------------------------------ relecture : refus de lecture, memoire, sha256
+
+def test_une_valeur_que_numpy_refuse_nomme_sa_ligne(tmp_path):
+    """`1_0` : Python le lit, `np.loadtxt` le refuse ; le refus nomme la ligne du fichier (une ligne vide avant), colonne comprise."""
+    for colonne, fautive in (('x', '0,1,1_0,100.0,5.0,'), ('z', '0,1,0.0,1_0,5.0,'), ('alt_m', '0,1,0.0,100.0,1_0,')):
+        p = tmp_path / f'{colonne}.csv'
+        lignes = ['i,j,x,z,alt_m,surface', '0,0,0.0,0.0,5.0,', '', fautive, '0,2,0.0,200.0,5.0,']
+        p.write_bytes(('\n'.join(lignes) + '\n').encode())
+        with pytest.raises(relief.RefusDonnees, match=rf'{colonne}\.csv ligne 4 : ligne illisible .*valeur non numerique.*1_0'):
+            relief.construire_grille([p], 'Syria')
+    assert relief._premiere_ligne_illisible(b'i,j,x,z,alt_m,surface\n0,0,1.5,1e3,-2,\n') is None
+
+
+def test_un_refus_de_numpy_sans_ligne_trouvee_garde_la_cause_de_numpy(monkeypatch, tmp_path):
+    monkeypatch.setattr(relief, '_premiere_ligne_illisible', lambda octets: None)
+    with pytest.raises(relief.RefusDonnees, match=r'ligne illisible \(.*could not convert'):
+        relief.lire_csv('v.csv', b'i,j,x,z,alt_m,surface\n0,0,1_0,0.0,5.0,\n')
+
+
+def test_l_entete_inattendu_nomme_la_ligne_1():
+    with pytest.raises(relief.RefusDonnees, match=r'v\.csv ligne 1 : en-tete inattendu'):
+        relief.lire_csv('v.csv', b'a,b,c\n1,2,3\n')
+
+
+def test_un_refus_de_la_passe_2_relit_l_entree_pour_son_numero_de_ligne(alt, tmp_path, monkeypatch):
+    """Les octets sont liberes apres la lecture : une lecture par passe, et une de plus pour le numero de ligne d'un refus."""
+    base = csv_bloc(alt, 0, 6, 0, 6).rstrip(b'\n') + b'\n3,3,-149737.0,61313.0,9999.00,\n'
+    p = tmp_path / 'double.csv'
+    p.write_bytes(base)
+    appels = []
+    vrai = relief.lister_csv
+
+    def compte(chemins, theatre):
+        return [(lib, (lambda o=ouvrir: appels.append(1) or o())) for lib, ouvrir in vrai(chemins, theatre)]
+    monkeypatch.setattr(relief, 'lister_csv', compte)
+    with pytest.raises(relief.RefusDonnees, match=r'double\.csv ligne 38 .*deux fois dans ce fichier'):
+        relief.construire_grille([p], 'Syria')
+    assert len(appels) == 3                                    # passe 1, passe 2, et la relecture du refus
+    appels.clear()
+    p.write_bytes(csv_bloc(alt, 0, 6, 0, 6))
+    relief.construire_grille([p], 'Syria')
+    assert len(appels) == 2                                    # sans refus : une lecture par passe
+
+
+def test_sha256_octets_sans_copie_et_meme_valeur(tmp_path, monkeypatch):
+    rng = np.random.default_rng(2)
+    a = (rng.random((37, 51)) * 3000).astype(np.float32)
+    a[3, 4] = np.nan
+    attendu = hashlib.sha256(a.tobytes()).hexdigest()
+    np.save(tmp_path / 'g.npy', a)
+    mm = np.load(tmp_path / 'g.npy', mmap_mode='r')
+    copies = []
+    vrai = np.ascontiguousarray
+    monkeypatch.setattr(np, 'ascontiguousarray', lambda *x, **k: copies.append(1) or vrai(*x, **k))
+    assert relief.Grille(a, 0, 0).sha256_octets() == attendu
+    assert relief.Grille(mm, 0, 0).sha256_octets() == attendu
+    assert not copies                                          # float32 contigu en ordre C : aucune copie
+    # ni float32, ni contigu : une copie, le meme hachage
+    assert relief.Grille(np.asfortranarray(a), 0, 0).sha256_octets() == attendu
+    assert relief.Grille(a.astype(np.float64), 0, 0).sha256_octets() == attendu
+    assert relief.Grille(a[:, ::1][::1], 0, 0).sha256_octets() == attendu
+    assert len(copies) == 2

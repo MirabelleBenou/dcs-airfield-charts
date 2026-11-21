@@ -16,6 +16,8 @@ What changed in the published charts, version by version. Each version is a GitH
 - New data in `downloads/msa/` (Caucasus, Cold War Germany, Syria): for each airfield, heliport and helipad of the mission editor, the minimum sector altitude within 25 NM, in four sectors by magnetic bearing to the airfield, computed on the ground elevation read in DCS — 1,000 ft above the highest ground of the sector, 2,000 ft where it reaches 1,500 m, rounded up to 100 ft. Ground only: obstacles are not included. New tool `render/build_msa.py`. The published charts do not change.
 - Terrain relief: the ground elevation read in DCS now covers every airfield of Syria and Cold War Germany, beyond the theatre bounds given by pydcs; the relief tiles cover the whole grid, and the hillshade is left transparent next to areas that were not read.
 
+- Relief and MSA tools: a malformed input is now refused with a clear message (a CSV value such as `1_0` names its line; an airfield file without positions is refused instead of crashing), and building the relief grid uses less memory. No data changes.
+
 **Map tiles: uniform areas no longer stall the capture.**
 
 - `capture/f10tiles.py capture`: a cell where the screen does not change after the camera moves (open sea, flat desert: the map is one colour from one cell to the next) is now taken once the screen has stayed still for 3 s, instead of being rejected after 10 s as not stable — such a grid could never be completed. `captures.jsonl` records it (`unchanged`) with the time of the first change seen on the other cells (`first_change_s`), and the log gives their number (`inchangees <n>`).

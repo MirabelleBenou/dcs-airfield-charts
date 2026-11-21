@@ -4,6 +4,7 @@ disque incomplet, le fichier `dcs-msa-v1` et la ligne de commande. Donnees synth
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 
 import numpy as np
@@ -282,8 +283,6 @@ def test_le_calcul_vectoriel_egale_la_reference_noeud_par_noeud():
     alt = np.round(alt, 0).astype(np.float32)           # beaucoup d'egalites : le premier en (i, j) compte
     for xa, za, gamma, decl in ((50000.0, 50000.0, 0.0, 0.0), (49937.3, 50061.9, 1.7, -4.25), (50010.0, 49990.0, -2.3, 8.0)):
         assert msa.msa_terrain(alt, 0.0, 0.0, xa, za, gamma, decl) == reference(alt, 0.0, 0.0, xa, za, gamma, decl)
-    mem = alt
-    assert mesure(mem) == mesure(np.array(mem))
 
 
 def test_deux_calculs_donnent_le_meme_resultat_avec_un_tableau_mmap(tmp_path):
@@ -398,3 +397,51 @@ def test_ligne_de_commande_codes_de_sortie(tmp_path, capsys):
     # une grille sans son .json voisin
     (tmp_path / 'grille' / 'relief_Syria.json').unlink()
     assert lancer(npy, pk, out) == 2 and 'description de la grille' in capsys.readouterr().err
+
+
+def _refus_terrains(tmp_path, capsys, doc_terrains, nom='terrains.json'):
+    """Lance `build_msa` avec un fichier de terrains donne (objet JSON ou texte) ; rend (code, stderr, sortie existe)."""
+    g, npy, pk = fabriquer(tmp_path / 'g')
+    pk2 = tmp_path / nom
+    pk2.write_text(doc_terrains if isinstance(doc_terrains, str) else json.dumps(doc_terrains), encoding='utf-8')
+    out = tmp_path / 'msa'
+    capsys.readouterr()
+    code = lancer(npy, pk2, out)
+    return code, capsys.readouterr().err, out.exists()
+
+
+def _bon(**changes):
+    t = {'airdromeId': 7, 'name': 'Alpha', 'x': -50000.0, 'y': 250000.0, 'parkings': []}
+    t.update(changes)
+    return {k: v for k, v in t.items() if v is not ABSENT}
+
+
+ABSENT = object()
+
+
+@pytest.mark.parametrize('cas, doc, attendu', [
+    ('cle absente', {'format': 'dcs-parkings-v1', 'theatre': 'Syria'}, 'airdromes'),
+    ('pas une liste', {'theatre': 'Syria', 'airdromes': {'a': 1}}, 'airdromes'),
+    ('liste nulle', {'theatre': 'Syria', 'airdromes': None}, 'airdromes'),
+    ('pas un objet', [1, 2], 'objet JSON'),
+    ('entree pas un objet', {'theatre': 'Syria', 'airdromes': [_bon(), 5]}, 'entree 2'),
+    ('sans airdromeId', {'theatre': 'Syria', 'airdromes': [_bon(), _bon(airdromeId=ABSENT, name='Sans id')]}, r'entree 2 .*Sans id.*"airdromeId" absent'),
+    ('sans name', {'theatre': 'Syria', 'airdromes': [_bon(name=ABSENT)]}, r'entree 1 .*airdromeId 7.*"name" absent'),
+    ('sans x', {'theatre': 'Syria', 'airdromes': [_bon(x=ABSENT)]}, r'entree 1 .*"x" absent'),
+    ('sans y', {'theatre': 'Syria', 'airdromes': [_bon(y=ABSENT)]}, r'entree 1 .*"y" absent'),
+    ('x texte', {'theatre': 'Syria', 'airdromes': [_bon(x='12')]}, r'entree 1 .*"x" n\'est pas un nombre fini'),
+    ('y nul', {'theatre': 'Syria', 'airdromes': [_bon(y=None)]}, r'entree 1 .*"y" n\'est pas un nombre fini'),
+    ('x booleen', {'theatre': 'Syria', 'airdromes': [_bon(x=True)]}, r'"x" n\'est pas un nombre fini'),
+    ('x non fini', '{"theatre": "Syria", "airdromes": [{"airdromeId": 1, "name": "N", "x": NaN, "y": 0}]}', r'entree 1 .*"x" n\'est pas un nombre fini'),
+    ('y infini', '{"theatre": "Syria", "airdromes": [{"airdromeId": 1, "name": "N", "x": 0, "y": Infinity}]}', r'entree 1 .*"y" n\'est pas un nombre fini'),
+])
+def test_un_fichier_de_terrains_mal_forme_est_refuse_code_2(tmp_path, capsys, cas, doc, attendu):
+    code, err, sortie = _refus_terrains(tmp_path, capsys, doc, nom='mes_terrains.json')
+    assert code == 2, cas
+    assert err.startswith('refus : ') and 'mes_terrains.json' in err and re.search(attendu, err), (cas, err)
+    assert 'Traceback' not in err and err.count('\n') == 1 and not sortie
+
+
+def test_un_fichier_de_terrains_bien_forme_passe_toujours(tmp_path, capsys):
+    code, err, sortie = _refus_terrains(tmp_path, capsys, {'theatre': 'Syria', 'airdromes': [_bon(x=-50000, y=250000)]})
+    assert code == 0 and err == '' and sortie                  # des entiers JSON sont des nombres

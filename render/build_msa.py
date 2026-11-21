@@ -5,12 +5,14 @@ Usage : python -I render/build_msa.py <Theatre> --grille <relief_<cle>.npy> --pa
 Entrees : la grille du relief ecrite par `render/build_relief.py` (le `.json` est lu a cote du `.npy`) et les terrains de
 `downloads/parkings/<cle>.json`. Theatre : Syria, GermanyColdWar ou Caucasus.
 Sortie : <out>/<cle>.json (format `dcs-msa-v1`) : une ligne d'en-tete, puis un terrain par ligne, dans l'ordre du fichier des parkings.
-Codes : 0 fait, 1 usage, 2 refus (disque d'un terrain incomplet, grille ou parkings d'un autre theatre, entree illisible).
+Codes : 0 fait, 1 usage, 2 refus (disque d'un terrain incomplet, grille ou parkings d'un autre theatre, entree illisible,
+fichier de terrains mal forme).
 La regle est celle de `render/msa.py`.
 """
 import argparse
 import hashlib
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -95,9 +97,33 @@ def charger_terrains(chemin, cle):
         doc = json.loads(Path(chemin).read_text(encoding='utf-8'))
     except (OSError, ValueError) as e:
         raise _Refus(f'{Path(chemin).name} : terrains illisibles ({e})')
+    nom = Path(chemin).name
+    if not isinstance(doc, dict):
+        raise _Refus(f'{nom} : terrains mal formes (un objet JSON est attendu)')
     if doc.get('theatre') != cle:
-        raise _Refus(f'les terrains {Path(chemin).name} sont ceux du theatre {doc.get("theatre")}, pas de {cle}')
-    return doc['airdromes']
+        raise _Refus(f'les terrains {nom} sont ceux du theatre {doc.get("theatre")}, pas de {cle}')
+    terrains = doc.get('airdromes')
+    if not isinstance(terrains, list):
+        raise _Refus(f'{nom} : terrains mal formes (la cle "airdromes" est absente ou n\'est pas une liste)')
+    for n, t in enumerate(terrains, start=1):
+        if not isinstance(t, dict):
+            raise _Refus(f'{nom} : entree {n} des terrains mal formee (un objet est attendu)')
+        for cle_champ in ('airdromeId', 'name', 'x', 'y'):
+            if cle_champ not in t:
+                raise _Refus(f'{nom} : entree {n} des terrains{_qui(t)} mal formee : "{cle_champ}" absent')
+        for cle_champ in ('x', 'y'):
+            v = t[cle_champ]
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v):
+                raise _Refus(f'{nom} : entree {n} des terrains{_qui(t)} mal formee : "{cle_champ}" n\'est pas un nombre fini')
+    return terrains
+
+
+def _qui(t):
+    """Le terrain d'une entree fautive, pour le message : ' (airdromeId 7, Alpha)' ; vide si ni l'un ni l'autre n'est donne."""
+    morceaux = [f'airdromeId {t["airdromeId"]}'] if 'airdromeId' in t else []
+    if 'name' in t:
+        morceaux.append(str(t['name']))
+    return f' ({", ".join(morceaux)})' if morceaux else ''
 
 
 def regle(annee):

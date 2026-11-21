@@ -168,6 +168,8 @@ def _premiere_ligne_illisible(octets):
             return k + 1, f'{len(champs)} colonne(s) au lieu de {len(ENTETE)} au moins'
         for c in (2, 3, 4):
             try:
+                if b'_' in champs[c]:                      # Python lit `1_0`, `np.loadtxt` le refuse : la ligne est illisible
+                    raise ValueError(champs[c])
                 float(champs[c])
             except ValueError:
                 return k + 1, f'valeur non numerique : {champs[c].decode("utf-8", errors="replace")[:40]!r} (colonne {c + 1})'
@@ -179,7 +181,7 @@ def lire_csv(libelle, octets):
     le numero de ligne d'un refus est celui du fichier, lignes vides comprises."""
     entete = octets.split(b'\n', 1)[0].decode('utf-8-sig', errors='replace').strip().split(',')
     if [c.strip() for c in entete[:len(ENTETE)]] != ENTETE:
-        raise RefusDonnees(f'{libelle} : en-tete inattendu (attendu : i,j,x,z,alt_m,surface ; recu : {",".join(entete)[:80]})')
+        raise RefusDonnees(f'{libelle} ligne 1 : en-tete inattendu (attendu : i,j,x,z,alt_m,surface ; recu : {",".join(entete)[:80]})')
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
@@ -210,8 +212,12 @@ class Grille:
         return [int(self.alt.shape[0]), int(self.alt.shape[1])]
 
     def sha256_octets(self):
-        """sha256 des octets float32 de la grille (ordre C)."""
-        return hashlib.sha256(np.ascontiguousarray(self.alt, dtype=np.float32).tobytes()).hexdigest()
+        """sha256 des octets float32 de la grille (ordre C). Un tableau float32 contigu en ordre C est hache sans copie (vue
+        memoire) ; une copie seulement s'il n'est ni float32 ni contigu."""
+        a = self.alt
+        if a.dtype == np.float32 and a.flags.c_contiguous:
+            return hashlib.sha256(memoryview(a).cast('B')).hexdigest()
+        return hashlib.sha256(np.ascontiguousarray(a, dtype=np.float32).tobytes()).hexdigest()
 
 
 def construire_grille(chemins, theatre, emprise=None, log=_rien):
@@ -243,13 +249,14 @@ def construire_grille(chemins, theatre, emprise=None, log=_rien):
         octets = ouvrir()
         sha = hashlib.sha256(octets).hexdigest()
         a = lire_csv(lib, octets)
+        del octets                                    # les octets ne vivent que le temps de la lecture ; un refus relit l'entree
         x, z, h = a[:, 0], a[:, 1], a[:, 2]
         i = np.rint((x - x0) / PAS_M)
         j = np.rint((z - z0) / PAS_M)
         hors = (np.abs(x - (x0 + PAS_M * i)) > TOL_NOEUD_M) | (np.abs(z - (z0 + PAS_M * j)) > TOL_NOEUD_M)
         if hors.any():
             n = int(np.nonzero(hors)[0][0])
-            raise RefusDonnees(f'{lib} ligne {numero_de_ligne(octets, n)} : le point (x = {x[n]:g}, z = {z[n]:g}) ne tombe pas sur '
+            raise RefusDonnees(f'{lib} ligne {numero_de_ligne(ouvrir(), n)} : le point (x = {x[n]:g}, z = {z[n]:g}) ne tombe pas sur '
                                f'un noeud de la grille de {PAS_M:g} m (origine x0 = {x0:g}, z0 = {z0:g}) a {TOL_NOEUD_M:g} m pres '
                                f'({int(hors.sum())} point(s) dans ce cas)')
         i, j = i.astype(np.int64), j.astype(np.int64)
@@ -260,7 +267,7 @@ def construire_grille(chemins, theatre, emprise=None, log=_rien):
         diff = deja & (ecart > TOL_ALT_M + TOL_ALT_FLOAT32_M)
         if diff.any():
             n = int(np.nonzero(diff)[0][0])
-            raise RefusDonnees(f'{lib} ligne {numero_de_ligne(octets, n)} : le noeud ({int(i[n])}, {int(j[n])}) (x = {x[n]:g}, '
+            raise RefusDonnees(f'{lib} ligne {numero_de_ligne(ouvrir(), n)} : le noeud ({int(i[n])}, {int(j[n])}) (x = {x[n]:g}, '
                                f'z = {z[n]:g}) est deja donne avec une autre altitude ({float(avant[n]):.2f} m, ici {float(h32[n]):.2f} m ; '
                                f'ecart {float(ecart[n]):.2f} m > {TOL_ALT_M:g} m)')
         # un noeud deja donne par une entree precedente garde sa valeur ; dans ce fichier, la premiere ligne d'un noeud
@@ -273,11 +280,11 @@ def construire_grille(chemins, theatre, emprise=None, log=_rien):
         relu = ~deja & (np.abs(alt[i, j].astype(np.float64) - h32.astype(np.float64)) > TOL_ALT_M + TOL_ALT_FLOAT32_M)
         if relu.any():
             n = int(np.nonzero(relu)[0][0])
-            raise RefusDonnees(f'{lib} ligne {numero_de_ligne(octets, n)} : le noeud ({int(i[n])}, {int(j[n])}) est donne deux fois '
+            raise RefusDonnees(f'{lib} ligne {numero_de_ligne(ouvrir(), n)} : le noeud ({int(i[n])}, {int(j[n])}) est donne deux fois '
                                f'dans ce fichier avec deux altitudes')
         entrees.append({'fichier': lib, 'sha256': sha})
         log(f'  lu {lib} ({a.shape[0]} points)')
-        del octets, a, x, z, h, i, j, h32, avant, deja, ecart, diff, relu, hors, neuf
+        del a, x, z, h, i, j, h32, avant, deja, ecart, diff, relu, hors, neuf
     g = Grille(alt, x0, z0, PAS_M, entrees)
     if emprise is not None:
         verifier_emprise(g, emprise)
