@@ -254,12 +254,12 @@ def diff_frac(a, b):
     return float((np.abs(a.astype(np.int16) - b.astype(np.int16)).max(axis=2) > PIX_THR).mean())
 
 
-def move_and_stabilize(x, z, alt, expect_change=True):
+def move_and_stabilize(x, z, alt, expect_change=True, calme_s=None):
     """Comme _move_and_stabilize, en s'assurant que DCS est au premier plan avant et apres (sinon on refait)."""
     global _fg_fail_streak
     while True:
         ensure_dcs_front('avant capture')
-        res = _move_and_stabilize(x, z, alt, expect_change)
+        res = _move_and_stabilize(x, z, alt, expect_change, calme_s)
         if dcs_in_front():
             return res
         _fg_incidents.append({'timestamp': datetime.now().isoformat(timespec='milliseconds'),
@@ -269,8 +269,15 @@ def move_and_stabilize(x, z, alt, expect_change=True):
             raise ForegroundFailure('DCS perd le premier plan pendant la capture (3 echecs de suite)')
 
 
-def _move_and_stabilize(x, z, alt, expect_change=True):
-    """Commande la camera, attend l'image stable. Retourne (image pleine, delai_s, n_images, stable, (x,z,alt))."""
+# Etat de la derniere prise de _move_and_stabilize (le retour reste un 5-uplet) : 'unchanged' vrai si l'image a ete rendue
+# stable au calme sans aucun changement vu (calme_s), 'first_change_s' : instant du premier changement vu (None sinon).
+derniere_prise = {'unchanged': False, 'first_change_s': None}
+
+
+def _move_and_stabilize(x, z, alt, expect_change=True, calme_s=None):
+    """Commande la camera, attend l'image stable. Retourne (image pleine, delai_s, n_images, stable, (x,z,alt)).
+    calme_s (facultatif) : si aucun changement n'a ete vu depuis la commande, l'image est rendue stable des que ce delai
+    est ecoule (zone uniforme : l'ecran ne change pas d'une case a la suivante)."""
     global _last
     if _last is None:
         _last = grab()
@@ -278,6 +285,8 @@ def _move_and_stabilize(x, z, alt, expect_change=True):
     t0 = time.perf_counter()
     cmd = hook_xz(x, z, alt)
     seen_change = not expect_change
+    premier = None
+    derniere_prise.update(unchanged=False, first_change_s=None)
     n = 0
     while True:
         t_frame = time.perf_counter()
@@ -288,8 +297,15 @@ def _move_and_stabilize(x, z, alt, expect_change=True):
         elapsed = time.perf_counter() - t0
         if d > STAB_FRAC:
             seen_change = True
+            if premier is None:
+                premier = elapsed
+                derniere_prise['first_change_s'] = round(premier, 3)
         elif seen_change and (expect_change or elapsed >= 0.3):
             _last = cur
+            return cur, elapsed, n, True, cmd
+        elif calme_s is not None and premier is None and elapsed >= calme_s:
+            _last = cur
+            derniere_prise['unchanged'] = True
             return cur, elapsed, n, True, cmd
         if elapsed > TIMEOUT_S:
             _last = cur

@@ -372,9 +372,9 @@ def test_tu15_le_temps_d_une_case_non_stable_entre_dans_l_estimation(cfg, monkey
     reel = f10capture.move_and_stabilize
     appels = []
 
-    def mesure(x, z, alt, expect_change=True):
+    def mesure(x, z, alt, expect_change=True, **kw):
         appels.append((x, z))
-        img, delai, n, ok, cmd = reel(x, z, alt, expect_change)
+        img, delai, n, ok, cmd = reel(x, z, alt, expect_change, **kw)
         if len(appels) == 7:                                       # la premiere case (l'etalonnage en prend 6) : instable et longue
             horloge.t += 100.0
             return img, 100.0, n, False, cmd

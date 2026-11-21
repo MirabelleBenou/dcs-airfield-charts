@@ -57,6 +57,7 @@ ZOOMS_AERODROMES = (17, 18)
 TAILLE_PART_O = T.TAILLE_PART_DEFAUT
 CODE_ARGUMENTS, CODE_QUESTION, CODE_INCOMPLET = 2, 3, 4
 
+CALME_S = 3.0                   # secondes d'ecran immobile apres la commande : case uniforme prise telle quelle
 _horloge = time.monotonic       # remplacee par les tests
 
 
@@ -377,7 +378,7 @@ def cmd_capture(a):
         mpp = cal['mpp']
         _log(f'etalonnage : {mpp:.5f} m/px (prevu {cal["mpp_predicted"]:.5f}), mode {cal["mode"]}, aerodrome {cal["airfield"]}')
         alt = g['commanded_alt_m']
-        durees, faites_ici, non_stables = [], 0, 0
+        durees, faites_ici, non_stables, inchangees = [], 0, 0, 0
         for c in restantes:
             if limite is not None:
                 moy = sum(durees) / len(durees) if durees else f10capture.EST_PER_CAPTURE_S
@@ -387,22 +388,27 @@ def cmd_capture(a):
                 _verifier_disque(z, len(restantes) - faites_ici)
             tt = _horloge()
             f10capture.set_status(f'CAPTURE tuiles {z.dossier.name} {total - len(restantes) + faites_ici + 1}/{total}')
-            img, delai, n, ok, cmd = f10capture.move_and_stabilize(c['x'], c['z'], alt)
+            img, delai, n, ok, cmd = f10capture.move_and_stabilize(c['x'], c['z'], alt, calme_s=CALME_S)
             if not ok:
                 non_stables += 1
                 _log(f'r{c["row"]}_c{c["col"]} NON STABLE apres {delai:.1f} s : image non enregistree (reprise a la prochaine execution)')
                 durees.append(_horloge() - tt)          # son temps compte dans l'estimation qui protege --duree-max-s
                 continue
+            sans_changement = bool(f10capture.derniere_prise['unchanged'])
+            premier = None if sans_changement else f10capture.derniere_prise['first_change_s']
             _ecrire_image(f10capture.crop(img), _nom_image(z, c), z.couche)
             with open(z.dossier / 'captures.jsonl', 'a', encoding='utf-8') as f:
                 f.write(json.dumps({'row': c['row'], 'col': c['col'], 'x': c['x'], 'z': c['z'], 'rendered_x': cmd[0],
                                     'rendered_z': cmd[1], 'rendered_alt': cmd[2], 'delay_s': round(delai, 3), 'n_images': n,
-                                    'mpp': mpp, 'timestamp': datetime.now().isoformat(timespec='milliseconds')}) + '\n')
+                                    'mpp': mpp, 'timestamp': datetime.now().isoformat(timespec='milliseconds'),
+                                    'unchanged': sans_changement, 'first_change_s': premier}) + '\n')
+            inchangees += sans_changement
             durees.append(_horloge() - tt)
             faites_ici += 1
     finally:
         f10capture.hook_release()
     faites = sum(1 for c in cases if _nom_image(z, c).is_file())
+    _log(f'inchangees {inchangees}')
     if faites < total:
         _log(f'INCOMPLET {faites}/{total}')
     else:

@@ -163,8 +163,8 @@ def test_tu4_une_image_non_stable_n_est_pas_enregistree(monde_capture, monkeypat
     reel = f10capture.move_and_stabilize
     appels = []
 
-    def instable(x, z, alt, expect_change=True):
-        img, delai, n, ok, cmd = reel(x, z, alt, expect_change)
+    def instable(x, z, alt, expect_change=True, **kw):
+        img, delai, n, ok, cmd = reel(x, z, alt, expect_change, **kw)
         appels.append((x, z))
         if len(appels) == 9:                                  # une case (l'etalonnage en prend 6)
             return img, 10.0, n, False, cmd
@@ -397,3 +397,137 @@ def test_les_constantes_de_f10capture_sont_celles_de_l_outil():
     assert f10capture.crop_offset(1.0) == (18.0, 45.0)
     assert ft.RECOUVREMENT_PX == 32 and ft.RECOUVREMENT_PX != f10capture.OVERLAP
     assert (T.MODE_X0, T.MODE_Y0, T.MODE_W, T.MODE_H) == (800, 300, 1800, 800)
+
+
+# ------------------------------------------------------------------ zones uniformes : le calme sans changement
+
+RECT_PETIT = '35.000,36.000,35.012,36.024'        # quelques cases au zoom 15 sur ECRAN_MOYEN
+
+
+class MondeUniforme(Monde):
+    """Une seule couleur partout (mer ouverte de la carte Alt)."""
+
+    def couleur(self, x, z):
+        forme = np.broadcast(np.asarray(x), np.asarray(z)).shape
+        return np.full(forme + (3,), (60, 110, 170), np.uint8)
+
+
+class HorlogeSim:
+    """Temps simule pour f10capture : `sleep` avance l'horloge, aucune attente reelle."""
+
+    def __init__(self):
+        self.t = 0.0
+
+    def perf_counter(self):
+        return self.t
+
+    def sleep(self, s):
+        self.t += s
+
+
+class FauxDcsRetard(FauxDcs):
+    """Faux DCS dont le rendu montre la nouvelle position seulement `retard_s` secondes (simulees) apres la commande."""
+
+    def __init__(self, monde, ecran, horloge, retard_s):
+        super().__init__(monde, ecran)
+        self.horloge, self.retard_s = horloge, retard_s
+        self.cam_vue, self.t_cmd = self.cam, -1e9
+
+    def hook_xz(self, x, z, alt):
+        if (x, z, alt) != self.cam:                 # le rappel de maintien de la meme position ne relance pas le delai
+            self.cam_vue = self.cam if self.horloge.t - self.t_cmd >= self.retard_s else self.cam_vue
+            self.t_cmd = self.horloge.t
+        return super().hook_xz(x, z, alt)
+
+    def grab(self):
+        vraie = self.cam
+        if self.horloge.t - self.t_cmd < self.retard_s:
+            self.cam = self.cam_vue
+        try:
+            return super().grab()
+        finally:
+            self.cam = vraie
+
+
+def _passe_sim(cfg, monkeypatch, monde, retard_s=None):
+    cfg(ecran=ECRAN_MOYEN)
+    horloge = HorlogeSim()
+    dcs = (FauxDcs(monde, ECRAN_MOYEN) if retard_s is None else FauxDcsRetard(monde, ECRAN_MOYEN, horloge, retard_s))
+    dcs.installer(monkeypatch)
+    monkeypatch.setattr(f10capture, 'time', types_ns(horloge))
+    monkeypatch.setattr(ft, '_horloge', horloge.perf_counter)
+    monkeypatch.setattr(T, 'mode_de_image', lambda img: ('alt', 0.5, 100.0))
+    monkeypatch.setattr(f10capture, 'calibrate', _calibrate_faux(dcs))
+    return dcs, horloge
+
+
+def types_ns(horloge):
+    import types
+    return types.SimpleNamespace(perf_counter=horloge.perf_counter, sleep=horloge.sleep)
+
+
+def _lignes_et_sortie(argv, capsys):
+    capsys.readouterr()
+    assert ft.executer(argv) == 0
+    sortie = [l for l in capsys.readouterr().out.splitlines() if l.strip()]
+    z = _zone(argv)
+    lignes = [json.loads(l) for l in (z.dossier / 'captures.jsonl').read_text(encoding='utf-8').splitlines()]
+    return z, lignes, sortie
+
+
+def test_zone_uniforme_prise_au_calme_sans_changement(cfg, monkeypatch, capsys):
+    _passe_sim(cfg, monkeypatch, MondeUniforme('alt'))
+    argv = args('capture', 'Syria', zoom=15, rectangle=RECT_PETIT)
+    z, lignes, sortie = _lignes_et_sortie(argv, capsys)
+    g = json.loads((z.dossier / 'grille.json').read_text(encoding='utf-8'))
+    n = len(g['cases'])
+    assert n >= 2 and len(lignes) == n
+    assert all(l['unchanged'] is True and l['first_change_s'] is None for l in lignes)
+    assert all(ft.CALME_S <= l['delay_s'] < ft.CALME_S + 0.5 for l in lignes)
+    assert not any('NON STABLE' in l for l in sortie)
+    assert sortie[-1] == f'COMPLET {n}/{n}' and sortie[-2] == f'inchangees {n}'
+    assert len(list(z.dossier.glob('r*_c*.png'))) == n
+
+
+def test_zone_texturee_inchangee_a_la_base(cfg, monkeypatch, capsys):
+    dcs, _ = _passe_sim(cfg, monkeypatch, Monde('bruit'))
+    argv = args('capture', 'Syria', zoom=15, rectangle=RECT_PETIT)
+    z, lignes, sortie = _lignes_et_sortie(argv, capsys)
+    g = json.loads((z.dossier / 'grille.json').read_text(encoding='utf-8'))
+    n = len(g['cases'])
+    assert len(lignes) == n and all(l['unchanged'] is False and l['first_change_s'] is not None for l in lignes)
+    assert all(l['delay_s'] < ft.CALME_S for l in lignes)
+    assert sortie[-1] == f'COMPLET {n}/{n}' and sortie[-2] == 'inchangees 0'
+    for c in g['cases']:
+        dcs.hook_xz(c['x'], c['z'], g['commanded_alt_m'])
+        attendu = f10capture.crop(dcs.grab())
+        lu = T.charger_image_rgb(z.dossier / T.nom_image('alt', c['row'], c['col']))
+        assert (lu == attendu).all()
+
+
+def test_rendu_en_retard_enregistre_la_nouvelle_case(cfg, monkeypatch, capsys):
+    dcs, _ = _passe_sim(cfg, monkeypatch, Monde('bruit'), retard_s=ft.CALME_S - 0.5)
+    argv = args('capture', 'Syria', zoom=15, rectangle=RECT_PETIT)
+    z, lignes, sortie = _lignes_et_sortie(argv, capsys)
+    g = json.loads((z.dossier / 'grille.json').read_text(encoding='utf-8'))
+    n = len(g['cases'])
+    assert sortie[-1] == f'COMPLET {n}/{n}' and sortie[-2] == 'inchangees 0'
+    assert all(l['unchanged'] is False and ft.CALME_S - 0.7 <= l['first_change_s'] < ft.CALME_S for l in lignes)
+    monde = Monde('bruit')
+    for c in g['cases']:
+        mpp = T.mpp_camera(g['commanded_alt_m'])
+        attendu = f10capture.crop(monde.image(c['x'], c['z'], mpp, *ECRAN_MOYEN))
+        lu = T.charger_image_rgb(z.dossier / T.nom_image('alt', c['row'], c['col']))
+        assert (lu == attendu).all()                                   # la nouvelle case, pas celle d'avant
+
+
+def test_calme_s_none_zone_uniforme_n_est_pas_stable_au_plafond(cfg, monkeypatch):
+    dcs, horloge = _passe_sim(cfg, monkeypatch, MondeUniforme('alt'))
+    dcs.hook_xz(10000.0, 20000.0, 2000.0)
+    f10capture._last = None
+    t0 = horloge.t
+    img, delai, n, ok, cmd = f10capture.move_and_stabilize(10300.0, 20000.0, 2000.0)
+    assert ok is False and delai > f10capture.TIMEOUT_S and horloge.t - t0 > f10capture.TIMEOUT_S
+    assert f10capture.derniere_prise['unchanged'] is False
+    img, delai, n, ok, cmd = f10capture.move_and_stabilize(10600.0, 20000.0, 2000.0, calme_s=3.0)
+    assert ok is True and 3.0 <= delai < 3.5 and f10capture.derniere_prise == {'unchanged': True, 'first_change_s': None}
