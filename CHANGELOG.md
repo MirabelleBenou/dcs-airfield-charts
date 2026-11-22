@@ -5,6 +5,12 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
+## Unreleased
+
+**LotAtc drawings of every charted airfield, for air traffic controllers.**
+
+- New tool `render/build_lotatc.py`: from the airfields and helicopters zips of a release, writes for every airfield and helicopter base of the theatre its LotAtc drawing layers: the plan (pavement outline, runways, runway designators and taxiway names, as on the 10-9 chart) and the parking stands (named as in the mission editor), at their positions in DCS. One zip per theatre, `DCS_Airfield_Charts_<Theatre>_1985_lotatc.zip`, ready to copy into the LotAtc server's drawings folder. The published charts do not change.
+
 ## AC-V1.10.0 — 22 November 2026
 
 **A reading guide for the charts.**

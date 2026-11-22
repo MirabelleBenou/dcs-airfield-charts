@@ -181,6 +181,14 @@ python -I render/build_plans.py <Theatre> --zips <airfields zip> <helicopters zi
 
 Input: the same zips and `airfields.json`, and the parking stands of `downloads/parkings/`. Each chart is matched to its airfield as above; its stands are then fitted to the circles of its Parking layer (least squares, accepted only when every stand meets one circle within 0.01 mm). Output: `<folder>/<key>/` with `index.json` (format `dcs-plans-v1`: the scale and offset that place each page on the DCS map frame) and one SVG per airfield reduced to pavement, runways, runway markings and buildings, without text, and `<folder>/DCS_Airfield_Charts_<Theatre>_1985_plans.zip` with the same files at its root; with `--shelters`, also the stands drawn as hardened shelters (`downloads/parkings/shelters/`). The tool stops, writing nothing, on any mismatch, and never overwrites.
 
+For air traffic controllers who use [LotAtc](https://www.lotatc.com), the same zips give drawing layers, again without drawing anything:
+
+```
+python -I render/build_lotatc.py <Theatre> --zips <airfields zip> <helicopters zip> --airfields <airfields.json> --parkings downloads/parkings/<GermanyCW|Syria>.json --edition AC-V1.10.0 --out <folder>
+```
+
+Input: the same as for `build_plans.py`. Each chart is matched and calibrated exactly as there; its 10-9 page is then read back and converted to latitude and longitude with the theatre projection. Output: `<folder>/<key>/` with, for every airfield, a plan layer `<base>.json` (pavement outline, runways, runway designators and taxiway names) and a parking layer `<base>_parking.json` (the stands, at their exact positions in the game; helicopter bases have no plan layer), and `<folder>/DCS_Airfield_Charts_<Theatre>_1985_lotatc.zip` with the same files and a `README.txt` at its root. The tool stops, writing nothing, on any mismatch, and never overwrites.
+
 The reading guide, `downloads/DCS_Airfield_Charts_Reading_Guide.pdf`, is built from the same zips, by laying numbered notes on the real pages of Konya (LTAN), of the helicopter base Naqoura and of the heliport directory:
 
 ```
