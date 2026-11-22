@@ -165,17 +165,23 @@ def pspec(*pins, **kw):
     return {'id': 'chX', 'kind': 'anatomy', 'source': 'p', 'pins': list(pins), **kw}
 
 
-def test_text_pin_point_is_chosen_in_the_box_start_middle_or_end():
+def test_text_pin_dot_is_outside_the_box_on_the_pin_side():
     src = src_of(page_with_everything())
     w = guide.fonts.text_width('LTAN', 'regular', 2.0)
-    out = {}
-    for at in ('start', 'middle', 'end'):
-        (p,) = guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (-4, -8), at)))
-        out[at] = p.aim
-        assert p.check == 'texte' and p.at == at and guide.box_distance(*p.aim, list(p.box)) == 0.0
-    assert out['start'][0] == pytest.approx(6.0) and out['middle'][0] == pytest.approx(6.0 + w / 2)
-    assert out['end'][0] == pytest.approx(6.0 + w)
-    assert out['start'][1] == pytest.approx(11.4 - guide.fonts.CAP_HEIGHT * 2.0 / 2)       # milieu des capitales
+    d = (guide.DOT_R + guide.DOT_GAP_AIM) / guide.S                    # centre du point a 1,15 mm A4 du bord de la boite
+    mid_y = 11.4 + (guide.LINE_DESCENT - guide.LINE_ASCENT) * 2.0 / 2   # ligne mediane de la boite
+    (a,) = guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (-3, -6), 'start')))
+    (b,) = guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (3, -6), 'end')))
+    (c,) = guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (0, -6), 'middle')))
+    assert a.aim == pytest.approx((6.0 - d, mid_y)) and b.aim == pytest.approx((6.0 + w + d, mid_y))
+    top = 11.4 - guide.LINE_ASCENT * 2.0
+    assert c.aim == pytest.approx((6.0 + w / 2, top - d))               # middle : au bord le plus proche de la pastille
+    (c2,) = guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (0, 6), 'middle')))
+    assert c2.aim == pytest.approx((6.0 + w / 2, 11.4 + guide.LINE_DESCENT * 2.0 + d))
+    for p in (a, b, c, c2):
+        assert p.check == 'texte' and guide.box_distance(*p.aim, list(p.box)) > 0.0
+        gap = guide.box_distance(*p.aim, list(p.box)) * p.scale - guide.DOT_R
+        assert gap == pytest.approx(0.6) and 0.2 <= gap <= 1.0
 
 
 def test_text_pin_with_nudge_or_unknown_at_stops():
@@ -193,7 +199,7 @@ def test_pin_disc_over_its_own_target_text_stops():
     src = src_of(page_with_everything())
     with pytest.raises(guide.GuideError, match=r'chX.*pastille 1.*disque.*recouvre le texte « LTAN »'):
         guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (1, 0))))
-    assert guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (-4, -8))))            # decalee : acceptee
+    assert guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (-3, -6))))            # decalee : acceptee
 
 
 def test_pin_disc_over_another_text_of_the_page_stops():
@@ -222,16 +228,61 @@ def test_pin_that_leaves_the_page_stops():
 
 
 # ------------------------------------------------------------------------------ A2 : le point dessine est controle
-def test_drawn_point_must_be_in_the_box_or_within_two_mm_of_its_edge():
+def test_drawn_point_inside_the_box_stops():
     src = src_of(page_with_everything())
-    (p,) = guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (-4, -8), 'end')))
-    x0, y0, x1, y1 = (min(c[0] for c in p.box), min(c[1] for c in p.box), max(c[0] for c in p.box), max(c[1] for c in p.box))
-    guide.check_drawn(p, p.aim[0], p.aim[1])                              # dedans
-    guide.check_drawn(p, x1 + 1.9, p.aim[1])                              # a 1,9 mm du bord
-    with pytest.raises(guide.GuideError, match=r'pastille 1.*point dessine.*2\.\d+ mm du texte « LTAN »'):
-        guide.check_drawn(p, x1 + 2.5, p.aim[1])
-    with pytest.raises(guide.GuideError, match='point dessine'):
-        guide.check_drawn(p, p.aim[0], y0 - 3.0)
+    (p,) = guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (-3, -6), 'start')))
+    guide.check_drawn(p, *p.aim)                                          # le point choisi par l'outil passe
+    cx = sum(c[0] for c in p.box) / 4
+    cy = sum(c[1] for c in p.box) / 4
+    with pytest.raises(guide.GuideError, match=r'pastille 1.*dans la boite du texte « LTAN »'):
+        guide.check_drawn(p, cx, cy)
+
+
+def test_drawn_point_too_far_or_too_close_stops():
+    src = src_of(page_with_everything())
+    (p,) = guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (-3, -6), 'start')))
+    x0 = min(c[0] for c in p.box)
+    y = p.aim[1]
+    for gap, ok in ((0.2, True), (1.0, True), (0.1, False), (1.2, False), (3.0, False)):
+        x = x0 - (guide.DOT_R + gap) / guide.S
+        if ok:
+            guide.check_drawn(p, x, y)
+        else:
+            with pytest.raises(guide.GuideError, match=r'pastille 1.*bord du point dessine est a .* mm de la boite.*0\.2 a 1\.0'):
+                guide.check_drawn(p, x, y)
+
+
+def test_drawn_point_on_the_wrong_side_of_its_text_stops():
+    import dataclasses
+    src = src_of(page_with_everything())
+    (p,) = guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (-3, -6), 'start')))      # point a gauche, pastille a gauche
+    bad = dataclasses.replace(p, badge=(3, -6))                                     # pastille de l'autre cote du texte
+    with pytest.raises(guide.GuideError, match=r'pastille 1.*du mauvais cote du texte « LTAN »'):
+        guide.check_drawn(bad, *p.aim)
+    with pytest.raises(guide.GuideError, match=r'pastille 1.*du mauvais cote'):
+        guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (3, -6), 'start')))
+
+
+def test_leader_line_through_its_own_target_box_stops(monkeypatch):
+    box = [(10.0, 10.0), (20.0, 10.0), (20.0, 12.0), (10.0, 12.0)]
+    assert guide.segment_crosses_box((5.0, 11.0), (25.0, 11.0), box)             # de part en part
+    assert guide.segment_crosses_box((5.0, 11.0), (15.0, 11.0), box)             # finit dedans
+    assert not guide.segment_crosses_box((5.0, 9.0), (25.0, 9.0), box)           # passe au-dessus
+    assert not guide.segment_crosses_box((5.0, 11.0), (9.0, 5.0), box)
+    # le controle du trait est branche dans check_drawn : si le trait traverse la boite, arret nomme
+    src = src_of(page_with_everything())
+    (p,) = guide.resolve_pins(src, pspec(tpin(1, 'LTAN', (-3, -6), 'start')))
+    monkeypatch.setattr(guide, 'segment_crosses_box', lambda a, b, c: True)
+    with pytest.raises(guide.GuideError, match=r'pastille 1.*trait de rappel traverse la boite de sa cible « LTAN »'):
+        guide.check_drawn(p, *p.aim)
+
+
+def test_dot_over_another_text_stops():
+    svg = svg_page(layer('Header', txt(6, 11.4, 'LTAN') + txt(6, 17.0, 'ELEV')))
+    src = src_of(svg)
+    # le point (au-dessus de LTAN) tomberait sur ELEV : texte voisin trop proche
+    with pytest.raises(guide.GuideError, match=r'pastille 1.*(point dessine|disque).*recouvre le texte'):
+        guide.resolve_pins(src, pspec(tpin(1, 'ELEV', (0, -3), 'middle')))
 
 
 def test_drawn_point_of_an_ink_target_is_the_one_checked():
@@ -246,9 +297,9 @@ def test_drawn_point_of_an_ink_target_is_the_one_checked():
 def test_pins_report_gives_the_checked_box_and_the_drawn_point(tmp_path):
     g = guide.build(mini_zips(tmp_path), 'AC-V9.9.9', mini_data())
     rows = guide.pins_report(g).splitlines()
-    assert rows[0].split('\t')[4:] == ['boite_controlee_mm', 'point_dessine_mm', 'ecart_mm']
+    assert rows[0].split('\t')[4:] == ['boite_controlee_mm', 'point_dessine_mm', 'ecart_bord_point_boite_mm']
     f = rows[1].split('\t')
-    assert 'LTAN' in f[3] and f[4].startswith('(') and f[5].startswith('(') and f[6] == '0.00'
+    assert 'LTAN' in f[3] and f[4].startswith('(') and f[5].startswith('(') and f[6] == '0.60'
     assert 'nudge' not in ''.join(rows)
 
 
@@ -414,7 +465,7 @@ def mini_labels():
 
 
 def mini_data():
-    pin = lambda n, tg, title, text='': {'n': n, 'target': tg, 'badge': [-4, 0], 'title': title, 'text': text}
+    pin = lambda n, tg, title, text='': {'n': n, 'target': tg, 'badge': [0, -5], 'title': title, 'text': text}
     return {
         'labels': mini_labels(),
         'sources': {'a': {'zip': 'airfields', 'file': 'svg/A_10-9.svg'},

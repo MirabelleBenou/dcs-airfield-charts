@@ -5,10 +5,10 @@ puis dit quel appareil peut voler quelle approche. La logique est ici ; la comma
 - Les textes, les pastilles et leurs cibles vivent dans `render/data/guide/guide.json`, pas dans le code ; les textes fixes
   (ligne de partie, pied de page, « HOW TO USE IT », titre du PDF) sont sous `labels`.
 - Une pastille vise soit un TEXTE d'une page SVG (couche + texte exact d'un element `text`, halos ignores, transformations
-  appliquees ; le point dessine est choisi dans la boite du texte : `at` = start, middle ou end), soit un POINT (couche
+  appliquees ; le point dessine se pose HORS de la boite du texte, a 0,6 mm de son bord : `at` = start (a gauche), end (a droite) ou middle (au bord le plus proche de la pastille)), soit un POINT (couche
   rendue seule : il doit y avoir de l'encre a moins de 0,5 mm), soit, pour l'annuaire (une image sans texte), un point de
-  la page, sans controle de cible. Le disque d'une pastille ne recouvre aucun texte de la page source ; le point dessine
-  est controle la ou il est dessine ; une pastille « zoom » dont le point sort de la zone agrandie arrete l'outil.
+  la page, sans controle de cible. Le disque d'une pastille et son point ne recouvrent aucun texte de la page source ; le point dessine
+  (0,2 a 1,0 mm de la boite, du cote de la pastille, trait sans traverser sa cible) est controle la ou il est dessine ; une pastille « zoom » dont le point sort de la zone agrandie arrete l'outil.
 - Chaque chiffre cite par un texte du guide est cherche, element `text` par element, dans la page qu'il cite (frontieres de
   mot, casse ignoree).
 - Le texte se mesure avec les avances reelles des glyphes (`render.fonts`), espacement des lettres compris ; un texte qui
@@ -462,7 +462,9 @@ def block_text(page, name, runs, x, y, width, bottom, size_pt, lead, fill=INK, s
 
 # ------------------------------------------------------------------------------------------------------------- pastilles
 PIN_R = 2.1 + 0.175                       # rayon exterieur d'une pastille (disque + liseré blanc), mm de la page A4
-DOT_TOLERANCE_MM = 2.0                    # le point dessine : dans la boite du texte ou a 2 mm au plus de son bord
+DOT_R = 0.55                              # rayon du point rouge au bout du trait de rappel, mm de la page A4
+DOT_GAP_MM = (0.2, 1.0)                   # ecart du bord du point au bord de la boite du texte vise, mm de la page A4
+DOT_GAP_AIM = 0.6                         # l'ecart que l'outil vise
 AT_CHOICES = ('start', 'middle', 'end')
 
 
@@ -482,6 +484,57 @@ def box_distance(x, y, corners):
     return min(_seg_dist(x, y, *corners[i], *corners[(i + 1) % 4]) for i in range(4))
 
 
+def nearest_point(x, y, corners):
+    """Le point du quadrilatere le plus proche de (x, y)."""
+    if box_distance(x, y, corners) == 0.0:
+        return (x, y)
+    best = None
+    for i in range(4):
+        ax, ay = corners[i]
+        bx, by = corners[(i + 1) % 4]
+        dx, dy = bx - ax, by - ay
+        n = dx * dx + dy * dy
+        t = 0.0 if n == 0 else max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / n))
+        q = (ax + t * dx, ay + t * dy)
+        d = math.hypot(x - q[0], y - q[1])
+        if best is None or d < best[0]:
+            best = (d, q)
+    return best[1]
+
+
+def _segments_cross(p1, p2, p3, p4):
+    def o(a, b, c):
+        return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+    return o(p1, p2, p3) * o(p1, p2, p4) < 0 and o(p3, p4, p1) * o(p3, p4, p2) < 0
+
+
+def segment_crosses_box(a, b, corners):
+    """Le segment [a, b] traverse-t-il le quadrilatere (une extremite dedans, ou un cote coupe) ?"""
+    if box_distance(*a, corners) == 0.0 or box_distance(*b, corners) == 0.0:
+        return True
+    return any(_segments_cross(a, b, corners[i], corners[(i + 1) % 4]) for i in range(4))
+
+
+def dot_outside(el, at, badge, scale):
+    """Le point dessine d'une cible de texte : hors de la boite, a DOT_GAP_AIM mm (page A4) du bord, du cote de la pastille.
+    `start` : a gauche, `end` : a droite, sur la ligne mediane de la boite ; `middle` : au bord de la boite le plus proche
+    de la pastille (haut, bas, gauche ou droite). Retourne un point de la page source, mm."""
+    k = math.sqrt(abs(el.m[0] * el.m[3] - el.m[1] * el.m[2])) or 1.0
+    dl = (DOT_R + DOT_GAP_AIM) / scale / k                      # distance locale du bord au centre du point
+    w = el.width()
+    x0 = {'middle': el.lx - w / 2, 'end': el.lx - w}.get(el.anchor, el.lx)
+    top, bot = el.ly - LINE_ASCENT * el.size, el.ly + LINE_DESCENT * el.size
+    ym, xm = (top + bot) / 2, x0 + w / 2
+    if at == 'start':
+        return apply(el.m, x0 - dl, ym)
+    if at == 'end':
+        return apply(el.m, x0 + w + dl, ym)
+    centre = apply(el.m, xm, ym)
+    want = (centre[0] + badge[0] / scale, centre[1] + badge[1] / scale)
+    cands = [apply(el.m, xm, top - dl), apply(el.m, xm, bot + dl), apply(el.m, x0 - dl, ym), apply(el.m, x0 + w + dl, ym)]
+    return min(cands, key=lambda c: math.hypot(c[0] - want[0], c[1] - want[1]))
+
+
 @dataclass
 class Pin:
     n: int
@@ -498,17 +551,32 @@ class Pin:
     spec_id: str
     target_text: str = ''
     at: str = ''
+    scale: float = S          # echelle de la page A4 par rapport a la page source (S, ou celle du zoom)
 
 
 def check_drawn(pin, x, y):
-    """Le point dessine (x, y), mm de la page source, est la ou la cible a ete controlee : dans la boite du texte ou a 2 mm
-    au plus de son bord (une cible-encre : a 0,5 mm du point ou l'encre a ete trouvee). Sinon arret nomme."""
+    """Le point dessine (x, y), mm de la page source, est la ou la cible a ete controlee. Cible-texte : HORS de la boite du
+    texte, du cote de la pastille, a 0,2 a 1,0 mm (page A4) du bord de la boite au bord du point, et le trait de rappel ne
+    traverse pas la boite de sa cible. Cible-encre : a 0,5 mm du point ou l'encre a ete trouvee. Sinon arret nomme."""
     where = f'page {pin.spec_id} ({pin.page_key}), pastille {pin.n} : '
     if pin.check == 'texte':
-        d = box_distance(x, y, list(pin.box))
-        if d > DOT_TOLERANCE_MM + 1e-9:
-            raise GuideError(f'{where}le point dessine ({x:.2f}, {y:.2f}) est a {d:.2f} mm du texte « {pin.target_text} » '
-                             f'(limite {DOT_TOLERANCE_MM} mm)')
+        corners = list(pin.box)
+        d = box_distance(x, y, corners)
+        gap = d * pin.scale - DOT_R
+        if d == 0.0:
+            raise GuideError(f'{where}le point dessine ({x:.2f}, {y:.2f}) est dans la boite du texte « {pin.target_text} » : '
+                             f'il doit etre dehors')
+        if not DOT_GAP_MM[0] - 1e-6 <= gap <= DOT_GAP_MM[1] + 1e-6:
+            raise GuideError(f'{where}le bord du point dessine est a {gap:.2f} mm de la boite du texte « {pin.target_text} » '
+                             f'(attendu : {DOT_GAP_MM[0]} a {DOT_GAP_MM[1]} mm)')
+        q = nearest_point(x, y, corners)
+        nx, ny = x - q[0], y - q[1]
+        bx, by = pin.badge[0] / pin.scale, pin.badge[1] / pin.scale
+        if bx * nx + by * ny < -1e-9:
+            raise GuideError(f'{where}le point dessine est du mauvais cote du texte « {pin.target_text} » : la pastille est '
+                             f'de l\'autre cote')
+        if segment_crosses_box((x, y), (x + bx, y + by), corners):
+            raise GuideError(f'{where}le trait de rappel traverse la boite de sa cible « {pin.target_text} »')
     elif pin.check == 'encre':
         d = math.hypot(x - pin.aim[0], y - pin.aim[1])
         if d > INK_RADIUS_MM + 1e-9:
@@ -545,12 +613,13 @@ def resolve_pins(sources, spec):
         if 'nudge' in tg:
             raise GuideError(f'{where}« nudge » n\'existe plus : choisir at = start, middle ou end')
         box, tgt_text, at = (), '', ''
+        scale = zoom[1] if on == 'zoom' else page_scale
         if tg['kind'] == 'text':
             el = sources.svg(key).find_text(tg['layer'], tg['text'], tg.get('occurrence'), where)
             at = tg.get('at', 'middle')
             if at not in AT_CHOICES:
                 raise GuideError(f'{where}« at » inconnu : « {at} » (attendu : start, middle ou end)')
-            aim = el.point_at(at)
+            aim = dot_outside(el, at, p['badge'], scale)
             box, tgt_text = tuple(el.corners()), el.text
             check = 'texte'
         elif tg['kind'] == 'point':
@@ -567,8 +636,9 @@ def resolve_pins(sources, spec):
         else:
             raise GuideError(f'{where}sorte de cible inconnue : {tg["kind"]}')
         pin = Pin(p['n'], on, tg['kind'], tg.get('layer', ''), tuple(aim), box, tuple(p['badge']), p['title'],
-                  p.get('text', ''), check, key, spec['id'], tgt_text, at)
+                  p.get('text', ''), check, key, spec['id'], tgt_text, at, scale)
         _check_pin_geometry(sources, spec, pin, page_scale, zoom, is_image, where)
+        check_drawn(pin, *pin.aim)
         out.append(pin)
     return out
 
@@ -600,6 +670,9 @@ def _check_pin_geometry(sources, spec, pin, page_scale, zoom, is_image, where):
         if box_distance(cx, cy, c) < r:
             raise GuideError(f'{where}le disque de la pastille (centre {cx:.2f}, {cy:.2f} ; rayon {r:.2f} mm de la page) '
                              f'recouvre le texte « {t.text} » (couche « {t.layer} »)')
+        if box_distance(pin.aim[0], pin.aim[1], c) < DOT_R / scale - 1e-9:
+            raise GuideError(f'{where}le point dessine ({pin.aim[0]:.2f}, {pin.aim[1]:.2f}) recouvre le texte « {t.text} » '
+                             f'(couche « {t.layer} »)')
 
 
 def check_cited(sources, cited):
@@ -1189,15 +1262,15 @@ def summary(g):
 
 def pins_report(g):
     """Une ligne par pastille : page, numero, sorte de cible, boite controlee (cible-texte : le rectangle du texte, mm de la
-    page source, englobant s'il est tourne), point dessine et son ecart a la boite (0 : dedans)."""
-    rows = ['page\tsource\tn\tcible\tboite_controlee_mm\tpoint_dessine_mm\tecart_mm']
+    page source, englobant s'il est tourne), point dessine et l'ecart (mm de la page A4) entre le bord du point et le bord de la boite."""
+    rows = ['page\tsource\tn\tcible\tboite_controlee_mm\tpoint_dessine_mm\tecart_bord_point_boite_mm']
     for p in g.pins:
         what = {'text': 'texte', 'point': 'encre', 'image': 'page-image'}[p.kind]
         lay = f' {p.layer}' if p.layer else ''
         if p.check == 'texte':
             xs, ys = [c[0] for c in p.box], [c[1] for c in p.box]
             box = f'({min(xs):.2f}, {min(ys):.2f}, {max(xs):.2f}, {max(ys):.2f})'
-            gap = f'{box_distance(p.aim[0], p.aim[1], list(p.box)):.2f}'
+            gap = f'{box_distance(p.aim[0], p.aim[1], list(p.box)) * p.scale - DOT_R:.2f}'
             what += f'{lay} « {p.target_text} » ({p.at})'
         elif p.check == 'encre':
             box, gap, what = f'encre a moins de {INK_RADIUS_MM} mm', '0.00', what + lay

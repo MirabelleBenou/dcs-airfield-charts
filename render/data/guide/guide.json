@@ -259,7 +259,7 @@
      },
      "badge": [
       6.1,
-      -3.5
+      -2.2
      ],
      "title": "Runways",
      "text": "Each with its magnetic heading, at the threshold where you land."
@@ -290,8 +290,8 @@
       "at": "middle"
      },
      "badge": [
-      8,
-      -8
+      5.5,
+      -6.5
      ],
      "title": "Towns within 20 km",
      "text": "Off the page: a triangle at the edge, in the direction of the town, with its distance from the airfield."
@@ -623,7 +623,7 @@
       "at": "start"
      },
      "badge": [
-      -4.0,
+      -3.5,
       0.0
      ],
      "title": "Runway table",
@@ -638,7 +638,7 @@
       "at": "end"
      },
      "badge": [
-      4.0,
+      3.5,
       0.0
      ],
      "title": "Parking and legend",
@@ -653,7 +653,7 @@
       "at": "end"
      },
      "badge": [
-      4.0,
+      3.5,
       0.0
      ],
      "title": "Sources",
@@ -701,8 +701,8 @@
       "at": "end"
      },
      "badge": [
-      4,
-      0
+      3.5,
+      0.0
      ],
      "title": "Parking page",
      "text": "When the 10-9 has no room for the stand numbers, they are here, on one or more pages (10-9A, 10-9B…)."
@@ -716,8 +716,8 @@
       "at": "start"
      },
      "badge": [
-      -4,
-      0
+      -3.5,
+      0.0
      ],
      "title": "Insets",
      "text": "Each frame enlarges one area; its title gives the stands it holds (here 87 to 124)."
@@ -776,8 +776,8 @@
       "at": "end"
      },
      "badge": [
-      4,
-      -5
+      3.5,
+      -4.2
      ],
      "title": "Numbers as in DCS",
      "text": "Including the numbers DCS repeats at some bases."
@@ -1208,8 +1208,8 @@
       "at": "start"
      },
      "badge": [
-      -4,
-      0
+      -3.5,
+      0.0
      ],
      "title": "Missed approach in words"
     },
@@ -1237,8 +1237,8 @@
       "at": "start"
      },
      "badge": [
-      -4,
-      0
+      -3.5,
+      0.0
      ],
      "title": "Notes",
      "text": "How the page was built, and the conditions for each way of flying it."
