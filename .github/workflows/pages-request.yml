@@ -1,0 +1,33 @@
+# Asks for the website of an existing release to be published again: push a branch `pages/AC-V<x.y.z>`.
+# This workflow only checks the request; the site is built and deployed by `pages.yml` once this one has succeeded.
+name: Pages request
+
+on:
+  push:
+    branches:
+      - 'pages/**'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the branch name and the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if ! [[ "$BRANCH" =~ ^pages/AC-V[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::The branch must be named pages/AC-V<x>.<y>.<z>, not $BRANCH"
+            exit 1
+          fi
+          tag="${BRANCH#pages/}"
+          if ! gh release view "$tag" > /dev/null; then
+            echo "::error::There is no release $tag"
+            exit 1
+          fi
+          echo "Release $tag exists."

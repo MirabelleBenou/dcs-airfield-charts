@@ -10,6 +10,8 @@ The goal is to share a complete set of charts for every airfield, as PDF and PNG
 
 ## Download the charts
 
+**Browse the charts online**: the [Airfield Charts website](https://mirabellebenou.github.io/dcs-airfield-charts/) — search an airfield or a heliport by name or ICAO code, see every page before you download it, and get its PDF and its LotAtc files.
+
 **New to these charts?** Start with the reading guide, [DCS_Airfield_Charts_Reading_Guide.pdf](downloads/DCS_Airfield_Charts_Reading_Guide.pdf?raw=true) (A4): how to read every page of an airfield, how to fly with them, and which approach pages your aircraft can fly.
 
 **Syria — 78 of the 80 airfields and helicopter bases, plus every heliport** (magnetic declination for 1985), rendered with no manual drawing.
@@ -225,7 +227,7 @@ It writes one `<theatre>.json` per theatre (eleven files) to the folder and prin
 
 Tests: `python -m pytest` (see the table above for the tests that need samples).
 
-Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [OurAirports](https://github.com/davidmegginson/ourairports-data) (public domain) for the ICAO codes in `downloads/navaids/`; [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports. Squadron Ready Room insignia: original artwork of the project; lettering from Oswald (SIL Open Font License 1.1), converted to outlines ([licence](render/data/marque/OFL-Oswald.txt)).
+Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [OurAirports](https://github.com/davidmegginson/ourairports-data) (public domain) for the ICAO codes in `downloads/navaids/`; [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports. Squadron Ready Room insignia: original artwork of the project; lettering from Oswald (SIL Open Font License 1.1), converted to outlines ([licence](render/data/marque/OFL-Oswald.txt)). The website uses the Barlow Condensed and Oswald fonts (SIL Open Font License 1.1).
 
 ## Approach charts
 
@@ -268,6 +270,10 @@ Terrain: DCS World, Eagle Dynamics SA — terrain elevation read in the game. No
 Releases are created by the workflow `.github/workflows/release.yml`, not by hand. On `main`, the `Unreleased` section of the CHANGELOG is first renamed to the new version. Then a branch `release/AC-V<x.y.z>` is pushed: that `main` commit plus files under `.release/` only — `notes.md` (the release text), the zips under `assets/` (a zip over 100 MB, the limit of a git push, is pushed in parts `<name>.part001`, `<name>.part002`… that the workflow joins), and last `manifest.json` (tag, title, `main` commit, and the name, size and SHA-256 of each zip).
 
 The workflow checks all of it, creates the release with its zips, publishes it as the latest release (which creates the tag on the `main` commit) and deletes the branch. If anything fails, nothing stays published and the branch gets `.release/FAILED.md` with the reason. A branch `release/essai-<name>` runs the same checks without publishing anything and writes `.release/CHECK.md`.
+
+## Publishing the website (maintainers)
+
+The website is a static site built by `render/build_site.py` from the zips of a release and published on GitHub Pages by the workflow `.github/workflows/pages.yml`, which runs after every successful release (Settings › Pages › Source must be *GitHub Actions*). To publish the site of an existing release again, push a branch `pages/AC-V<x.y.z>`: the workflow `.github/workflows/pages-request.yml` checks that the release exists, the site is built and deployed, and the branch is deleted. If anything fails, the site stays as it was and a branch `pages-failed/AC-V<x.y.z>` gets `.pages/FAILED.md` with the reason.
 
 ## What we measured
 

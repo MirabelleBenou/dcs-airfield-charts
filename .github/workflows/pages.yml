@@ -1,0 +1,101 @@
+# Builds the website from the zips of a release and deploys it to GitHub Pages.
+# Runs after a successful `Release` (branch release/AC-V<x.y.z>) or `Pages request` (branch pages/AC-V<x.y.z>).
+# Settings > Pages > Source must be "GitHub Actions". No secret other than the token of the workflow.
+name: Pages
+
+on:
+  workflow_run:
+    workflows: ['Release', 'Pages request']
+    types: [completed]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  pages:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      (startsWith(github.event.workflow_run.head_branch, 'release/AC-V') ||
+       startsWith(github.event.workflow_run.head_branch, 'pages/AC-V'))
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Tag of the release
+        id: tag
+        shell: bash
+        run: |
+          if [[ "$BRANCH" =~ ^(release|pages)/(AC-V[0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "tag=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "Branch $BRANCH is not release/AC-V<x.y.z> or pages/AC-V<x.y.z>: nothing to deploy."
+          fi
+      - uses: actions/checkout@v4
+        if: steps.tag.outputs.ok == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.tag.outputs.ok == 'true'
+        with:
+          python-version: '3.12'
+      - name: Install the requirements
+        if: steps.tag.outputs.ok == 'true'
+        run: pip install -r requirements.txt
+      - name: Download the zips of the release
+        if: steps.tag.outputs.ok == 'true'
+        shell: bash
+        run: gh release download "${{ steps.tag.outputs.tag }}" --pattern '*.zip' --dir "$RUNNER_TEMP/zips"
+      - name: Build the site
+        if: steps.tag.outputs.ok == 'true'
+        shell: bash
+        run: |
+          python -I render/build_site.py --zips "$RUNNER_TEMP/zips" --edition "${{ steps.tag.outputs.tag }}" \
+            --repo "${{ github.repository }}" --out "$RUNNER_TEMP/site" 2>&1 | tee "$RUNNER_TEMP/build.log"
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.tag.outputs.ok == 'true'
+        with:
+          path: ${{ runner.temp }}/site
+      - name: Deploy to GitHub Pages
+        id: deploy
+        if: steps.tag.outputs.ok == 'true'
+        uses: actions/deploy-pages@v4
+      - name: Delete the request branch
+        if: steps.tag.outputs.ok == 'true' && startsWith(github.event.workflow_run.head_branch, 'pages/')
+        shell: bash
+        run: git push origin --delete "$BRANCH"
+      - name: Leave the reason on a branch pages-failed
+        if: failure() && steps.tag.outputs.ok == 'true'
+        shell: bash
+        run: |
+          tag="${{ steps.tag.outputs.tag }}"
+          mkdir -p .pages
+          {
+            echo "# The website of $tag was not published"
+            echo
+            echo "Tag: $tag"
+            echo "Run: $RUN_URL"
+            echo
+            echo "Last 60 lines of the build log:"
+            echo
+            echo '```'
+            if [ -f "$RUNNER_TEMP/build.log" ]; then tail -n 60 "$RUNNER_TEMP/build.log"; else echo "(no build log: the run stopped before the build)"; fi
+            echo '```'
+          } > .pages/FAILED.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git push origin --delete "pages-failed/$tag" || true
+          git checkout -b "pages-failed/$tag"
+          git add .pages/FAILED.md
+          git commit -m "The website of $tag was not published"
+          git push origin "pages-failed/$tag"
