@@ -674,3 +674,21 @@ def test_helicopteres_refuses_a_zip_that_does_not_match_and_writes_nothing(tmp_p
     with pytest.raises(republish.RepublishError, match=match):
         republish.republish_zip('Syria', zair, out, heli_zip=zheli)
     assert not out.exists()
+
+
+@pytest.mark.parametrize('variant', ['line', 'left', 'right'])
+def test_footer_two_elements_on_one_line_stop(variant):
+    """Un element par ligne exactement : deux elements sur une meme ligne du calque Footer ne sont pas une forme reconnue."""
+    layer = foot_layer()
+    if variant == 'line':
+        bad = layer.replace('stroke-width="0.5"/>\n', 'stroke-width="0.5"/><circle r="1"/>\n', 1)
+    elif variant == 'left':
+        bad = layer.replace(FOOT_TEXT + '</text>\n', FOOT_TEXT + '</text><circle r="1"/>\n', 1)
+    else:
+        bad = layer.replace('NAVIGATION</text>\n', 'NAVIGATION</text><circle r="1"/>\n', 1)
+    assert bad != layer
+    with pytest.raises(republish.RepublishError, match='Footer'):
+        republish.retouch_footer(doc_svg(foot=bad), 'X_10-9')
+    nested = layer.replace(FOOT_TEXT, FOOT_TEXT + '<tspan>x</tspan>', 1)
+    with pytest.raises(republish.RepublishError, match='Footer'):
+        republish.retouch_footer(doc_svg(foot=nested), 'X_10-9')

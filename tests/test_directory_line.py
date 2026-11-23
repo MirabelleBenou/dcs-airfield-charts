@@ -207,7 +207,7 @@ def _pdf_image_bytes(data):
 def test_republish_directory_counts(synth):
     _, _, _, res, _, _ = synth
     d = res.directory
-    assert (d.tiles, d.controlled, d.retouched, d.already, d.pages) == (141, 5, 5, 0, list(range(1, 48)))     # le pied : toutes les pages
+    assert (d.tiles, d.controlled, d.retouched, d.already, d.pages) == (141, 5, 5, 0, SYRIA_PAGES)
     assert (d.foot, d.foot_kept) == (list(range(1, 48)), [])
     assert all(g > 8 for g in d.foot_gaps.values())
     assert {r[1]: r[3] for r in d.rows} == SYRIA_SMALL
@@ -273,7 +273,7 @@ def test_republish_summary_line(synth, capsys):
     assert republish.main(['Syria', '--zip', str(zin), '--out', str(root / 'summary.zip')]) == 0
     out = capsys.readouterr().out
     assert ('repertoire des heliports : 141 vignettes ; controlees (ville sous 36 px) : 5 ; retouchees : 5 ; '
-            'deja retouchees : 0 ; pages touchees : 47 p01 p02') in out
+            'deja retouchees : 0 ; pages touchees : 5 p30 p31 p33 p43 p46') in out
     assert 'repertoire des heliports, pictogramme au pied : 47 pages retouchees ; 0 deja porteuses' in out
 
     again = root / 'summary_again.zip'

@@ -34,7 +34,7 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
      si `manquantes` > 0, l'option est obligatoire : son zip est la SORTIE de cet outil sur le zip *helicopters* de la meme release, et
      ses pages `<stem>_11-<n>H` (PDF `.../pdf/<stem>_11-<n>H.pdf`) completent le recueil, a la fin, dans l'ordre naturel : leur nombre
      egale `manquantes`, leur SVG a le pied de la forme neuve, leur texte egale celui des dernieres pages de l'ancien recueil.
-Chaque page 10-9* est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
+Chaque page 10-9*, et chaque page 10-8 ou 11-x dont le pied a ete retouche, est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
 recueil `pdf/<stem>_charts.pdf` de chaque chart est refait. Sortie : un nouveau zip, memes entrees dans le meme ordre ; les
 entrees hors charts sont recopiees a l'octet, sauf, pour 5, les JPEG des pages touchees et le PDF du repertoire (un zip sans page de
 chart ni repertoire des heliports aux noms ci-dessus est recopie tel quel). Un fichier de sortie qui existe
@@ -736,7 +736,7 @@ class DirectoryResult:
     controlled: int = 0                                       # celles dont la taille de la ville est sous 36 px
     retouched: int = 0
     already: int = 0
-    pages: list = field(default_factory=list)                 # numeros des pages touchees
+    pages: list = field(default_factory=list)                 # numeros des pages dont la ligne de la ville est retouchee
     foot: list = field(default_factory=list)                  # numeros des pages dont le pied a recu le pictogramme (lot ac-marque-pied)
     foot_kept: list = field(default_factory=list)             # numeros de celles qui le portaient deja
     foot_gaps: dict = field(default_factory=dict)             # {numero: ecart moyen du pied, page publiee / page redessinee}
@@ -916,7 +916,8 @@ def retouch_directory(theatre, zin, infos, tmp):
             final = redrawn
         if final is not None:
             new_jpegs[no] = encode_like(final, original)
-            res.pages.append(no)
+            if d is not None:                                  # `pages` : celles dont la ligne de la ville est retouchee (le pied : `foot`)
+                res.pages.append(no)
     pdf_bytes = zin.read(pdf)
     check_directory_pdf(pdf_bytes, len(jpgs), pdf.filename)          # arret meme si aucune page n'est touchee
     if not new_jpegs:
@@ -933,7 +934,7 @@ def retouch_directory(theatre, zin, infos, tmp):
 
 # ---------- 8. le pictogramme au pied (lot ac-marque-pied) ----------
 _FOOT_HEAD = '<g inkscape:groupmode="layer" id="layer-footer" inkscape:label="Footer">\n'
-_FOOT_BODY = re.compile(r'<line [^\n]*/>\n(?P<left><text x="(?P<x>6|10\.2)" y="203\.7"[^\n]*</text>\n)<text x="142"[^\n]*</text>\n')
+_FOOT_BODY = re.compile(r'<line [^<\n]*/>\n(?P<left><text x="(?P<x>6|10\.2)" y="203\.7"[^<\n]*>[^<\n]*</text>\n)<text x="142"[^<\n]*>[^<\n]*</text>\n')
 _FOOT_OLD_X, _FOOT_NEW_X = '6', '10.2'
 
 
