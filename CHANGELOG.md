@@ -5,7 +5,7 @@ What changed in the published charts, version by version. Each version is a GitH
 - **Minor** version (1.**x**.0): new charts, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts.
 
-## Unreleased
+## AC-V1.11.0 — 23 November 2026
 
 **LotAtc drawings of every charted airfield, for air traffic controllers.**
 
@@ -20,6 +20,11 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - Every chart page (10-8, 10-9, 11-x) and every page of the heliport directory carries a small black pictogram before the footer text. Nothing else changes on the charts.
 - `render/republish.py` adds it to the charts of a published release; a page that already carries it is left as it is.
+
+**Downloads.**
+
+- The four zips of the charts are those of AC-V1.10.0 with the pictogram at the foot of every page; the PDFs in `downloads/` and the reading guide are rebuilt from them.
+- Two new zips, `DCS_Airfield_Charts_Syria_1985_lotatc.zip` and `DCS_Airfield_Charts_GermanyColdWar_1985_lotatc.zip`: the LotAtc drawings of every charted airfield. Their colours and the rendering of their texts in LotAtc have not been checked by a controller yet.
 
 ## AC-V1.10.0 — 22 November 2026
 
