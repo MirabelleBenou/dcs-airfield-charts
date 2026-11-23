@@ -48,6 +48,12 @@ LINE_ASCENT, LINE_DESCENT = 1.0, 0.2      # boite de ligne de Barlow Condensed (
 INK_RADIUS_MM = 0.5                       # encre a moins de 0,5 mm d'une cible-point
 INK_PX_PER_MM = 10                        # couche rendue seule a 0,1 mm par pixel
 FOOTER_GAP_MM = 6.0                       # espace minimal entre les deux moities du pied de page
+MARQUE_DIR = Path(__file__).resolve().parent / 'data' / 'marque'
+MARQUE_TAG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 360" width="360" height="360">'
+INSIGNE_FILE, PICTO_FILE = 'insigne-airfield-charts.svg', 'pictogramme-mono.svg'
+COVER_INSIGNE = (MX0 + 8, 44.0, 36.0)     # x, y, cote (mm) de l'insigne sur la garde
+FOOTER_PICTO = (MX0, 287.1, 3.0)          # x, y, cote (mm) du pictogramme au pied
+FOOTER_TEXT_X = MX0 + 4.2                 # le texte de gauche du pied part apres le pictogramme
 
 SVG_NS = 'http://www.w3.org/2000/svg'
 INK_NS = 'http://www.inkscape.org/namespaces/inkscape'
@@ -60,6 +66,19 @@ LABEL = f'{{{INK_NS}}}label'
 
 class GuideError(Exception):
     """Cas d'arret du cadrage 6 : l'outil s'arrete sans rien ecrire."""
+
+
+def marque_svg(name, x, y, side, directory=None):
+    """Un SVG de la marque pose dans une page : sa balise d'ouverture, qui doit etre exactement MARQUE_TAG, est remplacee
+    (une fois) par un svg positionne en mm ; le reste du fichier est insere tel quel. Pas d'image matricielle."""
+    path = (directory or MARQUE_DIR) / name
+    try:
+        text = path.read_text(encoding='utf-8').strip()
+    except (OSError, UnicodeDecodeError) as e:
+        raise GuideError(f'marque : {name} illisible ({type(e).__name__} : {e})')
+    if not text.startswith(MARQUE_TAG):
+        raise GuideError(f'marque : {name} ne commence pas par la balise attendue {MARQUE_TAG}')
+    return text.replace(MARQUE_TAG, f'<svg x="{x:g}" y="{y:g}" width="{side:g}" height="{side:g}" viewBox="0 0 360 360">', 1)
 
 
 # Les textes fixes du guide (ligne de partie, pied de page, « HOW TO USE IT », titre et auteur du PDF) sont dans le fichier de
@@ -878,6 +897,7 @@ def layout_cover(cfg, emb, edition):
     pw = ph * PAGE_W / PAGE_H
     pg.add(f'<g opacity="{cfg["background_opacity"]}">', emb.svg(cfg['background'], (W - pw) / 2, 0, pw, ph), '</g>')
     pg.add(f'<rect x="{MX0}" y="86" width="2.2" height="52" fill="{PIN}"/>')
+    pg.add(marque_svg(INSIGNE_FILE, *COVER_INSIGNE))
     y = 100.0
     y = block_text(pg, 'title', [(cfg['title'], 'bold')], MX0 + 8, y, 120, 140, 38, 15.0, INK)
     y = block_text(pg, 'cover', [(cfg['subtitle'], 'regular')], MX0 + 8, y + 2, 160, 160, 16, 6.8, INK2)
@@ -1094,8 +1114,8 @@ def footer_texts(edition):
     left = label('footer_left').format(tag=edition)
     right = label('footer_right')
     wl, wr = tw(left, 'regular', 7), tw(right, 'bold', 7)
-    if wl + wr + FOOTER_GAP_MM > MX1 - MX0:
-        raise GuideError(f'pied de page : les deux moities ({wl:.1f} + {wr:.1f} mm) ne tiennent pas dans '
+    if FOOTER_TEXT_X - MX0 + wl + wr + FOOTER_GAP_MM > MX1 - MX0:
+        raise GuideError(f'pied de page : les deux moities ({wl:.1f} + {wr:.1f} mm, apres {FOOTER_TEXT_X - MX0:g} mm de pictogramme) ne tiennent pas dans '
                          f'{MX1 - MX0:.0f} mm avec l\'edition « {edition} » ; edition trop longue')
     return left, right
 
@@ -1116,7 +1136,8 @@ def page_svg(pg, number, edition):
     e += pg.els
     if not pg.cover:
         e += [f'<line x1="{MX0}" y1="285" x2="{MX1}" y2="285" stroke="{INK}" stroke-width="0.3"/>',
-              t_el(MX0, 289.5, footer[0], 7, 'normal', INK2),
+              marque_svg(PICTO_FILE, *FOOTER_PICTO),
+              t_el(FOOTER_TEXT_X, 289.5, footer[0], 7, 'normal', INK2),
               t_el(MX1, 289.5, footer[1], 7, 'bold', INK, 'end')]
     e.append('</svg>')
     return '\n'.join(e)

@@ -908,3 +908,76 @@ def test_data_file_is_well_formed():
     assert all(x['target']['kind'] != 'image' for p in d['pages'] if p.get('source') != 'directory_p11'
                for x in p.get('pins', []))
     json.dumps(d)
+
+
+# ------------------------------------------------------------------------------------------------------------ la marque
+MARQUE_OPEN = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 360" width="360" height="360">'
+
+
+def test_marque_svg_replaces_the_expected_tag_once():
+    out = guide.marque_svg(guide.INSIGNE_FILE, 20, 44, 36)
+    assert out.startswith('<svg x="20" y="44" width="36" height="36" viewBox="0 0 360 360">')
+    assert out.count('<svg') == 1 and MARQUE_OPEN not in out
+    body = (guide.MARQUE_DIR / guide.INSIGNE_FILE).read_text(encoding='utf-8').strip()
+    assert out.endswith(body[len(MARQUE_OPEN):])               # le reste est insere tel quel
+    assert guide.marque_svg(guide.PICTO_FILE, 12, 287.1, 3).startswith('<svg x="12" y="287.1" width="3" height="3" viewBox')
+
+
+@pytest.mark.parametrize('first', ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 360">',
+                                   '<svg viewBox="0 0 360 360" width="360" height="360">',
+                                   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">'])
+def test_marque_svg_with_another_tag_stops(tmp_path, first):
+    (tmp_path / 'x.svg').write_text(f'\n {first}<circle r="1"/></svg>\n', encoding='utf-8')
+    with pytest.raises(guide.GuideError, match='balise attendue'):
+        guide.marque_svg('x.svg', 0, 0, 1, directory=tmp_path)
+    with pytest.raises(guide.GuideError, match='illisible'):
+        guide.marque_svg('absent.svg', 0, 0, 1, directory=tmp_path)
+
+
+def test_marque_files_start_with_the_expected_tag():
+    for n in (guide.INSIGNE_FILE, guide.PICTO_FILE):
+        assert (guide.MARQUE_DIR / n).read_text(encoding='utf-8').strip().startswith(MARQUE_OPEN)
+
+
+def _svgs(monkeypatch, tmp_path):
+    monkeypatch.setattr(guide, 'render_pdf', lambda svgs: svgs)
+    monkeypatch.setattr(guide, '_LABELS', mini_labels())
+    g = guide.build(mini_zips(tmp_path), 'AC-V9.9.9', mini_data())
+    return g.pdf
+
+
+def test_insignia_on_the_cover_only_and_pictogram_on_every_other_page(monkeypatch, tmp_path):
+    svgs = _svgs(monkeypatch, tmp_path)
+    assert len(svgs) == 6
+    insigne = guide.marque_svg(guide.INSIGNE_FILE, *guide.COVER_INSIGNE)
+    picto = guide.marque_svg(guide.PICTO_FILE, *guide.FOOTER_PICTO)
+    assert guide.COVER_INSIGNE == (20.0, 44.0, 36.0) and guide.FOOTER_PICTO == (12.0, 287.1, 3.0)
+    cover = svgs[0]
+    assert insigne in cover and picto not in cover
+    assert cover.index('fill="#C8102E"') < cover.index(insigne)     # juste apres le rect rouge
+    for s in svgs[1:]:
+        assert insigne not in s and s.count(picto) == 1
+        assert s.index(picto) < s.index('MINI GUIDE')                # avant le texte de gauche
+        assert 'x="16.20"' in s[s.index(picto):]
+
+
+def test_footer_left_text_starts_at_mx0_plus_4_2(monkeypatch, tmp_path):
+    svgs = _svgs(monkeypatch, tmp_path)
+    for s in svgs[1:]:
+        line = [l for l in s.split('\n') if 'MINI GUIDE' in l][0]
+        assert 'x="16.20"' in line and 'y="289.50"' in line
+        right = [l for l in s.split('\n') if 'NOT FOR REAL-WORLD' in l][0]
+        assert 'x="198.00"' in right
+
+
+def test_footer_check_counts_the_4_2_mm_of_the_pictogram(monkeypatch):
+    monkeypatch.setattr(guide, '_LABELS', mini_labels())
+    room = guide.MX1 - guide.MX0 - guide.FOOTER_GAP_MM
+    monkeypatch.setattr(guide, 'tw', lambda text, weight, size, spacing=0.0: (room - 4.2) / 2)
+    assert guide.footer_texts('E')[0].endswith('E')                 # 4.2 + wl + wr + gap == largeur : passe
+    monkeypatch.setattr(guide, 'tw', lambda text, weight, size, spacing=0.0: (room - 4.2) / 2 + 0.01)
+    with pytest.raises(guide.GuideError, match='pied de page'):    # 0,02 mm de trop : arret
+        guide.footer_texts('E')
+    monkeypatch.setattr(guide, 'tw', lambda text, weight, size, spacing=0.0: (room - 4.0) / 2)
+    with pytest.raises(guide.GuideError, match='pied de page'):    # tenait sans les 4,2 mm : arrete maintenant
+        guide.footer_texts('E')
