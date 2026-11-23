@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
-from . import dcsdata, geo, georef
+from . import dcsdata, geo, georef, marque
 from .fonts import FONT_DIR
 
 FT = 3.28084
@@ -533,9 +533,15 @@ def page_frame(theatre, right_bold, right_grey):
     return page, d
 
 
-def footer(d, left):
+FOOT_PICTO_PX, FOOT_PICTO_Y, FOOT_TEXT_DX = 35, 2352, 50      # lot ac-marque-pied : pictogramme (px, y du coin haut), decalage du texte de gauche
+
+
+def footer(page, d, left):
+    """Pied de la page `page` (`d` : son ImageDraw) : le pictogramme en image a (MARGIN_X, 2352), le texte de gauche, la mention de droite."""
     x1 = PAGE_PX[0] - MARGIN_X + 1
-    draw_text(d, (MARGIN_X, 2379), left, 'medium', 29, GREY, 'ls')
+    pic = marque.picture(FOOT_PICTO_PX)
+    page.paste(pic, (MARGIN_X, FOOT_PICTO_Y), pic)
+    draw_text(d, (MARGIN_X + FOOT_TEXT_DX, 2379), left, 'medium', 29, GREY, 'ls')
     draw_text(d, (x1, 2379), 'NOT FOR REAL-WORLD NAVIGATION', 'bold', 29, INK, 'rs')
 
 
@@ -572,7 +578,7 @@ def draw_index_page(theatre, sites, k, n_pages):
         draw_text(d, (cols['town'], y), s.town, 'regular', 31, INK, 'ls')
         draw_text(d, (cols['page'], y), str(s.page), 'bold', 31, INK, 'rs')
         d.rectangle([MARGIN_X, y + 9, x1 - 1, y + 9], fill=(222, 222, 222))
-    footer(d, FOOT_INDEX)
+    footer(page, d, FOOT_INDEX)
     return page
 
 
@@ -583,7 +589,7 @@ def draw_directory_page(theatre, pg, cache, stats):
     for site, pos in pg['entries']:
         img, g = cache(site)
         draw_tile(page, d, site, pos, img, g, stats)
-    footer(d, FOOT_LEFT)
+    footer(page, d, FOOT_LEFT)
     return page
 
 

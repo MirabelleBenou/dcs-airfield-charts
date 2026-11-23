@@ -14,8 +14,8 @@ import pytest
 from pypdf import PdfReader
 from shapely.geometry import box
 
-from render import analysis, approach, build_chart, dcsdata, export, fiches, page, republish, svgdoc
-from test_republish import RULE, doc_svg, five_fields, konya_latlon
+from render import analysis, approach, build_chart, dcsdata, export, fiches, marque, page, republish, svgdoc
+from test_republish import RULE, doc_svg, five_fields, foot_layer, konya_latlon
 
 TEXT = re.compile(r'<text x="([^"]+)" y="([^"]+)" ([^>]*)>(.*?)</text>', re.S)
 
@@ -467,7 +467,8 @@ def zips(six, tmp_path_factory):
     plat de la page 11-1 (sortie de `build_chart.py --approches-seulement`)."""
     root = tmp_path_factory.mktemp('approche_zip')
     lat, lon = konya_latlon()
-    s, p, n = export.export_page(doc_svg('<circle cx="9" cy="9" r="3"/>', *five_fields(lat, lon), RULE), root / 'Konya_10-9A')
+    s, p, n = export.export_page(doc_svg('<circle cx="9" cy="9" r="3"/>', *five_fields(lat, lon), RULE, foot=foot_layer(new=True)),
+                                  root / 'Konya_10-9A')
     (page11,) = six['Konya'][1]
     flat = root / 'flat'
     s1, p1, n1 = export.export_page(page11.svg, flat / 'Konya_11-1')
@@ -499,7 +500,7 @@ def test_republish_copies_an_approach_page_as_it_is(zips, tmp_path, capsys):
     out = tmp_path / 'o.zip'
     assert republish.main(['Syria', '--zip', str(zips.with11), '--out', str(out)]) == 0
     summary = capsys.readouterr().out
-    assert 'pages reexportees : 1' in summary and "pages d'approche 11-x : 1 recopiees telles quelles ; 0 ajoutees" in summary
+    assert 'pages reexportees : 1' in summary and "pages d'approche 11-x : 1 (1 recopiees telles quelles, 0 retouchees au pied) ; 0 ajoutees" in summary
     with zipfile.ZipFile(zips.with11) as a, zipfile.ZipFile(out) as b:
         assert [i.filename for i in a.infolist()] == [i.filename for i in b.infolist()]
         for n in ('pack/png/Konya_11-1.png', 'pack/svg/Konya_11-1.svg', 'pack/pdf/Konya_11-1.pdf', 'pack/notes.txt'):
@@ -512,7 +513,7 @@ def test_republish_ajouter_inserts_the_pages_before_the_collected_pdf(zips, tmp_
     out = tmp_path / 'o.zip'
     assert republish.main(['Syria', '--zip', str(zips.without), '--out', str(out), '--ajouter', str(zips.flat)]) == 0
     summary = capsys.readouterr().out
-    assert "pages d'approche 11-x : 0 recopiees telles quelles ; 1 ajoutees" in summary and '  Konya : 1 ajoutee(s) (11-1)' in summary
+    assert "pages d'approche 11-x : 0 (0 recopiees telles quelles, 0 retouchees au pied) ; 1 ajoutees" in summary and '  Konya : 1 ajoutee(s) (11-1)' in summary
     got = names(out)
     old = names(zips.without)
     k = old.index('pack/pdf/Konya_charts.pdf')
@@ -524,6 +525,50 @@ def test_republish_ajouter_inserts_the_pages_before_the_collected_pdf(zips, tmp_
         assert len(rec.pages) == 2 and 'ILS 01L' in rec.pages[-1].extract_text()
         assert z.read('pack/notes.txt') == b'unchanged'
     assert sorted(got) == sorted(names(zips.with11))                       # les memes entrees que le zip qui avait deja la page
+
+
+def _old_form(svg):
+    """La page telle que le moteur l'ecrivait avant le lot ac-marque-pied : texte de gauche a x = 6, pas de bloc du pictogramme."""
+    old = svg.replace('<text x="10.2" y="203.7"', '<text x="6" y="203.7"').replace(marque.block() + '\n', '')
+    assert old != svg and '<svg x="6" y="201.7"' not in old
+    return old
+
+
+def test_republish_ajouter_retouches_a_page_in_the_old_form_and_copies_one_in_the_new_form(zips, tmp_path, capsys):
+    """`--ajouter` suit la regle du pied des pages 11-x : forme neuve recopiee a l'octet ; ancienne forme retouchee puis reexportee."""
+    new_svg = (zips.flat / 'Konya_11-1.svg').read_text(encoding='utf-8')
+    assert republish.retouch_footer(new_svg, 'Konya_11-1') == (new_svg, 'deja')
+    old_dir = tmp_path / 'old'
+    export.export_page(_old_form(new_svg), old_dir / 'Konya_11-1')
+    out = tmp_path / 'o.zip'
+    assert republish.main(['Syria', '--zip', str(zips.without), '--out', str(out), '--ajouter', str(old_dir)]) == 0
+    summary = capsys.readouterr().out
+    assert "pages d'approche 11-x : 0 (0 recopiees telles quelles, 0 retouchees au pied) ; 1 ajoutees" in summary
+    assert 'pictogramme au pied : 1 pages SVG retouchees (0 10-8, 0 10-9*, 1 11-x) ; deja porteuses : 1' in summary
+    with zipfile.ZipFile(out) as z:
+        assert z.read('pack/svg/Konya_11-1.svg').decode() == new_svg                      # le pied retouche = le pied du moteur
+        assert z.read('pack/png/Konya_11-1.png') == (zips.flat / 'Konya_11-1.png').read_bytes()
+        rec = PdfReader(io.BytesIO(z.read('pack/pdf/Konya_charts.pdf')))
+        assert len(rec.pages) == 2 and 'ILS 01L' in rec.pages[-1].extract_text()
+
+
+def test_republish_old_form_11_x_in_the_zip_is_retouched_and_exported_again(zips, tmp_path):
+    new_svg = (zips.flat / 'Konya_11-1.svg').read_text(encoding='utf-8')
+    old_png = tmp_path / 'oldpage' / 'Konya_11-1'
+    s, p, n = export.export_page(_old_form(new_svg), old_png)
+    zin = tmp_path / 'in.zip'
+    with zipfile.ZipFile(zips.with11) as a, zipfile.ZipFile(zin, 'w') as z:
+        for i in a.infolist():
+            blob = {'pack/svg/Konya_11-1.svg': s.read_bytes(), 'pack/pdf/Konya_11-1.pdf': p.read_bytes(),
+                    'pack/png/Konya_11-1.png': n.read_bytes()}.get(i.filename, a.read(i))
+            z.writestr(i.filename, blob)
+    out, again = tmp_path / 'o.zip', tmp_path / 'again.zip'
+    assert republish.main(['Syria', '--zip', str(zin), '--out', str(out)]) == 0
+    assert republish.main(['Syria', '--zip', str(out), '--out', str(again)]) == 0
+    with zipfile.ZipFile(out) as b, zipfile.ZipFile(again) as c:
+        assert b.read('pack/svg/Konya_11-1.svg').decode() == new_svg
+        assert b.read('pack/png/Konya_11-1.png') == (zips.flat / 'Konya_11-1.png').read_bytes()
+        assert all(b.read(i) == c.read(i) for i in b.namelist() if not i.endswith('.pdf'))      # second passage : a l'octet
 
 
 def stops(zips, tmp_path, folder, match, zin=None):

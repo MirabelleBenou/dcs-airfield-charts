@@ -18,7 +18,7 @@ from shapely import affinity
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import unary_union
 
-from . import compose, geo, page, procedure
+from . import compose, geo, marque, page, procedure
 from .fonts import CAP_HEIGHT, pt, text_width
 from .page import PageOut, View, X0, X1
 from .procedure import FT, NM, TAN3
@@ -576,8 +576,9 @@ def build_page(site, P, index, log=print):
     prof_failed = (_profile_helico if heli else _profile_avion)(doc, site, P, frame, log)
     L = 'Footer'
     doc.add(L, line(X0, page.FOOTER_RULE_Y, X1, page.FOOTER_RULE_Y, INK, 0.5))
-    doc.add(L, text(X0, page.FOOTER_Y, FOOTER_TEXT, pt(6.1), 'regular', INK2))
+    doc.add(L, text(X0 + marque.TEXT_SHIFT_MM, page.FOOTER_Y, FOOTER_TEXT, pt(6.1), 'regular', INK2))
     doc.add(L, text(X1, page.FOOTER_Y, page.FOOTER_RIGHT, pt(6.1), 'bold', INK, 'end'))
+    doc.add(L, marque.block())
     svg = doc.render()
     failed = list(pl.failed) + list(prof_failed)
     return PageOut(index, svg, {'title': title, 'scale_mm_per_nm': s * NM, 'failed': failed, 'frame': frame})

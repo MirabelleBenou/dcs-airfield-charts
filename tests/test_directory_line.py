@@ -131,7 +131,7 @@ def test_engine_draws_the_line_like_the_republication(monkeypatch):
 
 # ---------- republish : un zip synthetique aux noms du repertoire publie ----------
 def _published_pages(tiles):
-    """{numero de page: image} des pages touchees, telles que publiees : chaque vignette a 36 px."""
+    """{numero de page: image} des pages a vignette retouchee, telles que publiees : chaque vignette a 36 px (le pied est ajoute par `make_zip`)."""
     pages = {}
     for no, site, x, w, base2, town, dims, size in tiles:
         if no not in SYRIA_PAGES:
@@ -153,17 +153,33 @@ def _pdf(images):
     return buf.getvalue()
 
 
-def make_zip(path, pages, n=47, skip_jpeg=None, extra=()):
-    """Zip : `n` JPEG p01..pNN (les pages sans vignette a retoucher : octets quelconques, jamais decodes) et le PDF (n pages)."""
+N_INDEX = 3                                                          # pages d'index de Syria
+
+
+def old_foot(im, no):
+    """Le pied d'une page publiee avant le lot ac-marque-pied : le texte de gauche a MARGIN_X, pas de pictogramme."""
+    im = im.copy()
+    d = ImageDraw.Draw(im)
+    left = directory.FOOT_INDEX if no <= N_INDEX else directory.FOOT_LEFT
+    directory.draw_text(d, (directory.MARGIN_X, 2379), left, 'medium', 29, directory.GREY, 'ls')
+    directory.draw_text(d, (directory.PAGE_PX[0] - directory.MARGIN_X + 1, 2379), 'NOT FOR REAL-WORLD NAVIGATION', 'bold', 29, directory.INK, 'rs')
+    return im
+
+
+def new_foot(im, no):
+    """Le pied d'une page qui porte deja le pictogramme."""
+    return republish.redraw_directory_foot(im, directory.FOOT_INDEX if no <= N_INDEX else directory.FOOT_LEFT)
+
+
+def make_zip(path, pages, n=47, skip_jpeg=None, extra=(), foot=old_foot):
+    """Zip : `n` JPEG p01..pNN (les pages absentes de `pages` : pages blanches) et le PDF (n pages) ; `foot(page, numero)` dessine le pied
+    de chacune (par defaut celui d'avant le lot : sans pictogramme)."""
     imgs = []
     with zipfile.ZipFile(path, 'w') as z:
         z.writestr(FOLDER + 'notes.txt', b'unchanged')
         for k in range(1, n + 1):
-            if k in pages:
-                data, im = _jpeg(pages[k]), pages[k]
-            else:
-                im = Image.new('RGB', (40, 50), (255, 255, 255 - k))
-                data = b'\xff\xd8not-a-real-page-%02d' % k
+            im = foot(pages.get(k) or Image.new('RGB', directory.PAGE_PX, (255, 255, 255)), k)
+            data = _jpeg(im)
             imgs.append(im)
             if k != skip_jpeg:
                 z.writestr(f'{FOLDER}heliports/Syria_heliports_directory_p{k:02d}.jpg', data)
@@ -191,7 +207,9 @@ def _pdf_image_bytes(data):
 def test_republish_directory_counts(synth):
     _, _, _, res, _, _ = synth
     d = res.directory
-    assert (d.tiles, d.controlled, d.retouched, d.already, d.pages) == (141, 5, 5, 0, SYRIA_PAGES)
+    assert (d.tiles, d.controlled, d.retouched, d.already, d.pages) == (141, 5, 5, 0, list(range(1, 48)))     # le pied : toutes les pages
+    assert (d.foot, d.foot_kept) == (list(range(1, 48)), [])
+    assert all(g > 8 for g in d.foot_gaps.values())
     assert {r[1]: r[3] for r in d.rows} == SYRIA_SMALL
     assert all(r[4] <= 6 < r[5] for r in d.rows)
 
@@ -201,15 +219,17 @@ def test_republish_directory_entries(synth):
     with zipfile.ZipFile(zin) as a, zipfile.ZipFile(out) as b:
         assert [i.filename for i in a.infolist()] == [i.filename for i in b.infolist()]
         changed = [n for n in a.namelist() if a.read(n) != b.read(n)]
-        assert sorted(changed) == sorted([f'{FOLDER}heliports/Syria_heliports_directory_p{k:02d}.jpg' for k in SYRIA_PAGES]
+        assert sorted(changed) == sorted([f'{FOLDER}heliports/Syria_heliports_directory_p{k:02d}.jpg' for k in range(1, 48)]
                                          + [FOLDER + 'Syria_heliports_directory.pdf'])
-        for k in SYRIA_PAGES:
+        for k in range(1, 48):
             name = f'{FOLDER}heliports/Syria_heliports_directory_p{k:02d}.jpg'
             old, new = Image.open(io.BytesIO(a.read(name))), Image.open(io.BytesIO(b.read(name)))
             assert new.quantization == old.quantization
             assert JpegImagePlugin.get_sampling(new) == JpegImagePlugin.get_sampling(old) and new.info['dpi'] == (300, 300)
             o, n = np.asarray(old.convert('RGB'), dtype=np.int16), np.asarray(new.convert('RGB'), dtype=np.int16)
             mask = np.ones(o.shape[:2], bool)
+            mask[republish.FOOT_ROWS[0]:republish.FOOT_ROWS[1] + 1] = False             # le pied est redessine
+            assert np.abs(o - n)[republish.FOOT_ROWS[0]:republish.FOOT_ROWS[1] + 1].mean() > 8
             for no, site, x, w, base2, town, dims, size in tiles:
                 if no == k and size < 36:
                     x0, y0, x1, y1 = republish.band_box(x, w, base2)
@@ -226,11 +246,8 @@ def test_republish_directory_pdf(synth):
         ia, ib = _pdf_image_bytes(pa), _pdf_image_bytes(pb)
         assert len(ia) == len(ib) == 47
         for k in range(1, 48):
-            if k in SYRIA_PAGES:
-                assert ib[k - 1] == b.read(f'{FOLDER}heliports/Syria_heliports_directory_p{k:02d}.jpg')     # les octets du nouveau JPEG
-                assert ib[k - 1] != ia[k - 1]
-            else:
-                assert ib[k - 1] == ia[k - 1]                                                                # a l'octet
+            assert ib[k - 1] == b.read(f'{FOLDER}heliports/Syria_heliports_directory_p{k:02d}.jpg')         # les octets du nouveau JPEG
+            assert ib[k - 1] != ia[k - 1]
         ra, rb = PdfReader(io.BytesIO(pa)), PdfReader(io.BytesIO(pb))
         for x, y in zip(ra.pages, rb.pages):
             assert list(x.mediabox) == list(y.mediabox)
@@ -245,6 +262,7 @@ def test_republish_is_idempotent_on_the_directory(synth):
     res = republish.republish_zip('Syria', out, again)
     d = res.directory
     assert (d.controlled, d.retouched, d.already, d.pages) == (5, 0, 5, [])
+    assert (d.foot, d.foot_kept) == ([], list(range(1, 48))) and all(g < 1 for g in d.foot_gaps.values())
     with zipfile.ZipFile(out) as a, zipfile.ZipFile(again) as b:
         assert a.read(FOLDER + 'Syria_heliports_directory.pdf') == b.read(FOLDER + 'Syria_heliports_directory.pdf')
         assert all(a.read(n) == b.read(n) for n in a.namelist())
@@ -255,21 +273,27 @@ def test_republish_summary_line(synth, capsys):
     assert republish.main(['Syria', '--zip', str(zin), '--out', str(root / 'summary.zip')]) == 0
     out = capsys.readouterr().out
     assert ('repertoire des heliports : 141 vignettes ; controlees (ville sous 36 px) : 5 ; retouchees : 5 ; '
-            'deja retouchees : 0 ; pages touchees : 5 p30 p31 p33 p43 p46') in out
+            'deja retouchees : 0 ; pages touchees : 47 p01 p02') in out
+    assert 'repertoire des heliports, pictogramme au pied : 47 pages retouchees ; 0 deja porteuses' in out
+
+    again = root / 'summary_again.zip'
+    assert republish.main(['Syria', '--zip', str(root / 'summary.zip'), '--out', str(again)]) == 0
+    assert 'repertoire des heliports, pictogramme au pied : 0 pages retouchees ; 47 deja porteuses' in capsys.readouterr().out
 
 
 def test_republish_untouched_directory_is_copied_to_the_byte(tmp_path, syria_tiles):
-    """Aucune ville sous 36 px dans le zip (toutes les vignettes sont deja retouchees ... ou rien a retoucher) : rien ne change."""
+    """Toutes les vignettes deja retouchees et le pictogramme deja au pied de chaque page : rien ne change, tout est copie a l'octet."""
     tiles, _ = syria_tiles
     pages = {}
     for no, site, x, w, base2, town, dims, size in tiles:
         if no in SYRIA_PAGES:
             im = pages.setdefault(no, Image.new('RGB', directory.PAGE_PX, (255, 255, 255)))
             directory.draw_line2(ImageDraw.Draw(im), x, w, base2, town, dims, size)
-    zin = make_zip(tmp_path / 'in.zip', pages)
+    zin = make_zip(tmp_path / 'in.zip', pages, foot=new_foot)
     out = tmp_path / 'out.zip'
     res = republish.republish_zip('Syria', zin, out)
     assert (res.directory.retouched, res.directory.already, res.directory.pages) == (0, 5, [])
+    assert res.directory.foot == [] and len(res.directory.foot_kept) == 47
     with zipfile.ZipFile(zin) as a, zipfile.ZipFile(out) as b:
         assert all(a.read(n) == b.read(n) for n in a.namelist())
 
@@ -367,3 +391,100 @@ def test_other_names_keep_the_byte_copy(tmp_path):
     assert res.directory.tiles == 0
     with zipfile.ZipFile(zin) as a, zipfile.ZipFile(tmp_path / 'out.zip') as b:
         assert all(a.read(n) == b.read(n) for n in a.namelist()) and res.copied == 3
+
+
+# ---------- lot ac-marque-pied : le pictogramme au pied des pages du repertoire ----------
+def _white():
+    return Image.new('RGB', directory.PAGE_PX, (255, 255, 255))
+
+
+def test_footer_pictogram_and_texts_are_where_the_cadrage_puts_them():
+    import cairosvg
+    from render import marque
+    page = _white()
+    directory.footer(page, ImageDraw.Draw(page), directory.FOOT_LEFT)
+    src = (marque.MARQUE_DIR / marque.PICTO_FILE).read_text(encoding='utf-8').strip()
+    pic = Image.open(io.BytesIO(cairosvg.svg2png(bytestring=src.encode('utf-8'), output_width=35, output_height=35))).convert('RGBA')
+    want = _white()
+    want.paste(pic, (directory.MARGIN_X, 2352), pic)
+    wd = ImageDraw.Draw(want)
+    directory.draw_text(wd, (directory.MARGIN_X + 50, 2379), directory.FOOT_LEFT, 'medium', 29, directory.GREY, 'ls')
+    directory.draw_text(wd, (directory.PAGE_PX[0] - directory.MARGIN_X + 1, 2379), 'NOT FOR REAL-WORLD NAVIGATION', 'bold', 29, directory.INK, 'rs')
+    assert np.array_equal(np.asarray(page), np.asarray(want))
+    ink = np.asarray(page, dtype=np.int16).sum(axis=2) < 3 * 250
+    assert ink[:, directory.MARGIN_X:directory.MARGIN_X + 35].nonzero()[0].min() >= 2352 and ink[:, directory.MARGIN_X:directory.MARGIN_X + 35].nonzero()[0].max() < 2352 + 35
+    assert ink[2336:2400, directory.MARGIN_X + 36:directory.MARGIN_X + 50].sum() == 0          # entre l'image et le texte : blanc
+    assert ink[2336:2400, directory.MARGIN_X + 50:].nonzero()[1].min() >= 0 and ink[:2336].sum() == 0
+    assert pic.size == (35, 35) and pic.mode == 'RGBA' and pic.getchannel('A').getextrema() == (0, 255)
+
+
+def test_footer_text_starts_50_px_after_the_margin_and_the_mention_of_the_right_is_unchanged():
+    page = _white()
+    d = ImageDraw.Draw(page)
+    directory.footer(page, d, directory.FOOT_LEFT)
+    base = _white()
+    directory.draw_text(ImageDraw.Draw(base), (directory.PAGE_PX[0] - directory.MARGIN_X + 1, 2379), 'NOT FOR REAL-WORLD NAVIGATION', 'bold', 29,
+                        directory.INK, 'rs')
+    a, b = np.asarray(page), np.asarray(base)
+    x1 = directory.PAGE_PX[0] - directory.MARGIN_X + 1
+    cols = (b.astype(int).sum(axis=2) < 3 * 250).nonzero()[1]
+    right = slice(cols.min(), cols.max() + 1)                                           # la mention de droite, a elle seule
+    assert np.array_equal(a[:, right], b[:, right]) and cols.min() > 1000
+    left_ink = (a[2336:2400, directory.MARGIN_X + 36:cols.min() - 20].astype(int).sum(axis=2) < 3 * 250).nonzero()[1]
+    assert left_ink.min() + directory.MARGIN_X + 36 >= directory.MARGIN_X + 50
+
+
+def test_engine_index_page_has_the_pictogram_footer(syria_tiles):
+    from render import fiches
+    sites, pages, n_index = fiches.replay_directory('Syria')
+    page = directory.draw_index_page('Syria', sites, 0, n_index)
+    want = republish.redraw_directory_foot(_white(), directory.FOOT_INDEX)
+    rows = slice(republish.FOOT_ROWS[0], republish.FOOT_ROWS[1] + 1)
+    assert np.array_equal(np.asarray(page)[rows], np.asarray(want)[rows])
+
+
+def test_republish_picks_the_index_text_for_pages_1_to_3_and_the_plan_text_after(synth):
+    root, _, out, _, _, _ = synth
+    rows = slice(republish.FOOT_ROWS[0], republish.FOOT_ROWS[1] + 1)
+    with zipfile.ZipFile(out) as z:
+        for no, own, other in ((1, directory.FOOT_INDEX, directory.FOOT_LEFT), (3, directory.FOOT_INDEX, directory.FOOT_LEFT),
+                               (4, directory.FOOT_LEFT, directory.FOOT_INDEX), (47, directory.FOOT_LEFT, directory.FOOT_INDEX)):
+            im = Image.open(io.BytesIO(z.read(f'{FOLDER}heliports/Syria_heliports_directory_p{no:02d}.jpg'))).convert('RGB')
+            assert republish.foot_gap(im, republish.redraw_directory_foot(_white(), own)) < 1
+            assert republish.foot_gap(im, republish.redraw_directory_foot(_white(), other)) > 3
+    assert rows.start == 2336 and rows.stop == 2400
+
+
+def _with_defect(tmp_path, area_w, area_h):
+    """Un zip dont toutes les pages portent deja le pictogramme, sauf la page 10 : un bloc noir de area_w x area_h dans le pied."""
+    pages = {}
+    def foot(im, no):
+        im = new_foot(im, no)
+        if no == 10:
+            ImageDraw.Draw(im).rectangle([600, 2340, 600 + area_w - 1, 2340 + area_h - 1], fill=(0, 0, 0))
+        return im
+    return make_zip(tmp_path / "in.zip", pages, foot=foot)
+
+
+@pytest.mark.parametrize('w, h', [(50, 35), (30, 35), (15, 35)])
+def test_a_footer_gap_between_1_and_8_stops_and_writes_nothing(tmp_path, capsys, w, h):
+    """Le seuil de 3 ne separe plus une page qui porte le pictogramme de celle qui ne le porte pas : arret."""
+    zin = _with_defect(tmp_path, w, h)
+    out = tmp_path / 'out.zip'
+    assert republish.main(['Syria', '--zip', str(zin), '--out', str(out)]) == 1
+    err = capsys.readouterr().err
+    assert 'repertoire page 10' in err and 'ecart moyen du pied' in err and not out.exists()
+
+
+def test_a_footer_gap_below_3_means_the_page_carries_the_pictogram_and_above_8_that_it_does_not(tmp_path, syria_tiles):
+    tiles, _ = syria_tiles
+    zin = make_zip(tmp_path / 'in.zip', _published_pages(tiles), foot=old_foot)
+    res = republish.republish_zip('Syria', zin, tmp_path / 'out.zip')
+    assert all(g > 8 for g in res.directory.foot_gaps.values()) and len(res.directory.foot) == 47
+    pages = {}
+    for no, site, x, w, base2, town, dims, size in tiles:
+        if no in SYRIA_PAGES:
+            directory.draw_line2(ImageDraw.Draw(pages.setdefault(no, _white())), x, w, base2, town, dims, size)
+    zin2 = make_zip(tmp_path / 'in2.zip', pages, foot=new_foot)
+    res2 = republish.republish_zip('Syria', zin2, tmp_path / 'out2.zip')
+    assert all(g < 1 for g in res2.directory.foot_gaps.values()) and len(res2.directory.foot_kept) == 47 and res2.directory.foot == []

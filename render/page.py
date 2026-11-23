@@ -10,7 +10,7 @@ from shapely import affinity
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import unary_union
 
-from . import geo, layout, vector
+from . import geo, layout, marque, vector
 from .fonts import CAP_HEIGHT, pt, text_width
 from .svgdoc import (BAND, BUILD, INK, INK2, PAVE, TAXI, Doc, circle, f, line, path_d, rect, slug, text)
 
@@ -435,8 +435,9 @@ def footer_text(data, osm):
 def footer(doc, data, osm):
     L = 'Footer'
     doc.add(L, line(X0, FOOTER_RULE_Y, X1, FOOTER_RULE_Y, INK, 0.5))
-    doc.add(L, text(X0, FOOTER_Y, footer_text(data, osm), pt(6.1), 'regular', INK2))
+    doc.add(L, text(X0 + marque.TEXT_SHIFT_MM, FOOTER_Y, footer_text(data, osm), pt(6.1), 'regular', INK2))
     doc.add(L, text(X1, FOOTER_Y, FOOTER_RIGHT, pt(6.1), 'bold', INK, 'end'))
+    doc.add(L, marque.block())
 
 
 def legend(doc, y, x_left=None, x_right=None, note=None, sym_r=SYM_PLAN_R, heli=False, fond=False):

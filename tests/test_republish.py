@@ -10,7 +10,7 @@ import pytest
 from PIL import Image
 from pypdf import PdfReader
 
-from render import analysis, compose, dcsdata, export, geo, page, republish, svgdoc, update_coords
+from render import analysis, compose, dcsdata, export, geo, marque, page, republish, svgdoc, update_coords
 from render.fonts import pt
 
 BAR_Y = 172.4
@@ -63,9 +63,27 @@ def test_scale_block_1000_m_and_short_bars_are_unchanged():
 
 
 # ---------- la retouche egale a ce que scale_block ecrit ----------
-def doc_svg(*parts):
+FOOT_TEXT = 'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics), via pydcs'
+
+
+def foot_layer(new=False, left_x=None, extra=''):
+    """Le calque `Footer` d'une page publiee : l'ancienne forme (texte de gauche a x = 6) ou la neuve (x = 10.2, puis le bloc du pictogramme)."""
+    x = left_x or ('10.2' if new else '6')
+    parts = ['<line x1="6" y1="201.2" x2="142" y2="201.2" stroke="#1A1A1A" stroke-width="0.5"/>',
+             f'<text x="{x}" y="203.7" font-family="Barlow Condensed" font-size="2.152" fill="#5A5A5A">{FOOT_TEXT}</text>',
+             '<text x="142" y="203.7" font-family="Barlow Condensed" font-size="2.152" fill="#1A1A1A" font-weight="bold" '
+             'text-anchor="end">NOT FOR REAL-WORLD NAVIGATION</text>']
+    if new:
+        parts.append(marque.block())
+    return '<g inkscape:groupmode="layer" id="layer-footer" inkscape:label="Footer">\n' + '\n'.join(parts) + extra + '\n</g>'
+
+
+def doc_svg(*parts, foot=None):
+    """Page synthetique ; `foot` : le calque Footer (par defaut, celui de l'ancienne forme ; `False` : aucun)."""
+    foot = foot_layer() if foot is None else foot
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
-            'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="148mm" height="210mm" viewBox="0 0 148 210">\n<g>\n' + '\n'.join(parts) + '\n</g>\n</svg>')
+            'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="148mm" height="210mm" viewBox="0 0 148 210">\n<g>\n'
+            + '\n'.join(parts) + '\n</g>\n' + (foot + '\n' if foot else '') + '</svg>')
 
 
 def old_bar_elements(elems, L, y=BAR_Y):
@@ -250,7 +268,7 @@ def old_zip(tmp_path_factory):
     pages = {
         'Konya_10-9': doc_svg('<rect x="1" y="1" width="2" height="2"/>', *three_fields(lat, lon), RULE, *old_bar_elements(bar750, 750),
                               frame_layer(*OLD_NORTH)),
-        'Konya_10-9A': doc_svg('<circle cx="9" cy="9" r="3"/>', *five_fields(lat, lon), RULE),
+        'Konya_10-9A': doc_svg('<circle cx="9" cy="9" r="3"/>', *five_fields(lat, lon), RULE, foot=foot_layer(new=True)),      # deja porteuse
         'KonyaF_10-9': doc_svg(img, *five_fields(lat, lon), RULE, *bar300, frame_layer(0.0, 3.29)),
     }
     files = {}
@@ -285,6 +303,7 @@ def test_republish_zip(old_zip, tmp_path, capsys):
     assert 'barres completees : 1' in summary and '  Konya_10-9 : 750 M' in summary
     assert 'pages a fond F10 : 1' in summary and '  KonyaF_10-9' in summary
     assert 'recueils refaits : 2' in summary and 'entrees recopiees telles quelles : 2' in summary
+    assert 'pictogramme au pied : 2 pages SVG retouchees (0 10-8, 2 10-9*, 0 11-x) ; deja porteuses : 1' in summary
     with zipfile.ZipFile(zin) as a, zipfile.ZipFile(out) as b:
         assert [i.filename for i in a.infolist()] == [i.filename for i in b.infolist()]
         assert [i.compress_type for i in a.infolist()] == [i.compress_type for i in b.infolist()]
@@ -292,13 +311,14 @@ def test_republish_zip(old_zip, tmp_path, capsys):
             assert a.read(n) == b.read(n)
         # page 10-9 : en-tete reecrit a cinq champs, fin de barre completee
         new = b.read('pack/svg/Konya_10-9.svg').decode()
-        want = doc_svg('<rect x="1" y="1" width="2" height="2"/>', *five_fields(lat, lon), RULE, *block(750)[0], frame_layer(0.0, 3.29))
+        want = doc_svg('<rect x="1" y="1" width="2" height="2"/>', *five_fields(lat, lon), RULE, *block(750)[0], frame_layer(0.0, 3.29),
+                       foot=foot_layer(new=True))
         assert new == want                                  # fleche fine a 0, pleine a la declinaison relue (d = p - t)
         # page de parkings : en-tete deja a cinq champs, rien ne change
         assert b.read('pack/svg/Konya_10-9A.svg') == a.read('pack/svg/Konya_10-9A.svg')
         # page a fond F10 : xlink:href ajoute, PNG a palette
         f10 = b.read('pack/svg/KonyaF_10-9.svg').decode()
-        assert ' xlink:href="data:image/png;base64,' in f10 and f10.replace(re.search(r' xlink:href="[^"]*"', f10).group(0), '') == pages['KonyaF_10-9']
+        assert ' xlink:href="data:image/png;base64,' in f10 and f10.replace(re.search(r' xlink:href="[^"]*"', f10).group(0), '') == pages['KonyaF_10-9'].replace(foot_layer(), foot_layer(new=True))
         assert Image.open(io.BytesIO(b.read('pack/png/KonyaF_10-9.png'))).mode == 'P'
         assert Image.open(io.BytesIO(b.read('pack/png/Konya_10-9.png'))).mode == 'RGBA'
         assert Image.open(io.BytesIO(b.read('pack/png/Konya_10-9A.png'))).mode == 'RGBA'
@@ -411,14 +431,15 @@ def test_republish_uses_the_engine_functions(monkeypatch):
 
 
 # ---------- lot ac-approches-v1 : les pages helicoptere 11-xH ----------
-def test_republish_copies_the_helicopter_approach_pages_and_puts_them_after_the_11_x(tmp_path, capsys):
-    """Une page `<stem>_11-<n>H` est traitee comme une page 11-x : recopiee telle quelle (son elevation porte les metres), son PDF
-    entre dans le recueil apres les 11-x ; une chart qui n'a que des pages 11-xH (zip helicopters) n'a pas de recueil."""
+def test_republish_puts_the_pictogram_on_the_helicopter_approach_pages_and_puts_them_after_the_11_x(tmp_path, capsys):
+    """Une page `<stem>_11-<n>H` est traitee comme une page 11-x (son elevation porte les metres) : sa seule retouche est le pied ; une
+    page a la forme neuve du pied est recopiee telle quelle, les autres sont retouchees puis reexportees ; leur PDF entre dans le
+    recueil apres les 11-x ; une chart qui n'a que des pages 11-xH (zip helicopters) n'a pas de recueil."""
     lat, lon = konya_latlon()
     bar300, _ = page.scale_block(BAR_X, BAR_Y, 38.0 / 300)
     heli = five_fields(lat, lon, elev='ELEV 3392 FT · 1034 M')
     pages = {'Konya_10-9': doc_svg('<rect x="1" y="1" width="2" height="2"/>', *five_fields(lat, lon), RULE, *bar300, frame_layer(0.0, 3.29)),
-             'Konya_11-1': doc_svg('<circle cx="5" cy="5" r="1"/>', *five_fields(lat, lon), RULE),
+             'Konya_11-1': doc_svg('<circle cx="5" cy="5" r="1"/>', *five_fields(lat, lon), RULE, foot=foot_layer(new=True)),
              'Konya_11-1H': doc_svg('<circle cx="6" cy="6" r="1"/>', *heli, RULE),
              'Konya_11-2': doc_svg('<circle cx="7" cy="7" r="1"/>', *five_fields(lat, lon), RULE),
              'Other_11-1H': doc_svg('<circle cx="8" cy="8" r="1"/>', *heli, RULE)}
@@ -436,14 +457,132 @@ def test_republish_copies_the_helicopter_approach_pages_and_puts_them_after_the_
         z.writestr('pack/pdf/Konya_charts.pdf', (tmp_path / 'src' / 'rec.pdf').read_bytes())
     out = tmp_path / 'out.zip'
     assert run(zin, out) == 0
-    assert "pages d'approche 11-x : 4 recopiees telles quelles" in capsys.readouterr().out
+    summary = capsys.readouterr().out
+    assert "pages d'approche 11-x : 4 (1 recopiees telles quelles, 3 retouchees au pied)" in summary
+    assert 'pictogramme au pied : 4 pages SVG retouchees (0 10-8, 1 10-9*, 3 11-x) ; deja porteuses : 1' in summary
     with zipfile.ZipFile(zin) as a, zipfile.ZipFile(out) as b:
         assert a.namelist() == b.namelist()
-        for name in ('Konya_11-1', 'Konya_11-1H', 'Konya_11-2', 'Other_11-1H'):
-            for sub in ('pdf', 'png', 'svg'):
-                assert b.read(f'pack/{sub}/{name}.{sub}') == a.read(f'pack/{sub}/{name}.{sub}')
+        for sub in ('pdf', 'png', 'svg'):                                              # forme neuve : a l'octet
+            assert b.read(f'pack/{sub}/Konya_11-1.{sub}') == a.read(f'pack/{sub}/Konya_11-1.{sub}')
+        for name in ('Konya_11-1H', 'Konya_11-2', 'Other_11-1H'):                      # ancienne forme : le pied seul change
+            assert b.read(f'pack/svg/{name}.svg').decode() == pages[name].replace(foot_layer(), foot_layer(new=True))
+            assert b.read(f'pack/png/{name}.png') != a.read(f'pack/png/{name}.png')
         rec = PdfReader(io.BytesIO(b.read('pack/pdf/Konya_charts.pdf')))
         assert len(rec.pages) == 4
-        last = PdfReader(io.BytesIO(files['Konya_11-1H'][1])).pages[0].extract_text()
+        last = PdfReader(io.BytesIO(b.read('pack/pdf/Konya_11-1H.pdf'))).pages[0].extract_text()
         assert rec.pages[3].extract_text() == last and 'Other_charts' not in ' '.join(b.namelist())
     assert republish._approach_key('11-1H') > republish._approach_key('11-2')
+
+
+# ---------- lot ac-marque-pied : le pictogramme au pied des charts ----------
+def test_block_replaces_the_opening_tag_once_and_keeps_the_rest():
+    text = (marque.MARQUE_DIR / marque.PICTO_FILE).read_text(encoding='utf-8').strip()
+    assert text.startswith('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 360" width="360" height="360">')
+    b = marque.block()
+    assert b.startswith('<svg x="6" y="201.7" width="2.6" height="2.6" viewBox="0 0 360 360">')
+    assert b == '<svg x="6" y="201.7" width="2.6" height="2.6" viewBox="0 0 360 360">' + text[len(marque.MARQUE_TAG):]
+    assert b.count('<svg') == 1 and '<image' not in b and b.endswith('</svg>')
+
+
+@pytest.mark.parametrize('content', ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 360">\n<circle/></svg>',     # balise differente
+                                     '<?xml version="1.0"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 360" width="360" height="360"/>',
+                                     ''])
+def test_block_refuses_a_file_that_does_not_start_with_the_expected_tag(tmp_path, content):
+    (tmp_path / marque.PICTO_FILE).write_text(content, encoding='utf-8')
+    with pytest.raises(marque.MarqueError, match='balise attendue'):
+        marque.block(tmp_path)
+    with pytest.raises(marque.MarqueError):
+        marque.picture(35, tmp_path)
+
+
+def test_block_strips_the_blanks_of_the_file_and_refuses_a_missing_file(tmp_path):
+    (tmp_path / marque.PICTO_FILE).write_text('\n  ' + marque.MARQUE_TAG + '<g/></svg> \n\n', encoding='utf-8')
+    assert marque.block(tmp_path) == marque.BLOCK_TAG + '<g/></svg>'
+    with pytest.raises(marque.MarqueError, match='illisible'):
+        marque.block(tmp_path / 'absent')
+
+
+def test_engine_footer_layer_equals_the_republish_retouch_of_the_old_form():
+    """Le calque Footer d'une page neuve (page.footer) est, a l'octet, celui qu'ecrit la retouche d'une page a l'ancienne forme."""
+    from types import SimpleNamespace
+    d = svgdoc.Doc()
+    page.footer(d, SimpleNamespace(taxiway_source='jeu', osm_icao=None), False)
+    assert '\n'.join(d.layers['Footer']) == foot_layer(new=True).split('\n', 1)[1].rsplit('\n', 1)[0]
+    new_page = d.render()
+    got, state = republish.retouch_footer(doc_svg('<rect x="1" y="1" width="2" height="2"/>'), 'X_10-9')
+    assert state == 'retouchee'
+    layer = lambda t: t[t.index('<g inkscape:groupmode="layer" id="layer-footer"'):t.rindex('</svg>')].rstrip('\n')
+    assert layer(got) == layer(new_page) == foot_layer(new=True)
+
+
+def test_footer_retouch_changes_nothing_but_the_footer_layer():
+    old = doc_svg('<rect x="1" y="1" width="2" height="2"/>', RULE)
+    got, state = republish.retouch_footer(old, 'X_10-8')
+    assert state == 'retouchee'
+    assert got == old.replace(foot_layer(), foot_layer(new=True))
+    assert got.count('<text x="10.2" y="203.7"') == 1 and got.count('<text x="6" y="203.7"') == 0 and got.count(marque.block()) == 1
+    assert got.index(marque.block()) > got.index('NOT FOR REAL-WORLD NAVIGATION') and got.index('NOT FOR') < got.index('</g>\n</svg>')
+
+
+def test_footer_new_form_is_left_as_it_is_and_the_retouch_is_idempotent():
+    new = doc_svg('<rect x="1" y="1" width="2" height="2"/>', foot=foot_layer(new=True))
+    assert republish.retouch_footer(new, 'X_11-1') == (new, 'deja')
+    once, _ = republish.retouch_footer(doc_svg('<rect x="1" y="1" width="2" height="2"/>'), 'X_11-1')
+    assert republish.retouch_footer(once, 'X_11-1') == (once, 'deja')
+
+
+@pytest.mark.parametrize('foot', [
+    foot_layer(left_x='7'),                                              # une troisieme forme : le texte de gauche ailleurs
+    foot_layer(new=True, left_x='6'),                                    # le bloc sans le decalage du texte
+    foot_layer(extra='\n' + marque.block()),                             # le bloc sans le decalage du texte (ancienne x)
+    foot_layer(new=True).replace('<line ', '<rect ').replace('stroke-width="0.5"/>', 'stroke-width="0.5"/>', 1),
+    foot_layer(new=True, extra='\n<circle cx="1" cy="1" r="1"/>'),       # un element de trop
+    foot_layer().replace('y="203.7"', 'y="203.8"', 1),
+    foot_layer(new=True).replace('height="2.6"', 'height="2.7"'),        # un bloc qui n'est pas celui du fichier
+    '',                                                                  # pas de calque
+], ids=['x7', 'new-x6', 'old-with-block', 'no-line', 'extra-element', 'y', 'other-block', 'none'])
+def test_footer_other_forms_stop_and_nothing_is_written(tmp_path, capsys, foot):
+    svg = doc_svg('<rect x="1" y="1" width="2" height="2"/>', foot=foot or False)
+    with pytest.raises(republish.RepublishError, match='Footer'):
+        republish.retouch_footer(svg, 'X_10-8')
+    lat, lon = konya_latlon()
+    zin = _zip_with(tmp_path, {'Konya_10-9A': doc_svg('<circle cx="9" cy="9" r="3"/>', *five_fields(lat, lon), RULE, foot=foot or False)})
+    assert run(zin, tmp_path / 'o.zip') == 1
+    assert 'ARRET' in capsys.readouterr().err and not (tmp_path / 'o.zip').exists()
+
+
+def test_footer_two_layers_stop():
+    with pytest.raises(republish.RepublishError, match='2 calques Footer'):
+        republish.retouch_footer(doc_svg(foot=foot_layer() + '\n' + foot_layer()), 'X_10-9')
+
+
+def test_a_10_8_and_an_11_x_with_the_old_form_are_retouched_and_exported_again(tmp_path):
+    """10-8 et 11-x : plus recopiees a l'octet quand le pied est a l'ancienne forme (un seul calque change) ; a la forme neuve, recopiees."""
+    lat, lon = konya_latlon()
+    pages = {'Konya_10-8': doc_svg('<circle cx="5" cy="5" r="1"/>', *five_fields(lat, lon), RULE),
+             'Konya_10-9A': doc_svg('<circle cx="6" cy="6" r="1"/>', *five_fields(lat, lon), RULE, foot=foot_layer(new=True)),
+             'Konya_11-1': doc_svg('<circle cx="7" cy="7" r="1"/>', *five_fields(lat, lon), RULE)}
+    files = {}
+    for name, svg in pages.items():
+        s_, p_, n_ = export.export_page(svg, tmp_path / 'src' / name)
+        files[name] = (s_.read_bytes(), p_.read_bytes(), n_.read_bytes())
+    export.merge_pdfs([tmp_path / 'src' / f'{n}.pdf' for n in pages], tmp_path / 'src' / 'rec.pdf')
+    zin = tmp_path / 'in.zip'
+    with zipfile.ZipFile(zin, 'w') as z:
+        for name, (s_, p_, n_) in files.items():
+            for sub, blob in (('pdf', p_), ('png', n_), ('svg', s_)):
+                z.writestr(f'pack/{sub}/{name}.{sub}', blob)
+        z.writestr('pack/pdf/Konya_charts.pdf', (tmp_path / 'src' / 'rec.pdf').read_bytes())
+    out = tmp_path / 'out.zip'
+    assert run(zin, out) == 0
+    again = tmp_path / 'again.zip'
+    assert run(out, again) == 0
+    with zipfile.ZipFile(zin) as a, zipfile.ZipFile(out) as b, zipfile.ZipFile(again) as c:
+        for name in ('Konya_10-8', 'Konya_11-1'):
+            assert b.read(f'pack/svg/{name}.svg').decode() == pages[name].replace(foot_layer(), foot_layer(new=True))
+            assert b.read(f'pack/png/{name}.png') != a.read(f'pack/png/{name}.png')
+        assert b.read('pack/png/Konya_10-9A.png') == a.read('pack/png/Konya_10-9A.png')
+        for n in b.namelist():
+            if not n.endswith('.pdf'):
+                assert b.read(n) == c.read(n)                                 # un second passage : tout egal a l'octet (hors PDF)
+        assert len(PdfReader(io.BytesIO(b.read('pack/pdf/Konya_charts.pdf'))).pages) == 3

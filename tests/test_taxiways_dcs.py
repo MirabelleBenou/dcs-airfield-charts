@@ -2,6 +2,7 @@
 ceux du fichier OSM de la base, base par base. Les tests de read_osm travaillent sur un revetement factice ; ceux d'`analyze`
 demandent les echantillons (DCS_CHARTS_SAMPLES)."""
 import json
+import re
 from types import SimpleNamespace
 
 import numpy as np
@@ -206,14 +207,16 @@ def test_footer_text_credits_osm_only_for_what_comes_from_osm(source, icao, osm,
 def test_footer_never_touches_the_right_hand_notice_and_keeps_3_mm(source, icao, osm, expected):
     from render import page
     from render.fonts import pt, text_width
+    from render import marque
     left = text_width(page.footer_text(_data(source, icao), osm), 'regular', pt(6.1))
     right = text_width(page.FOOTER_RIGHT, 'bold', pt(6.1))
-    margin = (page.X1 - right) - (page.X0 + left)
+    margin = (page.X1 - right) - (page.X0 + marque.TEXT_SHIFT_MM + left)          # le texte de gauche part 4,2 mm apres le pictogramme
+    assert marque.TEXT_SHIFT_MM == 4.2
     assert margin >= page.FOOTER_MARGIN_MM == 3.0
     if expected.endswith('taxiways © OpenStreetMap contributors'):
-        assert margin == pytest.approx(13.73, abs=0.01)
+        assert margin == pytest.approx(13.73 - 4.2, abs=0.01)
     elif expected.endswith('ICAO © OpenStreetMap contributors'):
-        assert margin == pytest.approx(16.99, abs=0.01)
+        assert margin == pytest.approx(16.99 - 4.2, abs=0.01)
     print(f'marge {source}/{icao}/{osm} : {margin:.2f} mm')
 
 
@@ -224,3 +227,6 @@ def test_footer_draws_the_text_in_the_svg():
     page.footer(d, _data('jeu', 'LTAN'), True)
     svg = d.render()
     assert 'via pydcs · ICAO © OpenStreetMap contributors' in svg and 'NOT FOR REAL-WORLD NAVIGATION' in svg
+    left = re.search(r'<text x="([^"]*)" y="203.7"[^>]*>DCS AIRFIELD', svg)
+    assert left and left.group(1) == '10.2'                                            # X0 + 4,2 : apres le pictogramme
+    assert svg.index('NOT FOR REAL-WORLD NAVIGATION') < svg.index('<svg x="6" y="201.7" width="2.6" height="2.6" viewBox="0 0 360 360">')

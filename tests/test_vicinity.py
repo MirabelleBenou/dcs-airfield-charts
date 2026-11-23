@@ -22,6 +22,7 @@ from render.fonts import pt
 from render import (analysis, build_chart, compose, dcsdata, directory, export, fiches, geo, georef, page, republish, runways, svgdoc,
                     update_coords, vicinity)
 from render.svgdoc import Doc, with_halo
+from test_republish import foot_layer
 
 THEATRE = 'GermanyColdWar'
 LAT0, LON0 = 52.4, 11.8                         # ARP : sur une minute de latitude et de longitude (des graduations dans un petit cadre)
@@ -588,7 +589,7 @@ def konya_latlon():
 def doc_svg(*parts):
     return ('<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
             'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="148mm" height="210mm" viewBox="0 0 148 210">\n<g>\n'
-            + '\n'.join(parts) + '\n</g>\n</svg>')
+            + '\n'.join(parts) + '\n</g>\n' + foot_layer() + '\n</svg>')
 
 
 RULE = '<line x1="6" y1="22.8" x2="142" y2="22.8" stroke="#1A1A1A" stroke-width="0.25"/>'
@@ -646,7 +647,7 @@ def test_republish_keeps_a_10_8_as_it_is_and_first_in_the_collection(tmp_path, c
     out = tmp_path / 'new.zip'
     assert republish.main(['Syria', '--zip', str(zin), '--out', str(out)]) == 0
     summary = capsys.readouterr().out
-    assert 'pages reexportees : 1' in summary and 'pages 10-8 (abords) : 1 recopiees telles quelles' in summary
+    assert 'pages reexportees : 1' in summary and 'pages 10-8 (abords) : 1 (1 recopiees telles quelles, 0 retouchees au pied)' in summary
     assert 'recueils refaits : 1' in summary
     with zipfile.ZipFile(zin) as a, zipfile.ZipFile(out) as b:
         assert [i.filename for i in a.infolist()] == [i.filename for i in b.infolist()]

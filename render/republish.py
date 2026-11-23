@@ -20,12 +20,15 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
   5. le repertoire des heliports d'un zip *helicopters* (entrees `<dossier>heliports/<Theatre>_heliports_directory_p<NN>.jpg` et
      `<dossier><Theatre>_heliports_directory.pdf`), sans les captures : voir `retouch_directory` ; une vignette dont la ligne de la
      ville, a 36 px, touche les dimensions ou en est a moins de 24 px est reecrite plus petit sur sa page JPEG et dans le PDF.
-  6. les pages d'approche `<stem>_11-<n>` (lot ac-approche-ils) : acceptees et recopiees telles quelles, aucune retouche ; leur PDF
+  6. les pages d'approche `<stem>_11-<n>` (lot ac-approche-ils) : acceptees, sans autre retouche que le pied (retouche 8) ; leur PDF
      entre dans le recueil de la chart, apres les pages 10-9* (ordre naturel des suffixes). `--ajouter <dossier>` ajoute au zip les
      pages 11-x d'un dossier (la sortie, a plat, de `build_chart.py --approches-seulement` ; les autres fichiers du dossier sont ignores et
      comptes au resume) : voir `find_added_pages`.
-  7. la page des abords `<stem>_10-8` (lot ac-variante-contexte) : acceptee et recopiee telle quelle (SVG, PNG et PDF a l'octet, aucune
-     retouche, aucune reexportation) ; son PDF ouvre le recueil de la chart (ordre naturel des suffixes : 10-8, 10-9, 10-9A..., 11-x).
+  7. la page des abords `<stem>_10-8` (lot ac-variante-contexte) : acceptee, sans autre retouche que le pied (retouche 8) ; son PDF ouvre
+     le recueil de la chart (ordre naturel des suffixes : 10-8, 10-9, 10-9A..., 11-x).
+  8. le pictogramme de la famille au pied de chaque page (lot ac-marque-pied), APRES les retouches 0 a 4 : voir `retouch_footer` pour
+     les pages SVG (10-8, 10-9*, 11-x ; une page a la forme neuve du pied n'est pas touchee ; une page 10-8 ou 11-x a l'ancienne forme est
+     retouchee puis reexportee, sinon elle est recopiee a l'octet) et `retouch_directory` pour les pages du repertoire des heliports.
 Chaque page 10-9* est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
 recueil `pdf/<stem>_charts.pdf` de chaque chart est refait. Sortie : un nouveau zip, memes entrees dans le meme ordre ; les
 entrees hors charts sont recopiees a l'octet, sauf, pour 5, les JPEG des pages touchees et le PDF du repertoire (un zip sans page de
@@ -51,7 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))      # python -I
 from PIL import Image, ImageDraw, JpegImagePlugin                     # noqa: E402
 from pypdf import PdfReader, PdfWriter                                # noqa: E402
 
-from render import dcsdata, directory, export, fiches, geo, page, update_coords   # noqa: E402
+from render import dcsdata, directory, export, fiches, geo, marque, page, update_coords   # noqa: E402
 from render.svgdoc import INK, INK2, f                                # noqa: E402
 from render.update_coords import ROW_Y, UpdateError, _PAGE_NAME, _PAGE_SVG, _TEXT, _Y   # noqa: E402
 
@@ -676,6 +679,9 @@ def add_xlink_href(svg_text, name):
 _DIR_JPG = re.compile(r'^(?P<dir>(?:.*/)?)heliports/(?P<theatre>[^/]+)_heliports_directory_p(?P<no>\d+)\.jpg$')
 _DIR_PDF = re.compile(r'^(?P<dir>(?:.*/)?)(?P<theatre>[^/]+)_heliports_directory\.pdf$')
 DIR_PAIR_MAX = 6.0                 # ecart absolu moyen (RGB, 0-255) : au plus 6 = la bande est cette ligne
+FOOT_ROWS = (2336, 2399)           # lot ac-marque-pied : lignes du pied (bornes incluses), repeintes en blanc puis redessinees
+FOOT_HAS_MAX = 3.0                 # ecart moyen sous ce seuil : la page porte deja le pictogramme
+FOOT_GREY_ZONE = (1.0, 8.0)        # un ecart dans cet intervalle : le seuil ne separerait plus les deux cas, arret
 
 
 def band_box(x, w, base2):
@@ -725,6 +731,9 @@ class DirectoryResult:
     retouched: int = 0
     already: int = 0
     pages: list = field(default_factory=list)                 # numeros des pages touchees
+    foot: list = field(default_factory=list)                  # numeros des pages dont le pied a recu le pictogramme (lot ac-marque-pied)
+    foot_kept: list = field(default_factory=list)             # numeros de celles qui le portaient deja
+    foot_gaps: dict = field(default_factory=dict)             # {numero: ecart moyen du pied, page publiee / page redessinee}
     rows: list = field(default_factory=list)                  # [(page, site, ville, taille, ecart a 36 px, ecart a la taille, decision)]
 
 
@@ -813,14 +822,36 @@ def rewrite_directory_pdf(pdf_bytes, new_jpegs, n_jpegs, name, out_path):
             raise RepublishError(f'{name} page {k} : image ecrite differente de celle attendue')
 
 
+def redraw_directory_foot(im, left):
+    """La page `im` (RGB) redessinee au pied : rectangle blanc des lignes `FOOT_ROWS`, sur toute la largeur, puis `directory.footer`
+    avec le texte de gauche `left`. Retourne une copie."""
+    out = im.copy()
+    d = ImageDraw.Draw(out)
+    d.rectangle([0, FOOT_ROWS[0], directory.PAGE_PX[0] - 1, FOOT_ROWS[1]], fill=(255, 255, 255))
+    directory.footer(out, d, left)
+    return out
+
+
+def foot_gap(a, b):
+    """Ecart absolu moyen (tous canaux, lignes `FOOT_ROWS`) entre les pages RGB `a` et `b`."""
+    ra = np.asarray(a, dtype=np.int16)[FOOT_ROWS[0]:FOOT_ROWS[1] + 1]
+    rb = np.asarray(b, dtype=np.int16)[FOOT_ROWS[0]:FOOT_ROWS[1] + 1]
+    return float(np.abs(ra - rb).mean())
+
+
 def retouch_directory(theatre, zin, infos, tmp):
     """Repertoire des heliports d'un zip : (`DirectoryResult`, {entree: fichier ecrit sous `tmp`}). Les pages JPEG et le PDF du
-    repertoire ne sont lus que si une vignette a une ville sous 36 px ; sinon, ou sans ces entrees, aucune entree n'est reecrite.
+    repertoire sont lus (sans ces entrees, aucune entree n'est reecrite).
 
     Pour chaque vignette dont la taille de la ville (`directory.town_size`) est sous 36 px : la bande de la deuxieme ligne est
     comparee a la ligne redessinee a 36 px (ecart <= 6 : a retoucher), sinon a la taille retenue (<= 6 : deja retouchee), sinon
     RepublishError. Retouche : bande en blanc, puis `directory.draw_line2`. Le JPEG se reencode avec les tables et le
-    sous-echantillonnage de l'original ; le PDF recoit les octets du nouveau JPEG."""
+    sous-echantillonnage de l'original ; le PDF recoit les octets du nouveau JPEG.
+
+    Lot ac-marque-pied : pour chaque page, sur le resultat de cette retouche, la page redessinee (`redraw_directory_foot` : le pied
+    blanchi puis `directory.footer`) est comparee a la page publiee sur les lignes du pied (`foot_gap`) : sous `FOOT_HAS_MAX`, la
+    page porte deja le pictogramme (JPEG recopie a l'octet) ; au-dela, la page redessinee est encodee comme l'originale ; un ecart
+    dans `FOOT_GREY_ZONE` : RepublishError."""
     res = DirectoryResult()
     jpgs, pdf = _directory_entries(infos, theatre)
     if jpgs is None:
@@ -836,7 +867,7 @@ def retouch_directory(theatre, zin, infos, tmp):
         if t[7] < directory.LINE_SIZE:
             by_page.setdefault(t[0], []).append(t)
     new, new_jpegs = {}, {}
-    for no in sorted(by_page):
+    for no in sorted(jpgs):
         info = jpgs[no]
         original = Image.open(io.BytesIO(zin.read(info)))
         if original.format != 'JPEG' or original.size != directory.PAGE_PX:
@@ -844,7 +875,7 @@ def retouch_directory(theatre, zin, infos, tmp):
         im = original.convert('RGB')
         arr = np.asarray(im)
         work, d = im.copy(), None
-        for _, site, x, w, base2, town, dims, size in by_page[no]:
+        for _, site, x, w, base2, town, dims, size in by_page.get(no, []):
             res.controlled += 1
             g36 = band_gap(arr, x, w, base2, town, dims, directory.LINE_SIZE)
             gs = band_gap(arr, x, w, base2, town, dims, size)
@@ -864,8 +895,21 @@ def retouch_directory(theatre, zin, infos, tmp):
                                      f'(ecart {g36:.2f}) ni a celle a {size} px (ecart {gs:.2f}), seuil {DIR_PAIR_MAX} : repertoire publie en francais '
                                  f'(release anterieure) ou page modifiee ; cet outil ne relit que le repertoire en anglais')
             res.rows.append((no, site, town, size, g36, gs, decision))
-        if d is not None:
-            new_jpegs[no] = encode_like(work, original)
+        # lot ac-marque-pied : le pied, sur le resultat de la retouche de la ville (un seul encodage)
+        redrawn = redraw_directory_foot(work, directory.FOOT_INDEX if no <= n_index else directory.FOOT_LEFT)
+        gap = foot_gap(im, redrawn)
+        res.foot_gaps[no] = gap
+        if FOOT_GREY_ZONE[0] <= gap <= FOOT_GREY_ZONE[1]:
+            raise RepublishError(f'repertoire page {no} : ecart moyen du pied {gap:.2f}, entre {FOOT_GREY_ZONE[0]:g} et {FOOT_GREY_ZONE[1]:g} : '
+                                 f'le seuil de {FOOT_HAS_MAX:g} ne separe plus une page qui porte le pictogramme de celle qui ne le porte pas')
+        if gap < FOOT_HAS_MAX:
+            res.foot_kept.append(no)
+            final = work if d is not None else None
+        else:
+            res.foot.append(no)
+            final = redrawn
+        if final is not None:
+            new_jpegs[no] = encode_like(final, original)
             res.pages.append(no)
     pdf_bytes = zin.read(pdf)
     check_directory_pdf(pdf_bytes, len(jpgs), pdf.filename)          # arret meme si aucune page n'est touchee
@@ -881,9 +925,48 @@ def retouch_directory(theatre, zin, infos, tmp):
     return res, new
 
 
+# ---------- 8. le pictogramme au pied (lot ac-marque-pied) ----------
+_FOOT_HEAD = '<g inkscape:groupmode="layer" id="layer-footer" inkscape:label="Footer">\n'
+_FOOT_BODY = re.compile(r'<line [^\n]*/>\n(?P<left><text x="(?P<x>6|10\.2)" y="203\.7"[^\n]*</text>\n)<text x="142"[^\n]*</text>\n')
+_FOOT_OLD_X, _FOOT_NEW_X = '6', '10.2'
+
+
+def footer_form(svg_text, name):
+    """('ancienne' | 'neuve', m, j) : la forme du calque `Footer` de la page publiee (cadrage 2.4) ; `m` : la correspondance de
+    `_FOOT_BODY` ; `j` : la position qui suit le texte de droite. Toute autre forme : RepublishError."""
+    if svg_text.count(_FOOT_HEAD) != 1:
+        raise RepublishError(f'{name} : {svg_text.count(_FOOT_HEAD)} calques Footer (attendu : un, de la forme publiee)')
+    m = _FOOT_BODY.match(svg_text, svg_text.index(_FOOT_HEAD) + len(_FOOT_HEAD))
+    if not m:
+        raise RepublishError(f'{name} : le calque Footer n\'a ni la forme ancienne ni la forme neuve (ligne, texte de gauche a y = 203.7, texte de droite a x = 142)')
+    j = m.end()
+    if m['x'] == _FOOT_OLD_X and svg_text.startswith('</g>', j):
+        return 'ancienne', m, j
+    try:
+        block = marque.block()
+    except marque.MarqueError as e:
+        raise RepublishError(f'{name} : {e}') from None
+    if m['x'] == _FOOT_NEW_X and svg_text.startswith(block + '\n</g>', j):
+        return 'neuve', m, j
+    raise RepublishError(f'{name} : le calque Footer n\'a ni la forme ancienne ni la forme neuve')
+
+
+def retouch_footer(svg_text, name):
+    """(nouveau SVG, 'retouchee' | 'deja') : le pictogramme au pied d'une page SVG. Forme ancienne : le texte de gauche passe de
+    x = 6 a x = 10.2 et le bloc (`marque.block`), suivi d'un saut de ligne, s'insere avant la fin du calque ; rien d'autre ne change.
+    Forme neuve : la page est rendue telle quelle."""
+    form, m, j = footer_form(svg_text, name)
+    if form == 'neuve':
+        return svg_text, 'deja'
+    old = f'<text x="{_FOOT_OLD_X}" y="203.7"'
+    k = m.start('left')
+    return (svg_text[:k] + f'<text x="{_FOOT_NEW_X}" y="203.7"' + svg_text[k + len(old):j] + marque.block() + '\n' + svg_text[j:],
+            'retouchee')
+
+
 # ---------- une page ----------
 def retouch_page(svg_text, name, suffix, index):
-    """(nouveau SVG, details) : toutes les retouches ; details = {fields, header, bar, image, xlink, moves, unplaced, north}."""
+    """(nouveau SVG, details) : toutes les retouches ; details = {fields, header, bar, image, xlink, moves, unplaced, north, foot}."""
     svg, north = svg_text, None
     if suffix == '10-9':                                     # lot caps-cockpit : avant toutes les autres retouches
         svg, north = retouch_north_and_caps(svg, name)
@@ -898,8 +981,9 @@ def retouch_page(svg_text, name, suffix, index):
             raise RepublishError(f'{name} : {e}') from None
     has_image = '<image' in svg
     svg, n_xlink = add_xlink_href(svg, name)
+    svg, foot = retouch_footer(svg, name)                    # lot ac-marque-pied : apres les retouches 0 a 4
     return svg, {'fields': fields, 'header': header, 'bar': bar, 'image': has_image, 'xlink': n_xlink, 'moves': moves, 'unplaced': unplaced,
-                'north': north}
+                'north': north, 'foot': foot}
 
 
 @dataclass
@@ -916,8 +1000,10 @@ class Result:
     unplaced: list = field(default_factory=list)      # [(page, libelle de balise)] : aucune position libre, reste a droite
     north: dict = field(default_factory=dict)         # {page: details de retouch_north_and_caps} : pages 10-9
     directory: DirectoryResult = field(default_factory=lambda: DirectoryResult())   # repertoire des heliports (zip *helicopters*)
-    approach: list = field(default_factory=list)     # noms des pages 11-x du zip, recopiees telles quelles
-    vicinity: list = field(default_factory=list)     # noms des pages 10-8 du zip, recopiees telles quelles (lot ac-variante-contexte)
+    approach: list = field(default_factory=list)     # noms des pages 11-x du zip (acceptees ; recopiees ou, au pied retouche, reexportees)
+    vicinity: list = field(default_factory=list)     # noms des pages 10-8 du zip (idem ; lot ac-variante-contexte)
+    foot: list = field(default_factory=list)         # noms des pages SVG (zip et --ajouter) dont le pied a recu le pictogramme (lot ac-marque-pied)
+    foot_kept: list = field(default_factory=list)    # noms de celles qui le portaient deja
     added: dict = field(default_factory=dict)        # {stem: [pages 11-x ajoutees]} (`--ajouter`)
     ignored: list = field(default_factory=list)      # noms des fichiers du dossier `--ajouter` qui ne sont pas des pages 11-x
 
@@ -970,9 +1056,20 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
                 raise RepublishError(f'{info.filename} : nom de page inattendu (attendu <stem>_10-9[A-Z]* ou <stem>_11-<n>)')
             pages.append((m['dir'], m['page'], pm['stem'], pm['suffix']))
         new = {}                                   # nom d'entree -> fichier temporaire
+        for k, (name, files) in enumerate(added.items()):       # pages ajoutees : meme regle du pied que les pages 11-x du zip
+            svg_new, foot = retouch_footer(files['svg'].read_text(encoding='utf-8'), name)
+            if foot == 'deja':
+                res.foot_kept.append(name)
+                continue
+            res.foot.append(name)
+            svg_p, pdf_p, png_p = export.export_page(svg_new, tmp / f'add{k}' / 'page')
+            if svg_p.read_bytes() != svg_new.encode('utf-8'):
+                raise RepublishError(f'{name} : le SVG ecrit differe du SVG calcule')
+            added[name] = {'svg': svg_p, 'pdf': pdf_p, 'png': png_p}
         for n, (d, name, _, suffix) in enumerate(pages):
-            if _APPROACH.match(suffix) or _VICINITY.match(suffix):      # page d'approche 11-x ou page 10-8 des abords : recopiee telle quelle
-                elev = header_elements(zin.read(f'{d}svg/{name}.svg').decode('utf-8'), name)[0][2]       # recopiee, mais lue en anglais seulement
+            if _APPROACH.match(suffix) or _VICINITY.match(suffix):      # page d'approche 11-x ou page 10-8 des abords : pied seul
+                svg_old = zin.read(f'{d}svg/{name}.svg').decode('utf-8')
+                elev = header_elements(svg_old, name)[0][2]       # lue en anglais seulement
                 if _HELI.match(suffix):
                     elev = _ELEV_METRES.sub('', elev)
                 problem = page.elevation_text_problem(elev)
@@ -982,6 +1079,15 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
                     if f'{d}{sub}/{name}.{ext}' not in names:
                         raise RepublishError(f'{name} : entree {d}{sub}/{name}.{ext} absente du zip')
                 (res.vicinity if _VICINITY.match(suffix) else res.approach).append(name)
+                svg_new, foot = retouch_footer(svg_old, name)
+                if foot == 'deja':                               # forme neuve : recopiee a l'octet
+                    res.foot_kept.append(name)
+                    continue
+                res.foot.append(name)
+                svg_p, pdf_p, png_p = export.export_page(svg_new, tmp / f'p{n}' / 'page')
+                if svg_p.read_bytes() != svg_new.encode('utf-8'):
+                    raise RepublishError(f'{name} : le SVG ecrit differe du SVG calcule')
+                new[f'{d}svg/{name}.svg'], new[f'{d}pdf/{name}.pdf'], new[f'{d}png/{name}.png'] = svg_p, pdf_p, png_p
                 continue
             svg_old = zin.read(f'{d}svg/{name}.svg').decode('utf-8')
             svg_new, det = retouch_page(svg_old, name, suffix, index)
@@ -993,6 +1099,7 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
             if svg_p.read_bytes() != svg_new.encode('utf-8'):
                 raise RepublishError(f'{name} : le SVG ecrit differe du SVG calcule')
             new[f'{d}svg/{name}.svg'], new[f'{d}pdf/{name}.pdf'], new[f'{d}png/{name}.png'] = svg_p, pdf_p, png_p
+            (res.foot if det['foot'] == 'retouchee' else res.foot_kept).append(name)
             res.lines[name] = det['fields']
             if det['header'] == 'reecrit':
                 res.rewritten += 1
@@ -1040,6 +1147,8 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
             for _, n in members:
                 if isinstance(n, str):                 # page ajoutee : son PDF du dossier
                     sources.append(added[n]['pdf'])
+                elif f'{d}pdf/{pages[n][1]}.pdf' in new:       # page reexportee (10-9*, ou 10-8 et 11-x au pied retouche)
+                    sources.append(new[f'{d}pdf/{pages[n][1]}.pdf'])
                 elif _APPROACH.match(pages[n][3]) or _VICINITY.match(pages[n][3]):     # page 11-x ou 10-8 du zip : son PDF, tel quel
                     pdf_p = tmp / f'approach{n}.pdf'
                     pdf_p.write_bytes(zin.read(f'{d}pdf/{pages[n][1]}.pdf'))
@@ -1129,10 +1238,17 @@ def main(argv):
     print(f"graduations glissees : {len(slid)} ; retirees : {len(grads) - len(slid)} (sur {len({m[0] for m in grads})} pages)")
     print(f"pages a fond F10 : {len(res.f10)}" + ''.join(f'\n  {n}' for n in res.f10))
     print(f'recueils refaits : {res.charts}')
+    foot_kinds = (('10-8', lambda n: _VICINITY.match(n.rsplit('_', 1)[1])), ('10-9*', lambda n: n.rsplit('_', 1)[1].startswith('10-9')),
+                  ('11-x', lambda n: _APPROACH.match(n.rsplit('_', 1)[1])))
+    print(f"pictogramme au pied : {len(res.foot)} pages SVG retouchees ("
+          + ', '.join(f'{sum(1 for n in res.foot if test(n))} {kind}' for kind, test in foot_kinds)
+          + f") ; deja porteuses : {len(res.foot_kept)}")
+    def kept(names):
+        return f"{len(names)} ({len([n for n in names if n in res.foot_kept])} recopiees telles quelles, {len([n for n in names if n in res.foot])} retouchees au pied)"
     if res.vicinity:
-        print(f"pages 10-8 (abords) : {len(res.vicinity)} recopiees telles quelles, en tete du recueil")
+        print(f"pages 10-8 (abords) : {kept(res.vicinity)}, en tete du recueil")
     if res.approach or res.added or res.ignored:
-        print(f"pages d'approche 11-x : {len(res.approach)} recopiees telles quelles ; {sum(len(v) for v in res.added.values())} ajoutees")
+        print(f"pages d'approche 11-x : {kept(res.approach)} ; {sum(len(v) for v in res.added.values())} ajoutees")
         for stem, names in res.added.items():
             print(f'  {stem} : {len(names)} ajoutee(s) ({", ".join(n[len(stem) + 1:] for n in names)})')
         if res.ignored:
@@ -1143,6 +1259,7 @@ def main(argv):
               f"deja retouchees : {dr.already} ; pages touchees : {len(dr.pages)}" + ''.join(f' p{n:02d}' for n in dr.pages))
         for no, site, town, size, g36, gs, decision in dr.rows:
             print(f'  p{no:02d} {site} : {town} -> {size} px ({decision} ; ecart a 36 px {g36:.2f}, a {size} px {gs:.2f})')
+        print(f"repertoire des heliports, pictogramme au pied : {len(dr.foot)} pages retouchees ; {len(dr.foot_kept)} deja porteuses")
     else:
         print('repertoire des heliports : aucun dans ce zip')
     print(f'entrees recopiees telles quelles : {res.copied}')

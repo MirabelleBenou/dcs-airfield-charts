@@ -282,6 +282,26 @@ def site_and_procs(inputs):
     return site, out
 
 
+@pytest.mark.parametrize('key', ['01L', '19RH'])
+def test_footer_layer_equals_the_republish_retouch_of_the_old_form(inputs, key):
+    """Lot ac-marque-pied : le calque Footer d'une page 11-x (`approach_ifr`) est, a l'octet, celui qu'ecrit la retouche de l'ancienne forme."""
+    from render import marque, republish
+    site, procs = site_and_procs(inputs)
+    po = approach_ifr.build_page(site, procs[key], '11-9H' if key.endswith('H') else '11-9', log=lambda *a: None)
+    layer = lambda t: t[t.index('<g inkscape:groupmode="layer" id="layer-footer"'):t.rindex('</svg>')].rstrip('\n')
+    old_layer = ('<g inkscape:groupmode="layer" id="layer-footer" inkscape:label="Footer">\n'
+                 '<line x1="6" y1="201.2" x2="142" y2="201.2" stroke="#1A1A1A" stroke-width="0.5"/>\n'
+                 f'<text x="6" y="203.7" font-family="Barlow Condensed" font-size="2.152" fill="#5A5A5A">{approach_ifr.FOOTER_TEXT}</text>\n'
+                 '<text x="142" y="203.7" font-family="Barlow Condensed" font-size="2.152" fill="#1A1A1A" font-weight="bold" '
+                 'text-anchor="end">NOT FOR REAL-WORLD NAVIGATION</text>\n</g>')
+    assert old_layer in po.svg.replace('<text x="10.2"', '<text x="6"').replace(marque.block() + '\n', '')
+    old_page = po.svg.replace(layer(po.svg), old_layer)
+    got, state = republish.retouch_footer(old_page, 'X_11-9')
+    assert state == 'retouchee' and got == po.svg                                      # la page entiere : seul le calque Footer differait
+    assert republish.retouch_footer(po.svg, 'X_11-9') == (po.svg, 'deja')
+    assert layer(po.svg).count(marque.block()) == 1 and '<text x="10.2" y="203.7"' in layer(po.svg)
+
+
 @pytest.mark.parametrize('key', ['01L', '19R', '01LH', '19RH'])
 def test_pages_have_no_overlapping_text_and_every_label_placed(inputs, key):
     site, procs = site_and_procs(inputs)
