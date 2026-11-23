@@ -981,3 +981,191 @@ def test_footer_check_counts_the_4_2_mm_of_the_pictogram(monkeypatch):
     monkeypatch.setattr(guide, 'tw', lambda text, weight, size, spacing=0.0: (room - 4.0) / 2)
     with pytest.raises(guide.GuideError, match='pied de page'):    # tenait sans les 4,2 mm : arrete maintenant
         guide.footer_texts('E')
+
+
+# ------------------------------------------------------------------------------- figures nommees et compose (site du guide)
+def anat_page(data, pid='ch2'):
+    return next(s for s in data['pages'] if s['id'] == pid)
+
+
+def zoomed_data(page='same', region=(98.0, 0.0, 148.0, 40.0), frame=None, pos=None):
+    """Le mini guide, sa page d'anatomie dotee d'un zoom (et d'une pastille posee sur le zoom)."""
+    d = mini_data()
+    z = {'region': list(region), 'scale': 1.2, 'caption': 'ZOOM CAPTION', 'frame_label': 'LABEL'}
+    if page != 'same':
+        z['page'] = page
+    if frame:
+        z['frame'] = list(frame)
+    if pos:
+        z['frame_label_pos'] = pos
+    spec = anat_page(d)
+    spec['zoom'] = z
+    spec['pins'].append({'n': 3, 'on': 'zoom', 'target': {'kind': 'text', 'layer': 'Header', 'text': '10-9', 'at': 'start'},
+                         'badge': [-6, 0], 'title': 'Zoomed', 'text': 'In the zoom.'})
+    return d
+
+
+def disc(p, ox, oy, rx, ry, scale):
+    """Le disque (centre) d'une pastille posee a (ox, oy) pour le point (rx, ry) de la page source, a l'echelle `scale`."""
+    return (ox + (p.aim[0] - rx) * scale + p.badge[0], oy + (p.aim[1] - ry) * scale + p.badge[1])
+
+
+def test_figure_frame_is_the_smallest_box_of_its_rectangles_plus_0_6_mm():
+    f = guide.Figure(rects=[(10.0, 20.0, 40.0, 50.0), (5.0, 30.0, 6.0, 31.0), (38.0, 52.0, 45.0, 53.0)])
+    assert f.frame() == pytest.approx((4.4, 19.4, 41.2, 34.2))
+    assert guide.Figure(rects=[(1.0, 2.0, 3.0, 4.0)]).frame() == pytest.approx((0.4, 1.4, 3.2, 3.2))
+    with pytest.raises(guide.GuideError, match='figure'):
+        guide.Figure().frame()
+
+
+def test_a_page_only_has_figures_when_one_is_named():
+    pg = guide.Page('x', 'P', 'T')
+    pg.add('<a/>', '<b/>')
+    assert pg.figs == {} and pg.els == ['<a/>', '<b/>']
+    pg.add('<c/>', fig='page')
+    pg.frame('page', 1, 2, 3, 4)
+    assert pg.els == ['<a/>', '<b/>', '<c/>'] and pg.figs['page'].els == ['<c/>'] and pg.figs['page'].rects == [(1, 2, 3, 4)]
+
+
+def test_anatomy_page_figure_is_its_source_page_with_the_pins_of_the_page(tmp_path):
+    c = guide.compose(mini_zips(tmp_path), 'AC-V9.9.9', mini_data())
+    figs = dict(c.figures)
+    assert [i for i, _ in c.figures] == ['ch1', 'ch2', 'ch3', 'annex']          # ni la couverture ni le sommaire
+    assert list(figs['ch2']) == ['page']
+    fig = figs['ch2']['page']
+    x0, y0 = guide.CX, guide.CY
+    w, h = guide.PAGE_W * guide.S, guide.PAGE_H * guide.S
+    p1, p2 = c.pins[0], c.pins[1]
+    discs = [disc(p, x0, y0, 0.0, 0.0, guide.S) for p in (p1, p2)]
+    right = max([x0 + w] + [d[0] + guide.PIN_R for d in discs])
+    left = min([x0] + [d[0] - guide.PIN_R for d in discs])
+    top = min([y0] + [d[1] - guide.PIN_R for d in discs])
+    bottom = max([y0 + h] + [d[1] + guide.PIN_R for d in discs])
+    assert fig.frame() == pytest.approx((left - 0.6, top - 0.6, right - left + 1.2, bottom - top + 1.2), abs=1e-6)
+    joined = ''.join(fig.els)
+    assert joined.count('<circle') >= 2 and '<svg' in joined and 'HOW TO USE' not in joined
+    assert 'Airfield' not in joined and 'The code.' not in joined            # ni titre ni texte de legende
+    assert all(e in ''.join(c.svgs) for e in fig.els)                        # les memes chaines que la page A4
+
+
+def test_a_pin_that_overflows_the_page_widens_the_frame(tmp_path):
+    d = mini_data()
+    spec = anat_page(d)
+    spec['pins'][0] = {'n': 1, 'target': {'kind': 'text', 'layer': 'Header', 'text': 'LTAN', 'at': 'start'},
+                       'badge': [-3.6, 0], 'title': 'Edge', 'text': ''}
+    c = guide.compose(mini_zips(tmp_path), 'AC-V9.9.9', d)
+    fig = dict(c.figures)['ch2']['page']
+    cx, _ = disc(c.pins[0], guide.CX, guide.CY, 0.0, 0.0, guide.S)
+    assert cx - guide.PIN_R < guide.CX                                       # la pastille depasse le bord de la page
+    x, y, w, hh = fig.frame()
+    assert x == pytest.approx(cx - guide.PIN_R - 0.6) and x < guide.CX - 0.6
+
+
+def test_zoom_label_background_is_in_the_page_figure_but_its_caption_is_not(tmp_path):
+    c = guide.compose(mini_zips(tmp_path), 'AC-V9.9.9', zoomed_data())
+    figs = dict(c.figures)['ch2']
+    assert list(figs) == ['page', 'zoom']
+    page, zoom = figs['page'], figs['zoom']
+    fx1 = 148.0
+    lx, ly = guide.CX + fx1 * guide.S, guide.CY - 1.4                         # etiquette au-dessus du cadre, a droite
+    lw = guide.fit('t', 'LABEL', 'bold', 6.2, 1e9, 0.2)
+    bg = (lx - lw - 0.6, ly - 2.0, lx + 0.6, ly + 0.7)
+    x, y, w, h = page.frame()
+    assert y == pytest.approx(bg[1] - 0.6)                                   # le fond blanc de l'etiquette est dans le cadre...
+    assert x + w == pytest.approx(bg[2] + 0.6)
+    assert bg[1] < guide.CY and bg[2] > guide.CX + guide.PAGE_W * guide.S    # ... et il debordait de la page
+    assert any('fill="#FFFFFF"' in e and 'fill-opacity="0.9"' in e for e in page.els)
+    assert any('stroke-dasharray' in e for e in page.els)
+    for f in (page, zoom):
+        assert 'ZOOM CAPTION' not in ''.join(f.els)                          # la legende du zoom n'est dans aucune figure
+    assert 'ZOOM CAPTION' in ''.join(c.svgs)
+    zw, zh = 50.0 * 1.2, 40.0 * 1.2                                          # la region agrandie, a l'echelle 1,2
+    zx, zy = (guide.W - zw) / 2, guide.CY + guide.PAGE_H * guide.S + 9
+    zx0, zy0, fw, fh = zoom.frame()
+    assert zx0 == pytest.approx(zx - 0.6) and zy0 == pytest.approx(zy - 0.6)
+    assert fw >= zw + 1.2 - 1e-6 and fh >= zh + 1.2 - 1e-6                    # le rectangle du zoom entier, et ses pastilles
+
+
+def test_zoom_pins_belong_to_the_zoom_figure_only(tmp_path):
+    c = guide.compose(mini_zips(tmp_path), 'AC-V9.9.9', zoomed_data())
+    figs = dict(c.figures)['ch2']
+    count = lambda f: ''.join(f.els).count('r="2.1"')
+    assert count(figs['page']) == 2 and count(figs['zoom']) == 1
+    assert '>3</text>' in ''.join(figs['zoom'].els) and '>3</text>' not in ''.join(figs['page'].els)
+
+
+def test_inside_label_background_is_in_the_frame_too(tmp_path):
+    c = guide.compose(mini_zips(tmp_path), 'AC-V9.9.9', zoomed_data(pos='inside', frame=(98.0, 0.0, 148.0, 40.0)))
+    page = dict(c.figures)['ch2']['page']
+    lw = guide.fit('t', 'LABEL', 'bold', 6.2, 1e9, 0.2)
+    lx = guide.CX + 148.0 * guide.S - 1.0                                     # etiquette a l'interieur du cadre : fond de 1,8 mm de plus
+    x, y, w, h = page.frame()
+    assert any('height="3.2" fill="#FFFFFF"' in e for e in page.els)
+    assert x <= guide.CX - 0.6 + 1e-6 and x + w >= guide.CX + guide.PAGE_W * guide.S + 0.6 - 1e-6
+    assert lx - lw - 0.8 > guide.CX                                           # ce fond est dans la page : le cadre ne grandit pas pour lui
+
+
+def test_zoom_on_the_next_page_puts_both_a4_pages_figures_under_one_id(tmp_path):
+    c = guide.compose(mini_zips(tmp_path), 'AC-V9.9.9', zoomed_data(page='next'))
+    assert c.n_pages == 7
+    figs = dict(c.figures)['ch2']
+    assert list(figs) == ['page', 'zoom']
+    assert [i for i, _ in c.figures] == ['ch1', 'ch2', 'ch3', 'annex']       # une seule entree pour les deux pages A4
+    assert 'ZOOM CAPTION' not in ''.join(figs['zoom'].els) and 'ZOOM CAPTION' in c.svgs[4]
+    assert ''.join(figs['zoom'].els).count('r="2.1"') == 1 and ''.join(figs['page'].els).count('r="2.1"') == 2
+    assert not any('stroke-dasharray' in e for e in figs['zoom'].els)
+
+
+def test_zoom_only_page_has_a_zoom_figure_without_its_caption(tmp_path):
+    d = mini_data()
+    d['pages'].insert(-1, {'id': 'chZ', 'kind': 'zoom_only', 'part': 1, 'num': '9', 'title': 'Zoom', 'source': 'a',
+                           'region': [0.0, 0.0, 50.0, 40.0], 'scale': 3.0, 'caption': 'ONLY CAPTION', 'text': 'Text below.',
+                           'pins': [{'n': 1, 'on': 'zoom', 'target': {'kind': 'text', 'layer': 'Header', 'text': 'LTAN', 'at': 'end'},
+                                     'badge': [6, 0], 'title': 'Code', 'text': 't'}]})
+    c = guide.compose(mini_zips(tmp_path), 'AC-V9.9.9', d)
+    figs = dict(c.figures)['chZ']
+    assert list(figs) == ['zoom']
+    assert 'ONLY CAPTION' not in ''.join(figs['zoom'].els) and 'Text below.' not in ''.join(figs['zoom'].els)
+    x, y, w, h = figs['zoom'].frame()
+    assert (x, y) == pytest.approx((guide.MX0 - 0.6, guide.CY + 1.0 - 0.6)) and w >= 150.0 + 1.2 - 1e-6   # 50 mm x 3
+
+
+def test_no_figure_outside_anatomy_and_zoom_pages(tmp_path):
+    d = mini_data()
+    for spec in (STRIP, OVERVIEW, FLIGHT):
+        d['pages'].insert(-1, spec)
+    c = guide.compose(mini_zips(tmp_path), 'AC-V9.9.9', d)
+    figs = dict(c.figures)
+    for pid in ('ch1', 'chS', 'chO', 'chF', 'annex'):
+        assert figs[pid] == {}, pid
+    assert sorted(k for k, v in figs.items() if v) == ['ch2', 'ch3']
+    assert list(figs['ch3']) == ['page']                                     # la page-image de l'annuaire est une figure aussi
+
+
+def test_compose_makes_the_same_pages_as_build_and_leaves_no_labels(monkeypatch, tmp_path):
+    z = mini_zips(tmp_path)
+    c = guide.compose(z, 'AC-V9.9.9', mini_data())
+    assert guide._LABELS == {}
+    seen = []
+    monkeypatch.setattr(guide, 'render_pdf', lambda svgs: seen.append(svgs) or b'%PDF')
+    g = guide.build(z, 'AC-V9.9.9', mini_data())
+    assert seen == [c.svgs] and g.pdf == b'%PDF' and guide._LABELS == {}
+    assert (g.n_pages, g.cited, g.toc, g.edition) == (c.n_pages, c.cited, c.toc, c.edition) and len(g.pins) == len(c.pins)
+    assert guide.compose(z, 'AC-V9.9.9', mini_data()).svgs == c.svgs         # deterministe
+
+
+def test_compose_stops_with_the_same_errors_as_build(tmp_path):
+    z = mini_zips(tmp_path)
+    d = mini_data()
+    d['pages'][3]['pins'][0]['target']['text'] = 'GONE'
+    with pytest.raises(guide.GuideError, match=r'pastille 1.*GONE'):
+        guide.compose(z, 'AC-V9.9.9', d)
+    d = mini_data()
+    d['pages'][2]['paragraphs'] = ['word ' * 3000]
+    with pytest.raises(guide.GuideError, match=r'ch1.*deborde'):
+        guide.compose(z, 'AC-V9.9.9', d)
+    with pytest.raises(guide.GuideError, match='edition'):
+        guide.compose(z, 'AC V1', mini_data())
+    with pytest.raises(guide.GuideError, match='1748 × 2480'):
+        guide.compose(mini_zips(tmp_path, directory_size=(1000, 1400)), 'AC-V9.9.9', mini_data())
+    assert guide._LABELS == {}

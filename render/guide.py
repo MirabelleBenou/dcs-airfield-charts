@@ -24,7 +24,7 @@ import re
 import tempfile
 import zipfile
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html import escape
 from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree as ET
@@ -454,16 +454,48 @@ def draw_lines(lines, x, y, size_pt, lead, fill=INK, spacing=None):
     return els, y
 
 
+FIG_MARGIN = 0.6                          # marge d'une figure autour de ce qu'elle contient, mm de la page A4
+
+
+@dataclass
+class Figure:
+    """Une figure d'une page d'anatomie ou de zoom, pour le site : ses elements SVG (les memes chaines que celles de la page A4,
+    dans l'ordre ou elles ont ete dessinees) et les rectangles (mm de la page A4) que son cadre doit contenir."""
+    els: list = field(default_factory=list)
+    rects: list = field(default_factory=list)
+
+    def frame(self):
+        """Son cadre : (x, y, largeur, hauteur), mm de la page A4 ; la plus petite boite qui contient ses rectangles (le rectangle
+        de la page source ou du zoom, le disque de chaque pastille, le point vise de chacune, le fond blanc de l'etiquette du cadre
+        du zoom), agrandie de FIG_MARGIN de chaque cote."""
+        if not self.rects:
+            raise GuideError('figure sans rectangle : son cadre est indeterminable')
+        x0 = min(r[0] for r in self.rects) - FIG_MARGIN
+        y0 = min(r[1] for r in self.rects) - FIG_MARGIN
+        x1 = max(r[2] for r in self.rects) + FIG_MARGIN
+        y1 = max(r[3] for r in self.rects) + FIG_MARGIN
+        return (x0, y0, x1 - x0, y1 - y0)
+
+
 class Page:
-    """Une page A4 en cours de composition : des elements SVG et une position verticale."""
+    """Une page A4 en cours de composition : des elements SVG, une position verticale et, pour les pages d'anatomie et de zoom,
+    des figures nommees (`page`, `zoom`)."""
 
     def __init__(self, pid, part, title, cover=False):
         self.id, self.part, self.title, self.cover = pid, part, title, cover
         self.els = []
         self.number = None
+        self.figs = {}
 
-    def add(self, *e):
+    def add(self, *e, fig=None):
+        """Ajoute des elements a la page ; avec `fig`, aussi a la figure de ce nom (les memes chaines)."""
         self.els.extend(e)
+        if fig:
+            self.figs.setdefault(fig, Figure()).els.extend(e)
+
+    def frame(self, fig, x0, y0, x1, y1):
+        """Un rectangle (mm de la page A4) que le cadre de la figure `fig` doit contenir."""
+        self.figs.setdefault(fig, Figure()).rects.append((x0, y0, x1, y1))
 
 
 def block_text(page, name, runs, x, y, width, bottom, size_pt, lead, fill=INK, spacing=None):
@@ -745,24 +777,28 @@ class Embedder:
         return self.svg(key, x, y, w, h)
 
 
-def draw_pin(pg, tx, ty, px, py, n):
-    """Le trait de rappel, le point vise et la pastille numerotee (comme la maquette)."""
+def draw_pin(pg, tx, ty, px, py, n, fig=None):
+    """Le trait de rappel, le point vise et la pastille numerotee (comme la maquette). `fig` : la figure ou elle est dessinee ;
+    son cadre contient le disque de la pastille et le point vise."""
     if abs(px - tx) + abs(py - ty) > 0:
         pg.add(f'<line x1="{tx:.2f}" y1="{ty:.2f}" x2="{px:.2f}" y2="{py:.2f}" stroke="{PIN}" stroke-width="0.35"/>',
-               f'<circle cx="{tx:.2f}" cy="{ty:.2f}" r="0.55" fill="{PIN}"/>')
+               f'<circle cx="{tx:.2f}" cy="{ty:.2f}" r="0.55" fill="{PIN}"/>', fig=fig)
     pg.add(f'<circle cx="{px:.2f}" cy="{py:.2f}" r="2.1" fill="{PIN}" stroke="#FFFFFF" stroke-width="0.35"/>',
-           t_el(px, py + 1.05, str(n), 7.2, 'bold', '#FFFFFF', 'middle'))
+           t_el(px, py + 1.05, str(n), 7.2, 'bold', '#FFFFFF', 'middle'), fig=fig)
+    if fig:
+        pg.frame(fig, px - PIN_R, py - PIN_R, px + PIN_R, py + PIN_R)
+        pg.frame(fig, tx, ty, tx, ty)
 
 
-def place_pin(pg, p, ox, oy, rx, ry, scale):
+def place_pin(pg, p, ox, oy, rx, ry, scale, fig=None):
     """Dessine la pastille `p` dont le point (rx, ry) de la page source est en (ox, oy) sur la page A4, a l'echelle `scale`.
-    Le point dessine est controle la ou il est dessine ; la pastille reste dans la page A4."""
+    Le point dessine est controle la ou il est dessine ; la pastille reste dans la page A4. `fig` : la figure ou elle est dessinee."""
     tx, ty = ox + (p.aim[0] - rx) * scale, oy + (p.aim[1] - ry) * scale
     check_drawn(p, rx + (tx - ox) / scale, ry + (ty - oy) / scale)
     bx, by = tx + p.badge[0], ty + p.badge[1]
     if not (PIN_R <= bx <= W - PIN_R and PIN_R <= by <= H - PIN_R):
         raise GuideError(f'page {p.spec_id} ({p.page_key}), pastille {p.n} : la pastille sort de la page A4')
-    draw_pin(pg, tx, ty, bx, by, p.n)
+    draw_pin(pg, tx, ty, bx, by, p.n, fig)
 
 
 def draw_legend(pg, pins, x, y, width, limit, title_pt=7.2):
@@ -802,17 +838,19 @@ def draw_use(pg, items, y0, numbered=None):
     return y
 
 
-def source_box(pg, emb, key, x, y, w, h):
-    """La page source (SVG ou image) avec son bord RULE."""
+def source_box(pg, emb, key, x, y, w, h, fig=None):
+    """La page source (SVG ou image) avec son bord RULE ; avec `fig`, elle fait partie de cette figure et son rectangle est dans son cadre."""
     pg.add(f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" fill="none" stroke="{RULE}" stroke-width="0.3"/>',
-           emb.source(key, x, y, w, h))
+           emb.source(key, x, y, w, h), fig=fig)
+    if fig:
+        pg.frame(fig, x, y, x + w, y + h)
 
 
 def layout_anatomy(spec, pins, emb, part_label, title):
     """Une page d'anatomie (1 ou 2 pages A4 : retourne une liste de Page)."""
     pg = Page(spec['id'], part_label, title)
     key = spec['source']
-    source_box(pg, emb, key, CX, CY, PAGE_W * S, PAGE_H * S)
+    source_box(pg, emb, key, CX, CY, PAGE_W * S, PAGE_H * S, fig='page')
     zoom = spec.get('zoom')
     same = bool(zoom) and zoom.get('page', 'same') == 'same'
     zy = CY + PAGE_H * S + 9
@@ -827,28 +865,32 @@ def layout_anatomy(spec, pins, emb, part_label, title):
         lw = fit(f'page {spec["id"]}, etiquette du cadre', lab, 'bold', 6.2, PAGE_W * S, 0.2)
         if zoom.get('frame_label_pos') == 'inside':
             lx, ly = CX + fx1 * S - 1.0, CY + fy0 * S + 3.4
+            bg_box = (lx - lw - 0.8, ly - 2.2, lx - lw - 0.8 + lw + 1.8, ly - 2.2 + 3.2)
             bg = f'<rect x="{lx - lw - 0.8:.2f}" y="{ly - 2.2:.2f}" width="{lw + 1.8:.2f}" height="3.2" fill="#FFFFFF"/>'
         else:
             lx, ly = CX + fx1 * S, CY + fy0 * S - 1.4
+            bg_box = (lx - lw - 0.6, ly - 2.0, lx - lw - 0.6 + lw + 1.2, ly - 2.0 + 2.7)
             bg = (f'<rect x="{lx - lw - 0.6:.2f}" y="{ly - 2.0:.2f}" width="{lw + 1.2:.2f}" height="2.7" fill="#FFFFFF" '
                   f'fill-opacity="0.9"/>')
         pg.add(bg,
                f'<rect x="{CX + fx0 * S:.2f}" y="{CY + fy0 * S:.2f}" width="{(fx1 - fx0) * S:.2f}" '
                f'height="{(fy1 - fy0) * S:.2f}" fill="none" stroke="{PIN}" stroke-width="0.3" stroke-dasharray="1 0.8"/>',
-               t_el(lx, ly, lab, 6.2, 'bold', PIN, 'end', spacing=0.2))
+               t_el(lx, ly, lab, 6.2, 'bold', PIN, 'end', spacing=0.2), fig='page')
+        pg.frame('page', *bg_box)
         if same:
             fit(f'page {spec["id"]}, legende du zoom', zoom['caption'], 'bold', 7.5, MX1 - MX0, 0.4)
-            pg.add(t_el(MX0, zy - 2.2, zoom['caption'], 7.5, 'bold', INK2, spacing=0.4),
-                   f'<rect x="{zx:.2f}" y="{zy:.2f}" width="{zw:.2f}" height="{zh:.2f}" fill="#FFFFFF" stroke="{RULE}" '
+            pg.add(t_el(MX0, zy - 2.2, zoom['caption'], 7.5, 'bold', INK2, spacing=0.4))
+            pg.add(f'<rect x="{zx:.2f}" y="{zy:.2f}" width="{zw:.2f}" height="{zh:.2f}" fill="#FFFFFF" stroke="{RULE}" '
                    f'stroke-width="0.3"/>',
-                   emb.svg(key, zx, zy, zw, zh, f'{x0} {y0} {x1 - x0} {y1 - y0}'))
+                   emb.svg(key, zx, zy, zw, zh, f'{x0} {y0} {x1 - x0} {y1 - y0}'), fig='zoom')
+            pg.frame('zoom', zx, zy, zx + zw, zy + zh)
     for p in pins:
         if p.on == 'zoom':
             if not same:
                 continue
-            place_pin(pg, p, zx, zy, x0, y0, z)
+            place_pin(pg, p, zx, zy, x0, y0, z, 'zoom')
         else:
-            place_pin(pg, p, CX, CY, 0.0, 0.0, S)
+            place_pin(pg, p, CX, CY, 0.0, 0.0, S, 'page')
     col = [p for p in pins if p.on == 'page' or same]
     draw_legend(pg, col, COL_X, CY + 1.5, MX1 - COL_X - 5.5, CY + PAGE_H * S + 1)
     y_use = (zy + zh + 12) if same else (CY + PAGE_H * S + 14)
@@ -868,13 +910,14 @@ def layout_zoom_page(spec, pins, emb, part_label, title, zoom):
     zw, zh = (x1 - x0) * z, (y1 - y0) * z
     zx, zy = (W - zw) / 2, 40.0
     fit(f'page {spec["id"]}, legende du zoom', zoom['caption'], 'bold', 7.5, MX1 - MX0, 0.4)
-    pg.add(t_el(MX0, zy - 2.2, zoom['caption'], 7.5, 'bold', INK2, spacing=0.4),
-           f'<rect x="{zx:.2f}" y="{zy:.2f}" width="{zw:.2f}" height="{zh:.2f}" fill="#FFFFFF" stroke="{RULE}" '
+    pg.add(t_el(MX0, zy - 2.2, zoom['caption'], 7.5, 'bold', INK2, spacing=0.4))
+    pg.add(f'<rect x="{zx:.2f}" y="{zy:.2f}" width="{zw:.2f}" height="{zh:.2f}" fill="#FFFFFF" stroke="{RULE}" '
            f'stroke-width="0.3"/>',
-           emb.svg(key, zx, zy, zw, zh, f'{x0} {y0} {x1 - x0} {y1 - y0}'))
+           emb.svg(key, zx, zy, zw, zh, f'{x0} {y0} {x1 - x0} {y1 - y0}'), fig='zoom')
+    pg.frame('zoom', zx, zy, zx + zw, zy + zh)
     zp = [p for p in pins if p.on == 'zoom']
     for p in zp:
-        place_pin(pg, p, zx, zy, x0, y0, z)
+        place_pin(pg, p, zx, zy, x0, y0, z, 'zoom')
     y = zy + zh + 12
     half = (MX1 - MX0 - 8) / 2
     for i in range(0, len(zp), 2):
@@ -1067,9 +1110,10 @@ def layout_zoom_only(spec, pins, emb, part_label, title):
         fit(f'page {spec["id"]}, legende du zoom', spec['caption'], 'bold', 7.5, MX1 - MX0, 0.4)
         pg.add(t_el(MX0, zy - 2.4, spec['caption'], 7.5, 'bold', INK2, spacing=0.4))
     pg.add(f'<rect x="{zx:.2f}" y="{zy:.2f}" width="{zw:.2f}" height="{zh:.2f}" fill="#FFFFFF" stroke="{RULE}" '
-           f'stroke-width="0.3"/>', emb.svg(key, zx, zy, zw, zh, f'{x0} {y0} {x1 - x0} {y1 - y0}'))
+           f'stroke-width="0.3"/>', emb.svg(key, zx, zy, zw, zh, f'{x0} {y0} {x1 - x0} {y1 - y0}'), fig='zoom')
+    pg.frame('zoom', zx, zy, zx + zw, zy + zh)
     for p in pins:
-        place_pin(pg, p, zx, zy, x0, y0, z)
+        place_pin(pg, p, zx, zy, x0, y0, z, 'zoom')
     lx = zx + zw + 7.0
     draw_legend(pg, pins, lx, zy + 1.5, MX1 - lx - 5.5, zy + zh)
     block_text(pg, 'texte du chapitre', parse_rich(spec['text']), MX0, zy + zh + 14, MX1 - MX0, BODY_BOTTOM, 11, 5.0)
@@ -1165,9 +1209,20 @@ def _why(e):
     return f'cle manquante {e}' if isinstance(e, KeyError) else f'{type(e).__name__} : {e}'
 
 
-def build(zips, edition, data=None):
-    """Compose le guide : retourne un Guide (le PDF en octets) ou leve GuideError ; n'ecrit rien. Toute erreur de lecture
-    d'une page de la release ou des donnees devient une GuideError qui nomme la page ou l'entree."""
+@dataclass
+class Composed:
+    """Le guide compose, avant le rendu du PDF : les pages A4 en SVG, les pastilles, et les figures de chaque page de chapitre."""
+    svgs: list
+    n_pages: int
+    pins: list
+    cited: int
+    edition: str
+    toc: dict
+    figures: list           # [(id de l'entree de guide.json, {nom: Figure})] sauf la couverture et le sommaire, dans l'ordre du fichier
+
+
+def _setup(edition, data):
+    """Controle l'edition, charge les donnees si besoin et pose les textes fixes ; retourne les donnees."""
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', edition or ''):
         raise GuideError(f'edition invalide : « {edition} » (attendu : une version comme AC-V1.9.0)')
     data = data or load_data()
@@ -1176,13 +1231,31 @@ def build(zips, edition, data=None):
         _LABELS.update(data['labels'])
     except (KeyError, TypeError, ValueError) as e:
         raise GuideError(f'donnees du guide : textes fixes « labels » illisibles ({_why(e)})')
+    return data
+
+
+def build(zips, edition, data=None):
+    """Compose le guide : retourne un Guide (le PDF en octets) ou leve GuideError ; n'ecrit rien. Toute erreur de lecture
+    d'une page de la release ou des donnees devient une GuideError qui nomme la page ou l'entree."""
+    data = _setup(edition, data)
     try:
-        return _build(zips, edition, data)
+        c = _compose(zips, edition, data)
+        return Guide(render_pdf(c.svgs), c.n_pages, c.pins, c.cited, c.edition, c.toc)
     finally:
         _LABELS.clear()
 
 
-def _build(zips, edition, data):
+def compose(zips, edition, data=None):
+    """Tout ce que fait `build` sauf le rendu du PDF (memes controles, memes GuideError) : retourne un Composed, dont les
+    figures (`figures`) servent aux pages du site."""
+    data = _setup(edition, data)
+    try:
+        return _compose(zips, edition, data)
+    finally:
+        _LABELS.clear()
+
+
+def _compose(zips, edition, data):
     try:
         defs, specs = data['sources'], data['pages']
         sources = Sources(zips, defs)
@@ -1195,7 +1268,7 @@ def _build(zips, edition, data):
         raise GuideError(f'donnees du guide illisibles ({_why(e)})')
     footer_texts(edition)                                 # les deux moities du pied de page tiennent
     emb = Embedder(sources)
-    pages, refs, pins, cited_n = [], {}, [], 0
+    pages, refs, pins, cited_n, figures = [], {}, [], 0, []
     contents_at = None
     for spec in specs:
         pid = spec.get('id', '?') if isinstance(spec, dict) else '?'
@@ -1232,6 +1305,11 @@ def _build(zips, edition, data):
             cited_n += check_cited(sources, spec.get('cited', []))
             for r in spec.get('refs', [spec['id']]):
                 refs[r] = len(pages) + 1
+            if kind != 'cover':
+                figs = {}
+                for pg in made:                           # les deux pages A4 d'une anatomie a zoom suivant : un seul id
+                    figs.update(pg.figs)
+                figures.append((spec['id'], figs))
             pages += made
         except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
             raise GuideError(f'page {pid} : donnees illisibles ({_why(e)})')
@@ -1243,7 +1321,7 @@ def _build(zips, edition, data):
     except (KeyError, TypeError, ValueError, IndexError, AttributeError) as e:
         raise GuideError(f'page {cspec.get("id", "contents")} : donnees illisibles ({_why(e)})')
     svgs = [page_svg(pg, i + 1, edition) for i, pg in enumerate(pages)]
-    return Guide(render_pdf(svgs), len(pages), pins, cited_n, edition, refs)
+    return Composed(svgs, len(pages), pins, cited_n, edition, refs, figures)
 
 
 def render_pdf(svgs):
