@@ -16,6 +16,11 @@ What changed in the published charts, version by version. Each version is a GitH
 - The cover of the reading guide carries the Airfield Charts insignia in colour, and every other page a small black pictogram before the footer text. The charts do not change.
 - The README opens with the Airfield Charts banner, and credits the insignia and its lettering (Oswald, SIL Open Font License 1.1).
 
+**The Squadron Ready Room pictogram at the foot of every chart.**
+
+- Every chart page (10-8, 10-9, 11-x) and every page of the heliport directory carries a small black pictogram before the footer text. Nothing else changes on the charts.
+- `render/republish.py` adds it to the charts of a published release; a page that already carries it is left as it is.
+
 ## AC-V1.10.0 — 22 November 2026
 
 **A reading guide for the charts.**
