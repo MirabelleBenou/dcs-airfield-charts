@@ -541,7 +541,7 @@ def test_guide_anatomy_body_figure_pins_zoom_and_use(gpages):
     svg = ('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="9.400 19.400 31.200 41.200" '
            'role="img" aria-label="Airfield — 10-9 (Konya)">\n<rect id="ch4p-r" class="num" x="10.0" y="20.0" width="30.0" height="40.0"/>\n'
            '<text>ch4p</text>\n</svg>')
-    assert f'<div class="anat"><figure>{svg}</figure><ol class="pins">' in h
+    assert f'<div class="anat under"><figure>{svg}</figure><ol class="pins">' in h
     assert ('<li><span class="bd">1</span><b>Code</b><span class="tx">The <b>ICAO</b> code.</span></li>'
             '<li><span class="bd">2</span><b>Title</b></li>'
             '<li><span class="bd">3</span><b>Zoomed &lt;one&gt;</b><span class="tx">In the zoom.</span></li></ol></div>') in h
@@ -550,7 +550,7 @@ def test_guide_anatomy_body_figure_pins_zoom_and_use(gpages):
             and 'viewBox="4.400 5.400 71.200 21.200"' in h and 'ch4z' in h)
     assert '<p class="note">A note.</p>' in h
     assert '<h3 class="use">How to use it</h3><ol class="use"><li>First <code>a</code>.</li><li>Second.</li></ol>' in h
-    assert h.index('class="anat"') < h.index('class="zoomf"') < h.index('class="note"') < h.index('How to use it') < h.index('class="pn"')
+    assert h.index('class="anat under"') < h.index('class="zoomf"') < h.index('class="note"') < h.index('How to use it') < h.index('class="pn"')
 
 
 def test_guide_text_strip_flight_overview_fiche_annex_bodies(gpages):
@@ -586,7 +586,7 @@ def test_guide_text_strip_flight_overview_fiche_annex_bodies(gpages):
 
 def test_guide_zoom_only_and_directory_pages(gpages):
     z = gpages[0]['ch9'].html
-    assert re.search(r'<div class="anat"><figure><figcaption class="capt">THE MSA BOX</figcaption><svg ', z)
+    assert re.search(r'<div class="anat under"><figure><figcaption class="capt">THE MSA BOX</figcaption><svg ', z)
     assert '<p>Each value is <b>1000 ft</b> above.</p>' in z and z.count('<svg ') == 1 and 'zoomf' not in z.split('</style>')[-1]
     assert gpages[0]['ch6b'].html.count('<svg ') == 1 and gpages[0]['ch6a'].html.count('<li><span class="bd">') == 1
 
@@ -707,3 +707,14 @@ def test_guide_is_composed_from_the_syria_zips_of_the_zips_folder(fake, monkeypa
     assert seen['edition'] == 'AC-V1.11.0'
     assert {k: v.name for k, v in seen['z'].items()} == {'airfields': 'DCS_Airfield_Charts_Syria_1985_airfields.zip',
                                                          'helicopters': 'DCS_Airfield_Charts_Syria_1985_helicopters.zip'}
+
+
+def test_pins_grid_is_under_the_figure_for_anatomy_and_zoom_only_but_not_for_fiches(gpages):
+    pages = gpages[0]
+    for pid in ('ch4', 'ch6a', 'ch6b', 'ch9'):
+        assert '<div class="anat under">' in pages[pid].html and '<div class="anat">' not in pages[pid].html, pid
+    assert '<div class="anat">' in pages['ch11-1'].html and 'anat under' not in pages['ch11-1'].html
+    for pid in ('ch1', 'ch2', 'ch10', 'ch11-0', 'ch11-5', 'annex'):
+        assert 'class="anat' not in pages[pid].html.split('</style>')[-1], pid
+    css = (site.DATA / 'site.css').read_text(encoding='utf-8')
+    assert '.anat.under ol.pins{display:block;columns:2;column-gap:32px}' in css

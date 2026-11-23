@@ -645,9 +645,9 @@ def guide_body(spec, figs, defs, images, root, counts):
         counts.pins += len(spec['pins'])
         if kind == 'zoom_only':
             cap = f'<figcaption class="capt">{esc(spec["caption"])}</figcaption>' if spec.get('caption') else ''
-            out.append(f'<div class="anat"><figure>{cap}{svg("zoom")}</figure><ol class="pins">{pins}</ol></div>')
+            out.append(f'<div class="anat under"><figure>{cap}{svg("zoom")}</figure><ol class="pins">{pins}</ol></div>')
         else:
-            out.append(f'<div class="anat"><figure>{svg("page")}</figure><ol class="pins">{pins}</ol></div>')
+            out.append(f'<div class="anat under"><figure>{svg("page")}</figure><ol class="pins">{pins}</ol></div>')
             if spec.get('zoom'):
                 out.append(f'<figure class="zoomf"><figcaption>{esc(spec["zoom"]["caption"])}</figcaption>{svg("zoom")}</figure>')
     elif kind == 'strip':
