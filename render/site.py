@@ -10,6 +10,7 @@ import html
 import io
 import json
 import os
+import posixpath
 import re
 import shutil
 import tempfile
@@ -24,7 +25,7 @@ from xml.etree import ElementTree
 
 from PIL import Image
 
-from . import dcsdata, directory, fiches, geo
+from . import dcsdata, directory, fiches, geo, guide
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(__file__).resolve().parent / 'data' / 'site'
@@ -33,7 +34,7 @@ FONTS = Path(__file__).resolve().parent / 'fonts'
 INSIGNE = Path(__file__).resolve().parent / 'data' / 'marque' / 'insigne-airfield-charts.svg'
 OFL_BARLOW = FONTS / 'OFL.txt'
 OFL_OSWALD = Path(__file__).resolve().parent / 'data' / 'marque' / 'OFL-Oswald.txt'
-BARLOW = ('BarlowCondensed-Regular.ttf', 'BarlowCondensed-Medium.ttf', 'BarlowCondensed-SemiBold.ttf')
+BARLOW = ('BarlowCondensed-Regular.ttf', 'BarlowCondensed-Medium.ttf', 'BarlowCondensed-SemiBold.ttf', 'BarlowCondensed-Bold.ttf')
 
 MAX_SITE_BYTES = 900 * 1024 * 1024
 LARGE_PX, LARGE_Q = 1400, 80
@@ -515,10 +516,238 @@ def home_html(ctx, images):
   {guide_card(ctx, '', True)}'''
 
 
-def guide_html(ctx):
-    return f'''<div class="crumb"><a href="../">Home</a> › Reading guide</div>
-  <h1 class="pt">Reading guide</h1>
-  {guide_card(ctx, '../', False)}'''
+# ---------- le guide de lecture : une page par chapitre ----------
+GUIDE_TITLE = f'Reading guide — {SITE_TITLE}'
+_SVG_SRC = re.compile(r'^svg/(?P<stem>.+)_(?P<page>[^_/]+)\.svg$')
+_DIR_SRC = re.compile(r'^heliports/(?:.*/)?[^/]*_directory_p(?P<no>\d+)\.jpg$')
+_CLASS_ATTR = re.compile(r'\bclass="([^"]*)"')
+_PART_PREFIX = re.compile(r'^PART \d+ · ')
+_NUM_PREFIX = re.compile(r'^\d+\.\d+ ')
+
+
+def md(t):
+    """Le texte echappe ; `**x**` devient <b>x</b> et `` `x` `` devient <code>x</code> (comme la maquette)."""
+    return re.sub(r'`(.+?)`', r'<code>\1</code>', re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', esc(t)))
+
+
+def gtitle(spec):
+    return (f'{spec["num"]}. ' if spec.get('num') else '') + spec['title']
+
+
+def source_image(defs, key, theatre):
+    """(nom de l'image du site sous `img/<dossier>/`, code de la page) d'une source de guide.json : `svg/<stem>_<page>.svg` ->
+    image_name(stem, page) ; `heliports/..._directory_p<NN>.jpg` -> dir_image_name(NN)."""
+    try:
+        f = defs[key]['file']
+    except (KeyError, TypeError):
+        raise SiteError(f'guide : la source « {key} » n\'est pas dans les sources de guide.json')
+    m = _SVG_SRC.match(f)
+    if m:
+        return image_name(m['stem'], m['page']), m['page']
+    m = _DIR_SRC.match(f)
+    if m:
+        return dir_image_name(int(m['no'])), 'directory'
+    raise SiteError(f'guide : la source « {key} » ({f}) n\'a ni la forme svg/<stem>_<page>.svg ni heliports/..._directory_p<NN>.jpg')
+
+
+def css_classes(css):
+    """Les classes que les selecteurs d'une feuille de style visent."""
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+    out = set()
+    for prelude in re.findall(r'([^{}]+)\{', css):
+        if not prelude.strip().startswith('@'):
+            out.update(re.findall(r'\.(-?[_a-zA-Z][\w-]*)', prelude))
+    return out
+
+
+def svg_classes(svg):
+    out = set()
+    for v in _CLASS_ATTR.findall(svg):
+        out.update(v.split())
+    return out
+
+
+def check_classes(figure_svgs, css):
+    """Une classe portee par un element d'un SVG de figure et visee par le CSS du site arrete la fabrication."""
+    hit = set()
+    for svg in figure_svgs:
+        hit |= svg_classes(svg)
+    hit &= css_classes(css)
+    if hit:
+        raise SiteError('guide : le CSS du site vise ' + ', '.join(f'.{c}' for c in sorted(hit)) +
+                        ', classe portee par un element d\'un SVG de figure')
+
+
+def figure_svg(fig, title):
+    """Le SVG d'une figure : son cadre pour viewBox (trois decimales), puis ses elements dans l'ordre ou ils ont ete dessines."""
+    x, y, w, h = fig.frame()
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+            f'viewBox="{x:.3f} {y:.3f} {w:.3f} {h:.3f}" role="img" aria-label="{esc(title)}">\n'
+            + '\n'.join(fig.els) + '\n</svg>')
+
+
+def guide_url(pid, first):
+    return 'guide/' if pid == first else f'guide/{pid}/'
+
+
+def rel_url(target, source):
+    """Le lien relatif d'une page du site (`source`, son url) a une autre (`target`), les deux de la forme `guide/` ou `guide/ch2/`."""
+    r = posixpath.relpath(target.rstrip('/') or '.', source.rstrip('/') or '.')
+    return './' if r == '.' else r + '/'
+
+
+class _Counts:
+    def __init__(self):
+        self.figures = self.pins = self.thumbs = 0
+
+
+def guide_toc(ctx, data, specs, cur, here, first):
+    """Le sommaire d'une page : un titre par partie, une entree par page sauf ch6b (ch6a reste marquee sur ch6b), le bouton PDF."""
+    labels = data['labels']['parts']
+    h, part = '', None
+    for p in specs:
+        if p['part'] != part:
+            part = p['part']
+            h += f'<h4>{esc(_PART_PREFIX.sub("", str(labels.get(str(part), ""))))}</h4>'
+        if p['id'] == 'ch6b':
+            continue
+        mark = ' aria-current="page"' if p['id'] == cur or (cur == 'ch6b' and p['id'] == 'ch6a') else ''
+        h += (f'<a href="{rel_url(guide_url(p["id"], first), here)}"{mark}>'
+              f'<span>{esc(p.get("num") or "·")}</span>{esc(_NUM_PREFIX.sub("", p["title"]))}</a>')
+    return h + f'<a class="btn pdf" href="{ctx.raw}/{GUIDE_PDF}">PDF <small>A4 · {ctx.guide_mb} MB</small></a>'
+
+
+def guide_body(spec, figs, defs, images, root, counts):
+    """Le corps d'une page de chapitre (cadrage 2.3)."""
+    kind, title = spec['kind'], spec['title']
+    theatre = next(t for t in THEATRES if t.pydcs == 'Syria')
+
+    def img(key, big, alt):
+        name, _ = source_image(defs, key, theatre)
+        stem = f'img/{theatre.folder}/{name}'
+        if stem not in images:
+            raise SiteError(f'guide, page {spec["id"]} : l\'image {stem}.webp n\'est pas sur le site')
+        counts.thumbs += 1
+        return f'<img class="thumb" src="{root}{stem}{"" if big else "_t"}.webp" alt="{esc(alt)}" loading="lazy">'
+
+    def svg(name):
+        if name not in figs:
+            raise SiteError(f'guide, page {spec["id"]} : la figure « {name} » manque')
+        counts.figures += 1
+        return figure_svg(figs[name], title)
+
+    out = []
+    if spec.get('paragraphs'):
+        out += [f'<p>{md(t)}</p>' for t in spec['paragraphs']]
+    if kind in ('anatomy', 'zoom_only'):
+        pins = ''.join(f'<li><span class="bd">{esc(p["n"])}</span><b>{esc(p["title"])}</b>'
+                       + (f'<span class="tx">{md(p["text"])}</span>' if p.get('text') else '') + '</li>' for p in spec['pins'])
+        counts.pins += len(spec['pins'])
+        if kind == 'zoom_only':
+            cap = f'<figcaption class="capt">{esc(spec["caption"])}</figcaption>' if spec.get('caption') else ''
+            out.append(f'<div class="anat"><figure>{cap}{svg("zoom")}</figure><ol class="pins">{pins}</ol></div>')
+        else:
+            out.append(f'<div class="anat"><figure>{svg("page")}</figure><ol class="pins">{pins}</ol></div>')
+            if spec.get('zoom'):
+                out.append(f'<figure class="zoomf"><figcaption>{esc(spec["zoom"]["caption"])}</figcaption>{svg("zoom")}</figure>')
+    elif kind == 'strip':
+        out.append('<div class="strip">' + ''.join(
+            f'<figure>{img(t["source"], False, t["code"])}<figcaption><b>{esc(t["code"])}</b>'
+            f'<span class="nm">{esc(t["name"])}</span>{esc(t["line"])}</figcaption></figure>' for t in spec['thumbs']) + '</div>')
+        out.append(f'<p>{md(spec["text"])}</p>')
+    elif kind == 'flight':
+        steps = []
+        for n, st in enumerate(spec['steps'], 1):
+            imgs = ''.join(img(k, False, source_image(defs, k, theatre)[1]) for k in st['thumbs'])
+            steps.append(f'<li><div class="imgs">{imgs}</div><div><span class="sn">{n}</span><p>{md(st["text"])}</p></div></li>')
+        out.append('<ol class="steps">' + ''.join(steps) + '</ol>')
+    elif kind == 'overview':
+        head = ''.join(f'<th>{esc(h)}</th>' for h in spec['header'])
+        rows = ''.join('<tr>' + f'<th scope="row">{esc(r[0])}</th>' + ''.join(
+            f'<td class="no">{esc(c)}</td>' if c == '—' else f'<td>{esc(c)}</td>' for c in r[1:]) + '</tr>' for r in spec['rows'])
+        out.append(f'<p class="capt">{esc(spec["caption"])}</p><div class="tbl"><table class="ov"><thead><tr>{head}</tr></thead>'
+                   f'<tbody>{rows}</tbody></table></div>')
+        out.append(f'<p class="note">{md(spec["note"])}</p>')
+    elif kind == 'fiche':
+        items = ''.join(f'<p>{md(t)}</p>' for t in spec['items'])
+        if spec.get('example'):
+            out.append(f'<div class="anat"><figure class="exf">{img(spec["example"], True, spec["example_caption"])}'
+                       f'<figcaption class="capt">{esc(spec["example_caption"])}</figcaption></figure><div>{items}</div></div>')
+        else:
+            out.append(items)
+    elif kind == 'annex':
+        for sec in spec['sections']:
+            out.append(f'<h3 class="use">{esc(sec["heading"])}</h3>')
+            for para in sec['paragraphs']:
+                if isinstance(para, list):
+                    out.append('<dl class="abbr">' + ''.join(f'<dt>{esc(a)}</dt><dd>{esc(b)}</dd>' for a, b in para) + '</dl>')
+                else:
+                    out.append(f'<p>{md(para)}</p>')
+    elif kind != 'text':
+        raise SiteError(f'guide, page {spec["id"]} : sorte de page inconnue : {kind}')
+    if spec.get('text') and kind != 'strip':
+        out.append(f'<p>{md(spec["text"])}</p>')
+    if spec.get('note') and kind != 'overview':
+        out.append(f'<p class="note">{md(spec["note"])}</p>')
+    if spec.get('use'):
+        out.append('<h3 class="use">How to use it</h3><ol class="use">' + ''.join(f'<li>{md(t)}</li>' for t in spec['use']) + '</ol>')
+    return '\n  '.join(out)
+
+
+@dataclass
+class GuidePage:
+    id: str
+    path: str               # chemin du fichier sous la racine du site
+    url: str                # url relative a la racine du site
+    title: str              # le titre de la page (h1)
+    html: str
+    prev: str = ''          # url relative a la page du chapitre precedent / suivant, '' s'il n'y en a pas
+    next: str = ''
+
+
+def guide_pages(ctx, data, composed, images, css=None):
+    """Les pages du guide (une par entree de guide.json sauf la couverture et le sommaire) ; retourne ([GuidePage], la ligne du
+    resume). `composed` : le Composed de `guide.compose` ; `images` : les images du site ; `css` : la feuille de style du site."""
+    specs = [s for s in data['pages'] if s['kind'] not in ('cover', 'contents')]
+    figures = dict(composed.figures)
+    if [i for i, _ in composed.figures] != [s['id'] for s in specs]:
+        raise SiteError('guide : les figures composees ne sont pas celles des pages de guide.json')
+    first, defs, parts = specs[0]['id'], data['sources'], data['labels']['parts']
+    css = (DATA / 'site.css').read_text(encoding='utf-8') if css is None else css
+    counts, pages = _Counts(), []
+    for k, spec in enumerate(specs):
+        pid = spec['id']
+        url = guide_url(pid, first)
+        root = '../' if pid == first else '../../'
+        body = guide_body(spec, figures[pid], defs, images, root, counts)
+        pv, nx = (specs[k - 1] if k else None), (specs[k + 1] if k + 1 < len(specs) else None)
+        link = lambda p: rel_url(guide_url(p['id'], first), url)
+        nav = ((f'<a class="btn" href="{link(pv)}">‹ {esc(gtitle(pv))}</a>' if pv else '<span></span>')
+               + (f'<a class="btn" href="{link(nx)}">{esc(gtitle(nx))} ›</a>' if nx else ''))
+        toc = guide_toc(ctx, data, specs, pid, url, first)
+        main = f'''<div class="crumb"><a href="{root}">Home</a> › <a href="{rel_url('guide/', url)}">Reading guide</a> › {esc(gtitle(spec))}</div>
+  <details class="tocm"><summary>Contents</summary><nav class="toc">{toc}</nav></details>
+  <div class="gd"><nav class="toc" aria-label="Guide contents">{toc}</nav>
+  <article><p class="gpart">{esc(parts.get(str(spec["part"]), ""))}</p><h1 class="pt">{esc(gtitle(spec))}</h1>
+  {body}
+  <div class="pn">{nav}</div>
+  </article></div>'''
+        path = 'guide/index.html' if pid == first else f'guide/{pid}/index.html'
+        pages.append(GuidePage(pid, path, url, gtitle(spec), page_html(ctx, GUIDE_TITLE, root, main, current='guide'),
+                               link(pv) if pv else '', link(nx) if nx else ''))
+    check_classes([figure_svg(f, '') for fs in figures.values() for f in fs.values()], css)
+    return pages, f'guide : {len(pages)} pages, {counts.figures} figures SVG, {counts.pins} pastilles, {counts.thumbs} vignettes'
+
+
+def compose_guide(zips_dir, edition):
+    """Les donnees du guide et leur composition (figures des pages d'anatomie et de zoom), sur les zips de Syria de `zips_dir`."""
+    t = next(t for t in THEATRES if t.pydcs == 'Syria')
+    zips = {k: Path(zips_dir) / zip_name(t, k) for k in ('airfields', 'helicopters')}
+    try:
+        data = guide.load_data()
+        return data, guide.compose(zips, edition, data)
+    except guide.GuideError as e:
+        raise SiteError(f'guide : {e}')
 
 
 def not_found_html():
@@ -675,6 +904,31 @@ def check_links(root):
         raise SiteError(f'{len(bad)} lien(s) relatif(s) sans fichier :\n  ' + '\n  '.join(bad[:30]) + ('\n  ...' if len(bad) > 30 else ''))
 
 
+class _Ids(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.seen, self.dup = set(), []
+
+    def handle_starttag(self, tag, attrs):
+        for k, v in attrs:
+            if k == 'id' and v is not None:
+                if v in self.seen and v not in self.dup:
+                    self.dup.append(v)
+                self.seen.add(v)
+
+
+def check_ids(root):
+    """Aucune page HTML ne porte deux fois le meme id ; SiteError sinon."""
+    root = Path(root).resolve()
+    bad = []
+    for page in sorted(root.rglob('*.html')):
+        p = _Ids()
+        p.feed(page.read_text(encoding='utf-8'))
+        bad += [f'{page.relative_to(root)} : id="{i}"' for i in p.dup]
+    if bad:
+        raise SiteError(f'{len(bad)} id en double :\n  ' + '\n  '.join(bad[:30]) + ('\n  ...' if len(bad) > 30 else ''))
+
+
 # ---------- construction ----------
 def write(path, data):
     path = Path(path)
@@ -701,7 +955,7 @@ def site_size(site):
     return len(files), sum(p.stat().st_size for p in files)
 
 
-def summary_lines(datas, n_files, size):
+def summary_lines(datas, n_files, size, guide_line=None):
     lines = []
     for d in datas:
         n_af, n_he = counts_text(d)
@@ -709,6 +963,8 @@ def summary_lines(datas, n_files, size):
         lines.append(f'{d.theatre.title} ({d.theatre.pydcs}) : {pluralize(len(d.bases), "chart")} ({pluralize(n_af, "airfield")}, '
                      f'{pluralize(n_he, "helicopter base")}), {pluralize(pages, "page")}, {pluralize(len(d.heliports), "heliport")}, '
                      f'{pluralize(len(d.dir_pages), "directory page")} shown, {pluralize(len(d.lotatc_bytes), "LotAtc file")}')
+    if guide_line:
+        lines.append(guide_line)
     lines.append(f'site : {n_files} files, {size / 1048576:.1f} MiB')
     return lines
 
@@ -731,6 +987,8 @@ def build_site(zips_dir, edition, repo, out, downloads=None, workers=None, log=p
         raise SiteError(f'{GUIDE_PDF} absent de {downloads}')
     if workers is None:
         workers = os.cpu_count() or 1
+    log('composition du guide de lecture ...')
+    guide_data, guide_composed = compose_guide(zips_dir, edition)
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix=f'.{out.name}-', dir=out.parent))
     try:
@@ -759,7 +1017,9 @@ def build_site(zips_dir, edition, repo, out, downloads=None, workers=None, log=p
             for name, blob in sorted(d.lotatc_bytes.items()):
                 write(tmp / 'lotatc' / d.theatre.folder / name, blob)
         write(tmp / 'index.html', page_html(ctx, SITE_TITLE, '', home_html(ctx, images)))
-        write(tmp / 'guide' / 'index.html', page_html(ctx, f'Reading guide — {SITE_TITLE}', '../', guide_html(ctx), current='guide'))
+        gpages, guide_line = guide_pages(ctx, guide_data, guide_composed, images)
+        for gp in gpages:
+            write(tmp / gp.path, gp.html)
         write(tmp / '404.html', page_html(ctx, f'Page not found — {SITE_TITLE}', '', not_found_html(),
                                           base_href=f'/{repo.split("/")[1]}/'))
         for d in datas:
@@ -774,10 +1034,11 @@ def build_site(zips_dir, edition, repo, out, downloads=None, workers=None, log=p
         write(tmp / 'search.json', json.dumps(search_entries(ctx), ensure_ascii=False, separators=(',', ':')) + '\n')
 
         check_links(tmp)
+        check_ids(tmp)
         n_files, size = site_size(tmp)
         if size > MAX_SITE_BYTES:
             raise SiteError(f'le site pese {size / 1048576:.1f} MiB (plus de {MAX_SITE_BYTES // 1048576} MiB)')
-        lines = summary_lines(datas, n_files, size)
+        lines = summary_lines(datas, n_files, size, guide_line)
         os.rename(tmp, out)
         return lines
     except BaseException:

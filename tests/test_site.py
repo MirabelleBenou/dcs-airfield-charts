@@ -14,6 +14,8 @@ from PIL import Image
 
 from render import site
 
+REAL_COMPOSE_GUIDE = site.compose_guide
+
 
 # ---------- nom et OACI ----------
 def test_split_name_prefix_in_header():
@@ -233,6 +235,11 @@ def fake(tmp_path, monkeypatch):
         folder = downloads / t.folder
         folder.mkdir()
     monkeypatch.setattr(site, 'load_theatre', lambda t, z, d, log=print: datas[t.pydcs])
+    data = guide_data()                                           # un guide fabrique, sur les sources et les images du faux site
+    data['sources'] = {'k109': {'file': 'svg/ABCD_First_10-9.svg'}, 'k111': {'file': 'svg/ABCD_First_10-8.svg'},
+                       'k111h': {'file': 'svg/Second_10-9.svg'}, 'naq': {'file': 'svg/Second_10-8.svg'},
+                       'dir': {'file': 'heliports/Syria_heliports_directory_p04.jpg'}}
+    monkeypatch.setattr(site, 'compose_guide', lambda zips, edition: (data, guide_composed(data)))
     return tmp_path, zips, downloads
 
 
@@ -389,3 +396,314 @@ def test_search_filter_and_viewer_in_chromium(fake):
             browser.close()
     finally:
         srv.shutdown()
+
+
+# ---------- le guide de lecture : une page par chapitre (donnees fabriquees par le test) ----------
+import re
+
+from render import guide
+
+
+def gfig(x=10.0, y=20.0, w=30.0, h=40.0, mark='f'):
+    return guide.Figure(els=[f'<rect id="{mark}-r" class="num" x="{x}" y="{y}" width="{w}" height="{h}"/>', f'<text>{mark}</text>'],
+                        rects=[(x, y, x + w, y + h)])
+
+
+def guide_data():
+    pin = lambda n, title, text='': {'n': n, 'title': title, 'text': text}
+    return {
+        'labels': {'parts': {'1': 'PART 1 · READING THE CHARTS', '2': 'PART 2 · FLYING WITH THE CHARTS', 'annex': 'APPENDICES',
+                             'contents': 'X'}},
+        'sources': {'k109': {'zip': 'airfields', 'file': 'svg/LTAN_Konya_10-9.svg'},
+                    'k111': {'zip': 'airfields', 'file': 'svg/LTAN_Konya_11-1.svg'},
+                    'k111h': {'zip': 'helicopters', 'file': 'svg/LTAN_Konya_11-1H.svg'},
+                    'naq': {'zip': 'helicopters', 'file': 'svg/Naqoura_10-9.svg'},
+                    'dir': {'zip': 'helicopters', 'file': 'heliports/Syria_heliports_directory_p11.jpg', 'size': [1748, 2480]}},
+        'pages': [
+            {'id': 'cover', 'kind': 'cover', 'title': 'Cover'},
+            {'id': 'contents', 'kind': 'contents', 'title': 'Contents'},
+            {'id': 'ch1', 'kind': 'text', 'part': 1, 'num': '1', 'title': 'About these charts',
+             'paragraphs': ['**Lead.** Body with `code` & <b>tags</b>.', 'Second.']},
+            {'id': 'ch2', 'kind': 'strip', 'part': 1, 'num': '2', 'title': 'The pages of an airfield',
+             'thumbs': [{'source': 'k109', 'code': '10-9', 'name': 'Airfield', 'line': 'The <runway>.'},
+                        {'source': 'k111', 'code': '11-1', 'name': 'Approach', 'line': 'The approach.'}],
+             'text': 'After the **strip**.'},
+            {'id': 'ch4', 'kind': 'anatomy', 'part': 1, 'num': '4', 'title': 'Airfield — 10-9 (Konya)', 'source': 'k109',
+             'zoom': {'caption': 'THE HEADER, ENLARGED'},
+             'pins': [pin(1, 'Code', 'The **ICAO** code.'), pin(2, 'Title'), pin(3, 'Zoomed <one>', 'In the zoom.')],
+             'use': ['First `a`.', 'Second.'], 'note': 'A note.'},
+            {'id': 'ch6a', 'kind': 'anatomy', 'part': 1, 'num': '6', 'title': 'A helicopter base — 10-9 (Naqoura)', 'source': 'naq',
+             'pins': [pin(1, 'Pad', 'A pad.')], 'use': ['One.']},
+            {'id': 'ch6b', 'kind': 'anatomy', 'part': 1, 'num': '6', 'title': 'The heliport directory (Syria, page 11)', 'source': 'dir',
+             'pins': [pin(1, 'Box', 'The box.')], 'use': ['One.']},
+            {'id': 'ch9', 'kind': 'zoom_only', 'part': 1, 'num': '9', 'title': 'Minimum sector altitude', 'source': 'k111',
+             'caption': 'THE MSA BOX', 'pins': [pin(1, 'Sector', 'A sector.')], 'text': 'Each value is **1000 ft** above.'},
+            {'id': 'ch10', 'kind': 'flight', 'part': 2, 'num': '10', 'title': 'A flight with the charts',
+             'steps': [{'thumbs': ['k109'], 'text': '**Open** the 10-9.'}, {'thumbs': ['k109', 'k111'], 'text': 'Then the 11-1.'}]},
+            {'id': 'ch11-0', 'kind': 'overview', 'part': 2, 'num': '', 'title': '11.0 Overview', 'caption': 'Which approach',
+             'header': ['Aircraft', 'NDB', 'ILS'], 'rows': [['Mi-24P', 'yes', '—'], ['F-5E', '—', 'yes']],
+             'note': 'Read the **equipment** line.'},
+            {'id': 'ch11-1', 'kind': 'fiche', 'part': 2, 'num': '', 'title': '11.1 Mi-24P', 'items': ['First **item**.', 'Second item.'],
+             'example': 'k111h', 'example_caption': 'Konya 11-1H, reduced'},
+            {'id': 'ch11-5', 'kind': 'fiche', 'part': 2, 'num': '', 'title': '11.5 MiG-21bis', 'items': ['Only item.']},
+            {'id': 'annex', 'kind': 'annex', 'part': 'annex', 'num': '', 'title': 'Appendices',
+             'sections': [{'heading': 'Abbreviations', 'paragraphs': [[['ADF', 'direction finder'], ['ARP', 'reference <point>']]]},
+                          {'heading': 'Notes', 'paragraphs': ['A **note** paragraph.']}]},
+        ]}
+
+
+def guide_composed(data=None):
+    data = data or guide_data()
+    figures = []
+    for s in data['pages']:
+        if s['kind'] in ('cover', 'contents'):
+            continue
+        figs = {}
+        if s['kind'] == 'anatomy':
+            figs['page'] = gfig(mark=s['id'] + 'p')
+            if s.get('zoom'):
+                figs['zoom'] = gfig(5.0, 6.0, 70.0, 20.0, mark=s['id'] + 'z')
+        elif s['kind'] == 'zoom_only':
+            figs['zoom'] = gfig(mark=s['id'] + 'z')
+        figures.append((s['id'], figs))
+    return type('Composed', (), {'figures': figures})()
+
+
+GUIDE_IMAGES = {f'img/syria/{n}': ((1, 1), (1400, 1960), (240, 336)) for n in
+                ('LTAN_Konya_10-9', 'LTAN_Konya_11-1', 'LTAN_Konya_11-1H', 'Naqoura_10-9', 'directory_p11')}
+
+
+def gctx():
+    return site.Context('AC-V1.11.0', 'MirabelleBenou/dcs-airfield-charts', 6, [])
+
+
+@pytest.fixture(scope='module')
+def gpages():
+    pages, line = site.guide_pages(gctx(), guide_data(), guide_composed(), GUIDE_IMAGES, css='a{}')
+    return {p.id: p for p in pages}, line
+
+
+def test_guide_has_one_page_per_entry_except_cover_and_contents(gpages):
+    pages, line = gpages
+    assert list(pages) == ['ch1', 'ch2', 'ch4', 'ch6a', 'ch6b', 'ch9', 'ch10', 'ch11-0', 'ch11-1', 'ch11-5', 'annex']
+    assert pages['ch1'].path == 'guide/index.html' and pages['ch1'].url == 'guide/'
+    assert pages['ch4'].path == 'guide/ch4/index.html' and pages['ch4'].url == 'guide/ch4/'
+    assert pages['ch11-0'].path == 'guide/ch11-0/index.html'
+    assert pages['ch4'].title == '4. Airfield — 10-9 (Konya)' and pages['ch11-1'].title == '11.1 Mi-24P'
+    assert pages['annex'].title == 'Appendices'
+    assert line == 'guide : 11 pages, 5 figures SVG, 6 pastilles, 6 vignettes'
+
+
+def test_guide_page_frame_title_breadcrumb_and_part_line(gpages):
+    h = gpages[0]['ch4'].html
+    assert '<title>Reading guide — DCS Airfield Charts</title>' in h and 'data-root="../../"' in h
+    assert '<a href="../../syria/" data-nav="syria">' in h and '<a href="../../guide/" data-nav="guide" aria-current="page">Reading guide</a>' in h
+    assert '<div class="crumb"><a href="../../">Home</a> › <a href="../">Reading guide</a> › 4. Airfield — 10-9 (Konya)</div>' in h
+    assert '<p class="gpart">PART 1 · READING THE CHARTS</p><h1 class="pt">4. Airfield — 10-9 (Konya)</h1>' in h
+    first = gpages[0]['ch1'].html
+    assert 'data-root="../"' in first and '<div class="crumb"><a href="../">Home</a> › <a href="./">Reading guide</a> › 1. About these charts</div>' in first
+    assert '<p class="gpart">APPENDICES</p>' in gpages[0]['annex'].html and '<p class="gpart">PART 2 · FLYING WITH THE CHARTS</p>' in gpages[0]['ch10'].html
+
+
+def test_guide_toc_parts_entries_ch6b_and_pdf_button(gpages):
+    h = gpages[0]['ch4'].html
+    toc = re.findall(r'<nav class="toc"[^>]*>(.*?)</nav>', h, re.S)
+    assert len(toc) == 2 and toc[0] == toc[1]                                  # le meme sommaire, replie et deplie
+    t = toc[0]
+    assert t.count('<h4>') == 3 and '<h4>READING THE CHARTS</h4>' in t and '<h4>FLYING WITH THE CHARTS</h4>' in t and '<h4>APPENDICES</h4>' in t
+    assert t.count('<a href=') == 11 - 1 and t.count('<a class="btn pdf"') == 1   # dix pages (ch6b exclue), puis le bouton PDF
+    assert '<a href="../ch6a/"><span>6</span>A helicopter base — 10-9 (Naqoura)</a>' in t and 'ch6b' not in t
+    assert '<a href="./" aria-current="page"><span>4</span>Airfield — 10-9 (Konya)</a>' in t
+    assert '<a href="../ch11-0/"><span>·</span>Overview</a>' in t and '<span>·</span>Mi-24P</a>' in t     # sans le numero de fiche
+    assert '<a href="../"><span>1</span>About these charts</a>' in t
+    assert t.endswith('<a class="btn pdf" href="https://raw.githubusercontent.com/MirabelleBenou/dcs-airfield-charts/AC-V1.11.0/'
+                      'downloads/DCS_Airfield_Charts_Reading_Guide.pdf">PDF <small>A4 · 6 MB</small></a>')
+    on_b = gpages[0]['ch6b'].html
+    assert on_b.count('aria-current="page"><span>6</span>A helicopter base') == 2           # ch6a reste marquee sur ch6b
+    assert re.findall(r'<a href="[^"]*"[^>]*aria-current="page"><span>', on_b).__len__() == 2
+    assert 'aria-current="page"><span>6</span>The heliport' not in on_b
+
+
+def test_guide_previous_and_next(gpages):
+    pages = gpages[0]
+    first, last = pages['ch1'].html, pages['annex'].html
+    assert '<div class="pn"><span></span><a class="btn" href="ch2/">2. The pages of an airfield ›</a></div>' in first
+    assert '<div class="pn"><a class="btn" href="../ch11-5/">‹ 11.5 MiG-21bis</a></div>' in last
+    mid = pages['ch6a'].html
+    assert '<a class="btn" href="../ch4/">‹ 4. Airfield — 10-9 (Konya)</a><a class="btn" href="../ch6b/">6. The heliport directory (Syria, page 11) ›</a>' in mid
+    assert (pages['ch1'].prev, pages['ch1'].next) == ('', 'ch2/')
+    assert (pages['ch2'].prev, pages['ch2'].next) == ('../', '../ch4/')
+    assert (pages['annex'].prev, pages['annex'].next) == ('../ch11-5/', '')
+
+
+def test_guide_anatomy_body_figure_pins_zoom_and_use(gpages):
+    h = gpages[0]['ch4'].html
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="9.400 19.400 31.200 41.200" '
+           'role="img" aria-label="Airfield — 10-9 (Konya)">\n<rect id="ch4p-r" class="num" x="10.0" y="20.0" width="30.0" height="40.0"/>\n'
+           '<text>ch4p</text>\n</svg>')
+    assert f'<div class="anat"><figure>{svg}</figure><ol class="pins">' in h
+    assert ('<li><span class="bd">1</span><b>Code</b><span class="tx">The <b>ICAO</b> code.</span></li>'
+            '<li><span class="bd">2</span><b>Title</b></li>'
+            '<li><span class="bd">3</span><b>Zoomed &lt;one&gt;</b><span class="tx">In the zoom.</span></li></ol></div>') in h
+    assert h.count('<li><span class="bd">') == 3                              # toutes les pastilles, celles du zoom aussi
+    assert ('<figure class="zoomf"><figcaption>THE HEADER, ENLARGED</figcaption><svg xmlns=' in h
+            and 'viewBox="4.400 5.400 71.200 21.200"' in h and 'ch4z' in h)
+    assert '<p class="note">A note.</p>' in h
+    assert '<h3 class="use">How to use it</h3><ol class="use"><li>First <code>a</code>.</li><li>Second.</li></ol>' in h
+    assert h.index('class="anat"') < h.index('class="zoomf"') < h.index('class="note"') < h.index('How to use it') < h.index('class="pn"')
+
+
+def test_guide_text_strip_flight_overview_fiche_annex_bodies(gpages):
+    pages = gpages[0]
+    t = pages['ch1'].html
+    assert '<p><b>Lead.</b> Body with <code>code</code> &amp; &lt;b&gt;tags&lt;/b&gt;.</p>\n  <p>Second.</p>' in t
+    s = pages['ch2'].html
+    assert ('<div class="strip"><figure><img class="thumb" src="../../img/syria/LTAN_Konya_10-9_t.webp" alt="10-9" loading="lazy">'
+            '<figcaption><b>10-9</b><span class="nm">Airfield</span>The &lt;runway&gt;.</figcaption></figure>') in s
+    assert s.count('<figure>') == 2 and s.index('</div>\n  <p>After the <b>strip</b>.</p>') > s.index('class="strip"')
+    f = pages['ch10'].html
+    assert f.count('<li><div class="imgs">') == 2 and f.count('class="sn"') == 2
+    assert ('<li><div class="imgs"><img class="thumb" src="../../img/syria/LTAN_Konya_10-9_t.webp" alt="10-9" loading="lazy"></div>'
+            '<div><span class="sn">1</span><p><b>Open</b> the 10-9.</p></div></li>') in f
+    assert f.count('<img class="thumb"') == 3 and '<ol class="steps">' in f
+    o = pages['ch11-0'].html
+    assert o.count('<tr>') == 3 and '<thead><tr><th>Aircraft</th><th>NDB</th><th>ILS</th></tr></thead>' in o
+    assert ('<tbody><tr><th scope="row">Mi-24P</th><td>yes</td><td class="no">—</td></tr>'
+            '<tr><th scope="row">F-5E</th><td class="no">—</td><td>yes</td></tr></tbody>') in o
+    assert '<p class="capt">Which approach</p><div class="tbl"><table class="ov">' in o and o.count('class="note"') == 1
+    assert '<p class="note">Read the <b>equipment</b> line.</p>' in o
+    e = pages['ch11-1'].html
+    assert ('<div class="anat"><figure class="exf"><img class="thumb" src="../../img/syria/LTAN_Konya_11-1H.webp" '
+            'alt="Konya 11-1H, reduced" loading="lazy"><figcaption class="capt">Konya 11-1H, reduced</figcaption></figure>'
+            '<div><p>First <b>item</b>.</p><p>Second item.</p></div></div>') in e
+    n = pages['ch11-5'].html
+    assert 'class="exf"' not in n and '<p>Only item.</p>' in n and '<div class="anat">' not in n
+    a = pages['annex'].html
+    assert ('<h3 class="use">Abbreviations</h3>\n  <dl class="abbr"><dt>ADF</dt><dd>direction finder</dd><dt>ARP</dt>'
+            '<dd>reference &lt;point&gt;</dd></dl>') in a
+    assert '<h3 class="use">Notes</h3>\n  <p>A <b>note</b> paragraph.</p>' in a
+
+
+def test_guide_zoom_only_and_directory_pages(gpages):
+    z = gpages[0]['ch9'].html
+    assert re.search(r'<div class="anat"><figure><figcaption class="capt">THE MSA BOX</figcaption><svg ', z)
+    assert '<p>Each value is <b>1000 ft</b> above.</p>' in z and z.count('<svg ') == 1 and 'zoomf' not in z.split('</style>')[-1]
+    assert gpages[0]['ch6b'].html.count('<svg ') == 1 and gpages[0]['ch6a'].html.count('<li><span class="bd">') == 1
+
+
+def test_guide_image_name_comes_from_the_source_of_guide_json():
+    defs = guide_data()['sources']
+    t = site.THEATRES[0]
+    assert site.source_image(defs, 'k111h', t) == ('LTAN_Konya_11-1H', '11-1H')
+    assert site.source_image(defs, 'naq', t) == ('Naqoura_10-9', '10-9')
+    assert site.source_image(defs, 'dir', t) == ('directory_p11', 'directory')
+    assert site.source_image(defs, 'dir', t)[0] == site.dir_image_name(11)
+    with pytest.raises(site.SiteError, match='nowhere'):
+        site.source_image(defs, 'nowhere', t)
+    with pytest.raises(site.SiteError, match='ni la forme'):
+        site.source_image({'x': {'file': 'png/foo.png'}}, 'x', t)
+
+
+def test_guide_image_missing_from_the_site_stops():
+    images = {k: v for k, v in GUIDE_IMAGES.items() if not k.endswith('LTAN_Konya_11-1')}
+    with pytest.raises(site.SiteError, match='LTAN_Konya_11-1.webp'):
+        site.guide_pages(gctx(), guide_data(), guide_composed(), images, css='a{}')
+
+
+def test_guide_figures_must_match_the_pages_of_the_data_file():
+    comp = guide_composed()
+    comp.figures = comp.figures[:-1]
+    with pytest.raises(site.SiteError, match='figures'):
+        site.guide_pages(gctx(), guide_data(), comp, GUIDE_IMAGES, css='a{}')
+
+
+def test_figure_svg_viewbox_has_three_decimals_and_keeps_the_order():
+    f = guide.Figure(els=['<a/>', '<b/>', '<c/>'], rects=[(1.0, 2.0, 3.5, 4.25)])
+    out = site.figure_svg(f, 'T <1>')
+    assert out.startswith('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+                          'viewBox="0.400 1.400 3.700 3.450" role="img" aria-label="T &lt;1&gt;">')
+    assert out.index('<a/>') < out.index('<b/>') < out.index('<c/>') and out.endswith('</svg>')
+
+
+def test_md_escapes_then_marks_up():
+    assert site.md('a **b** `c` <i> & "q"') == 'a <b>b</b> <code>c</code> &lt;i&gt; &amp; &quot;q&quot;'
+    assert site.md('**x `y`**') == '<b>x <code>y</code></b>'
+
+
+def test_class_collision_between_a_figure_and_the_site_css_stops():
+    css = '.a .halo,.b{x:y} @media (max-width:9px){.num{x:y}} @font-face{src:url(fonts/f.ttf)} /* .gone */ h1.pt{}'
+    assert site.css_classes(css) == {'halo', 'b', 'a', 'num', 'pt'}
+    assert site.svg_classes('<text class="halo num">1</text><g class="x"/>') == {'halo', 'num', 'x'}
+    site.check_classes(['<text class="x">1</text>'], css)
+    with pytest.raises(site.SiteError, match=r'\.halo, \.num'):
+        site.check_classes(['<text class="halo">1</text><text class="num">2</text>'], css)
+    assert not {'halo', 'num'} & site.css_classes((site.DATA / 'site.css').read_text(encoding='utf-8'))
+    comp = guide_composed()
+    with pytest.raises(site.SiteError, match=r'\.num'):                         # gfig() porte class="num"
+        site.guide_pages(gctx(), guide_data(), comp, GUIDE_IMAGES, css='.num{color:red}')
+
+
+def test_duplicate_id_in_a_page_stops_but_the_same_id_in_two_pages_is_fine(tmp_path):
+    (tmp_path / 'a').mkdir()
+    (tmp_path / 'a' / 'index.html').write_text('<svg id="g1-x"></svg><p id="p"></p><svg><g id="g2-x"/></svg>')
+    (tmp_path / 'b.html').write_text('<svg id="g1-x"></svg>')
+    site.check_ids(tmp_path)
+    (tmp_path / 'a' / 'index.html').write_text('<svg id="g1-x"></svg><p><svg id="g1-x"></svg></p>')
+    with pytest.raises(site.SiteError, match=r'a/index.html : id="g1-x"'):
+        site.check_ids(tmp_path)
+
+
+def test_site_css_declares_the_barlow_faces_of_the_svg_and_the_site_ships_them():
+    css = (site.DATA / 'site.css').read_text(encoding='utf-8')
+    for w, f in ((400, 'Regular'), (500, 'Medium'), (600, 'SemiBold'), (700, 'Bold')):
+        assert f"@font-face{{font-family:'Barlow Condensed';font-weight:{w};src:url(fonts/BarlowCondensed-{f}.ttf)" in css
+    assert "@font-face{font-family:'Barlow Condensed SemiBold';font-weight:100 900;src:url(fonts/BarlowCondensed-SemiBold.ttf)" in css
+    assert '.anat figure svg,.zoomf svg{display:block;width:100%;height:auto}' in css
+    assert 'BarlowCondensed-Bold.ttf' in site.BARLOW and (site.FONTS / 'BarlowCondensed-Bold.ttf').is_file()
+
+
+def test_fake_site_writes_the_guide_pages_and_prints_their_line(fake):
+    lines = build(fake)
+    out = fake[0] / 'site'
+    assert (out / 'guide' / 'index.html').is_file() and (out / 'guide' / 'ch4' / 'index.html').is_file()
+    assert (out / 'guide' / 'ch11-0' / 'index.html').is_file() and (out / 'guide' / 'annex' / 'index.html').is_file()
+    assert lines[-2] == 'guide : 11 pages, 5 figures SVG, 6 pastilles, 6 vignettes' and lines[-1].startswith('site : ')
+    assert (out / 'assets' / 'fonts' / 'BarlowCondensed-Bold.ttf').is_file()
+    assert not (out / 'guide' / 'index.html').read_text(encoding='utf-8').count('Read the guide')
+    home = (out / 'index.html').read_text(encoding='utf-8')
+    assert 'href="guide/">Read the guide</a>' in home                  # l'accueil ne change pas
+    assert 'Figure drawn' not in (out / 'guide' / 'index.html').read_text(encoding='utf-8')
+
+
+def test_fake_site_with_a_guide_is_deterministic(fake):
+    build(fake, 'one')
+    build(fake, 'two')
+    assert site.listing(fake[0] / 'one') == site.listing(fake[0] / 'two')
+    assert any(p.startswith('guide/ch4/') for p, _ in site.listing(fake[0] / 'one'))
+
+
+def test_guide_error_stops_the_site_and_leaves_nothing(fake, monkeypatch):
+    def boom(zips, edition, data=None):
+        raise guide.GuideError('page ch4 : la cible a disparu')
+    monkeypatch.setattr(site, 'compose_guide', REAL_COMPOSE_GUIDE)
+    monkeypatch.setattr(guide, 'compose', boom)
+    with pytest.raises(site.SiteError, match='guide : page ch4 : la cible a disparu'):
+        build(fake)
+    assert not (fake[0] / 'site').exists()
+    assert not [p for p in fake[0].iterdir() if p.name.startswith('.site-')]
+
+
+def test_guide_is_composed_from_the_syria_zips_of_the_zips_folder(fake, monkeypatch):
+    tmp, zips, downloads = fake
+    seen = {}
+
+    def spy(z, edition, data=None):
+        seen.update(z=z, edition=edition)
+        raise guide.GuideError('stop')
+    monkeypatch.setattr(site, 'compose_guide', REAL_COMPOSE_GUIDE)
+    monkeypatch.setattr(guide, 'compose', spy)
+    with pytest.raises(site.SiteError):
+        build(fake)
+    assert seen['edition'] == 'AC-V1.11.0'
+    assert {k: v.name for k, v in seen['z'].items()} == {'airfields': 'DCS_Airfield_Charts_Syria_1985_airfields.zip',
+                                                         'helicopters': 'DCS_Airfield_Charts_Syria_1985_helicopters.zip'}

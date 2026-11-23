@@ -2,6 +2,11 @@
 @font-face{font-family:BC;font-weight:400;src:url(fonts/BarlowCondensed-Regular.ttf) format('truetype')}
 @font-face{font-family:BC;font-weight:500;src:url(fonts/BarlowCondensed-Medium.ttf) format('truetype')}
 @font-face{font-family:BC;font-weight:600;src:url(fonts/BarlowCondensed-SemiBold.ttf) format('truetype')}
+@font-face{font-family:'Barlow Condensed';font-weight:400;src:url(fonts/BarlowCondensed-Regular.ttf) format('truetype')}
+@font-face{font-family:'Barlow Condensed';font-weight:500;src:url(fonts/BarlowCondensed-Medium.ttf) format('truetype')}
+@font-face{font-family:'Barlow Condensed';font-weight:600;src:url(fonts/BarlowCondensed-SemiBold.ttf) format('truetype')}
+@font-face{font-family:'Barlow Condensed';font-weight:700;src:url(fonts/BarlowCondensed-Bold.ttf) format('truetype')}
+@font-face{font-family:'Barlow Condensed SemiBold';font-weight:100 900;src:url(fonts/BarlowCondensed-SemiBold.ttf) format('truetype')}
 :root{
   --navy:#1D2B4E;--navy2:#26385F;--gold:#C9A64A;--gold-d:#9C7E2F;
   --bg:#F4F2EC;--surface:#FFFFFF;--line:#DCD8CC;--ink:#1B1F27;--muted:#5A6070;--chip:#ECE8DC;
@@ -139,3 +144,57 @@ footer a{color:#E2C477}
 .dirfig button{display:block;width:100%;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;cursor:zoom-in}
 .dirfig img{display:block;width:100%;height:auto}
 .dirfig figcaption{color:var(--muted);font-size:16px;margin-top:8px}
+/* guide */
+.gd{display:grid;grid-template-columns:250px minmax(0,1fr);gap:32px;margin-top:18px}
+.toc{position:sticky;top:76px;align-self:start;max-height:calc(100vh - 92px);overflow:auto;font-size:16px}
+.toc h4{font:600 14px BC;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 4px}
+.toc a{display:flex;gap:8px;padding:6px 8px;border-radius:6px;text-decoration:none;color:var(--ink);min-height:36px;align-items:center}
+.toc a:hover{background:var(--chip)}.toc a[aria-current]{background:var(--navy);color:#fff}
+.toc a span{color:var(--muted);min-width:26px}.toc a[aria-current] span{color:var(--gold)}
+.toc .pdf{margin-top:14px}
+details.tocm{display:none}
+@media (max-width:900px){.gd{grid-template-columns:minmax(0,1fr)}.toc{display:none}details.tocm{display:block;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px 12px;margin-top:12px}details.tocm summary{min-height:44px;display:flex;align-items:center;font-weight:600;cursor:pointer}details.tocm .toc{display:block;position:static;max-height:none}}
+.gpart{font:600 14px BC;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0}
+article h1.pt{margin-top:2px}
+article p{max-width:70ch}
+article code{font-size:.9em;background:var(--chip);padding:1px 5px;border-radius:4px}
+.anat{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (min-width:1101px){.anat figure{position:sticky;top:76px}}
+@media (max-width:1100px){.anat{grid-template-columns:minmax(0,1fr)}}
+.anat figure,.zoomf{margin:0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px}
+.anat figure img,.zoomf img{display:block;width:100%;height:auto}
+.ph-fig{aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;color:#8A90A0;font-size:16px;text-align:center;padding:16px}
+ol.pins{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+ol.pins li{display:grid;grid-template-columns:30px 1fr;gap:2px 10px}
+ol.pins .bd{grid-row:1/3;width:26px;height:26px;border-radius:50%;background:#C8102E;color:#fff;font:600 15px/26px BC;text-align:center}
+ol.pins b{font-weight:600;font-size:18px}
+ol.pins .tx{color:var(--muted);font-size:16px;line-height:1.35}
+.zoomf{margin-top:20px}.zoomf figcaption,.capt{font:600 14px BC;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+h3.use{font:600 20px Oswald,sans-serif;text-transform:uppercase;margin:26px 0 8px}
+ol.use{margin:0;padding-left:24px;max-width:75ch}ol.use li{margin:6px 0}
+.pn{display:flex;justify-content:space-between;gap:12px;margin-top:32px;flex-wrap:wrap}
+.anat figure svg,.zoomf svg{display:block;width:100%;height:auto}
+/* guide : sortes hors maquette */
+.strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;margin:18px 0}
+.strip figure,.exf{margin:0}
+.thumb{display:block;width:100%;height:auto;background:#fff;border:1px solid var(--line);border-radius:6px}
+.strip figcaption{margin-top:8px;font-size:16px;line-height:1.35}
+.strip figcaption b{display:block;font:600 20px BC}
+.strip figcaption .nm{display:block;font:600 14px BC;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+ol.steps{list-style:none;margin:18px 0;padding:0;display:grid;gap:18px}
+ol.steps li{display:grid;grid-template-columns:150px minmax(0,1fr);gap:16px;align-items:start}
+ol.steps .imgs{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+ol.steps .imgs img:only-child{grid-column:1/3}
+ol.steps .sn{font:600 26px Oswald,sans-serif;color:#C8102E}
+ol.steps p{margin:4px 0 0;max-width:70ch}
+@media (max-width:480px){ol.steps li{grid-template-columns:96px minmax(0,1fr)}}
+.tbl{overflow-x:auto;margin:8px 0 14px}
+table.ov{border-collapse:collapse;min-width:640px;font-size:16px}
+table.ov th,table.ov td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+table.ov thead th{background:var(--chip);font:600 14px BC;letter-spacing:.06em;text-transform:uppercase}
+table.ov td.no{color:var(--muted)}
+dl.abbr{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 16px;margin:0 0 14px;max-width:75ch}
+dl.abbr dt{font-weight:600}
+dl.abbr dd{margin:0;color:var(--muted)}
+.exf{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px}
+.exf img{display:block;width:100%;height:auto}

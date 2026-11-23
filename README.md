@@ -12,7 +12,7 @@ The goal is to share a complete set of charts for every airfield, as PDF and PNG
 
 **Browse the charts online**: the [Airfield Charts website](https://mirabellebenou.github.io/dcs-airfield-charts/) — search an airfield or a heliport by name or ICAO code, see every page before you download it, and get its PDF and its LotAtc files.
 
-**New to these charts?** Start with the reading guide, [DCS_Airfield_Charts_Reading_Guide.pdf](downloads/DCS_Airfield_Charts_Reading_Guide.pdf?raw=true) (A4): how to read every page of an airfield, how to fly with them, and which approach pages your aircraft can fly.
+**New to these charts?** Start with the reading guide, [online](https://mirabellebenou.github.io/dcs-airfield-charts/guide/) or as a PDF, [DCS_Airfield_Charts_Reading_Guide.pdf](downloads/DCS_Airfield_Charts_Reading_Guide.pdf?raw=true) (A4): how to read every page of an airfield, how to fly with them, and which approach pages your aircraft can fly.
 
 **Syria — 78 of the 80 airfields and helicopter bases, plus every heliport** (magnetic declination for 1985), rendered with no manual drawing.
 

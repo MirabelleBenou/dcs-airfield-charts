@@ -11,6 +11,7 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - https://mirabellebenou.github.io/dcs-airfield-charts/ — search an airfield or a heliport by name or ICAO code, browse each theatre, see every page of an airfield before you download it, and get its PDF, its LotAtc files and the theatre zips. Every heliport has its own page with its page of the heliport directory.
 - The site is built from the files of each release and published with it. The published charts do not change.
+- The reading guide can be read on the website too, one page per chapter, with the same figures and notes as the PDF: https://mirabellebenou.github.io/dcs-airfield-charts/guide/
 
 ## AC-V1.11.0 — 23 November 2026
 
