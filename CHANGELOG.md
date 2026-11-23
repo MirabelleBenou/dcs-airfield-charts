@@ -11,6 +11,11 @@ What changed in the published charts, version by version. Each version is a GitH
 
 - New tool `render/build_lotatc.py`: from the airfields and helicopters zips of a release, writes for every airfield and helicopter base of the theatre its LotAtc drawing layers: the plan (pavement outline, runways, runway designators and taxiway names, as on the 10-9 chart) and the parking stands (named as in the mission editor), at their positions in DCS. One zip per theatre, `DCS_Airfield_Charts_<Theatre>_1985_lotatc.zip`, ready to copy into the LotAtc server's drawings folder. The published charts do not change.
 
+**The Squadron Ready Room insignia on the reading guide and the README.**
+
+- The cover of the reading guide carries the Airfield Charts insignia in colour, and every other page a small black pictogram before the footer text. The charts do not change.
+- The README opens with the Airfield Charts banner, and credits the insignia and its lettering (Oswald, SIL Open Font License 1.1).
+
 ## AC-V1.10.0 — 22 November 2026
 
 **A reading guide for the charts.**

@@ -1,3 +1,5 @@
+![Airfield Charts — part of the Squadron Ready Room family](docs/marque/banniere-airfield-charts.png)
+
 # DCS Airfield Charts
 
 Airfield charts for DCS World, built from the game's own data.
@@ -223,7 +225,7 @@ It writes one `<theatre>.json` per theatre (eleven files) to the folder and prin
 
 Tests: `python -m pytest` (see the table above for the tests that need samples).
 
-Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [OurAirports](https://github.com/davidmegginson/ourairports-data) (public domain) for the ICAO codes in `downloads/navaids/`; [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports.
+Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [OurAirports](https://github.com/davidmegginson/ourairports-data) (public domain) for the ICAO codes in `downloads/navaids/`; [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports. Squadron Ready Room insignia: original artwork of the project; lettering from Oswald (SIL Open Font License 1.1), converted to outlines ([licence](render/data/marque/OFL-Oswald.txt)).
 
 ## Approach charts
 
