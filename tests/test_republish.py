@@ -586,3 +586,91 @@ def test_a_10_8_and_an_11_x_with_the_old_form_are_retouched_and_exported_again(t
             if not n.endswith('.pdf'):
                 assert b.read(n) == c.read(n)                                 # un second passage : tout egal a l'octet (hors PDF)
         assert len(PdfReader(io.BytesIO(b.read('pack/pdf/Konya_charts.pdf'))).pages) == 3
+
+
+# ---------- addendum 1 : `--helicopteres`, les recueils *airfields* qui portent des pages 11-xH ----------
+def _heli_fixture(tmp_path, heli_pages=('11-1H',), elev='ELEV 3392 FT · 1034 M', heli_foot_new=True, heli_elev=None, recueil_heli=('11-1H',)):
+    """(zip airfields, zip de sortie helicopters) synthetiques : la chart Konya a une 10-9A (entree) et un recueil qui porte en plus ses pages
+    11-xH `recueil_heli` (sans entree) ; le zip helicopters a les pages 11-xH `heli_pages` (SVG, PNG, PDF)."""
+    lat, lon = konya_latlon()
+    root = tmp_path / 'src'
+    air = doc_svg('<circle cx="9" cy="9" r="3"/>', *five_fields(lat, lon), RULE, foot=foot_layer(new=True))
+    export.export_page(air, root / 'Konya_10-9A')
+    heli = {}
+    for k, suffix in enumerate(sorted(set(heli_pages) | set(recueil_heli))):
+        e = heli_elev if (heli_elev and suffix in heli_pages and k == 0) else elev
+        svg = doc_svg(f'<circle cx="{20 + k}" cy="20" r="1"/>', *five_fields(lat, lon, elev=e), RULE, foot=foot_layer(new=heli_foot_new))
+        heli[suffix] = export.export_page(svg, root / f'Konya_{suffix}')
+    old_heli = {}
+    for suffix in recueil_heli:                                  # les pages du recueil publie : celles de la release
+        svg = doc_svg(f'<circle cx="{20 + sorted(heli).index(suffix)}" cy="20" r="1"/>', *five_fields(lat, lon, elev=elev), RULE)
+        old_heli[suffix] = export.export_page(svg, root / 'old' / f'Konya_{suffix}')
+    export.merge_pdfs([root / 'Konya_10-9A.pdf'] + [old_heli[s][1] for s in recueil_heli], root / 'rec.pdf')
+    zair, zheli = tmp_path / 'air.zip', tmp_path / 'heli.zip'
+    with zipfile.ZipFile(zair, 'w') as z:
+        for sub in ('png', 'svg', 'pdf'):
+            z.writestr(f'pack/{sub}/Konya_10-9A.{sub}', (root / f'Konya_10-9A.{sub}').read_bytes())
+        z.writestr('pack/pdf/Konya_charts.pdf', (root / 'rec.pdf').read_bytes())
+    with zipfile.ZipFile(zheli, 'w') as z:
+        for suffix in heli_pages:
+            for sub in ('png', 'svg', 'pdf'):
+                z.writestr(f'h/{sub}/Konya_{suffix}.{sub}', (root / f'Konya_{suffix}.{sub}').read_bytes())
+    return zair, zheli
+
+
+def _rec_texts(path):
+    with zipfile.ZipFile(path) as z:
+        return [p.extract_text() for p in PdfReader(io.BytesIO(z.read('pack/pdf/Konya_charts.pdf'))).pages]
+
+
+def test_helicopteres_completes_the_collection_with_the_11_xh_pages_and_is_idempotent(tmp_path, capsys):
+    zair, zheli = _heli_fixture(tmp_path)
+    out = tmp_path / 'o.zip'
+    assert republish.main(['Syria', '--zip', str(zair), '--out', str(out), '--helicopteres', str(zheli)]) == 0
+    summary = capsys.readouterr().out
+    assert 'recueils completes par --helicopteres : 1 ; pages ajoutees a leur fin : 1' in summary
+    assert len(_rec_texts(out)) == len(_rec_texts(zair)) == 2
+    with zipfile.ZipFile(zheli) as h:
+        assert _rec_texts(out)[1] == PdfReader(io.BytesIO(h.read('h/pdf/Konya_11-1H.pdf'))).pages[0].extract_text()
+    with zipfile.ZipFile(zair) as a, zipfile.ZipFile(out) as b:
+        assert a.namelist() == b.namelist() and not [n for n in a.namelist() if 'pdf/Konya_11' in n]       # aucune entree 11-xH ajoutee
+    again = tmp_path / 'again.zip'
+    assert republish.main(['Syria', '--zip', str(out), '--out', str(again), '--helicopteres', str(zheli)]) == 0
+    with zipfile.ZipFile(out) as a, zipfile.ZipFile(again) as b:
+        assert all(a.read(n) == b.read(n) for n in a.namelist() if not n.endswith('.pdf'))
+    assert len(_rec_texts(again)) == 2 and 'pictogramme au pied : 0 pages SVG retouchees' in capsys.readouterr().out
+
+
+def test_without_helicopteres_a_collection_with_11_xh_pages_stops_and_names_the_option(tmp_path, capsys):
+    zair, _ = _heli_fixture(tmp_path)
+    out = tmp_path / 'o.zip'
+    with pytest.raises(republish.RepublishError, match='--helicopteres'):
+        republish.republish_zip('Syria', zair, out)
+    assert not out.exists()
+    assert republish.main(['Syria', '--zip', str(zair), '--out', str(out)]) == 1
+    assert '--helicopteres' in capsys.readouterr().err and not out.exists()
+
+
+def test_a_collection_without_missing_pages_does_not_need_the_option_and_ignores_it(tmp_path):
+    zair, zheli = _heli_fixture(tmp_path, recueil_heli=())
+    assert republish.main(['Syria', '--zip', str(zair), '--out', str(tmp_path / 'a.zip')]) == 0
+    assert republish.main(['Syria', '--zip', str(zair), '--out', str(tmp_path / 'b.zip'), '--helicopteres', str(zheli)]) == 0
+
+
+@pytest.mark.parametrize('case, match', [('count', r'1 pages sans entree, le zip de `--helicopteres` a 2'),
+                                         ('none', r'1 pages sans entree, le zip de `--helicopteres` a 0'),
+                                         ('foot', 'pas le pied de la forme neuve'),
+                                         ('text', 'le texte de la page du zip de `--helicopteres` differe')])
+def test_helicopteres_refuses_a_zip_that_does_not_match_and_writes_nothing(tmp_path, case, match):
+    if case == 'count':
+        zair, zheli = _heli_fixture(tmp_path, heli_pages=('11-1H', '11-2H'), recueil_heli=('11-1H',))
+    elif case == 'none':
+        zair, zheli = _heli_fixture(tmp_path, heli_pages=())
+    elif case == 'foot':
+        zair, zheli = _heli_fixture(tmp_path, heli_foot_new=False)
+    else:
+        zair, zheli = _heli_fixture(tmp_path, heli_elev='ELEV 3500 FT · 1067 M')
+    out = tmp_path / 'o.zip'
+    with pytest.raises(republish.RepublishError, match=match):
+        republish.republish_zip('Syria', zair, out, heli_zip=zheli)
+    assert not out.exists()

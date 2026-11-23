@@ -29,6 +29,11 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
   8. le pictogramme de la famille au pied de chaque page (lot ac-marque-pied), APRES les retouches 0 a 4 : voir `retouch_footer` pour
      les pages SVG (10-8, 10-9*, 11-x ; une page a la forme neuve du pied n'est pas touchee ; une page 10-8 ou 11-x a l'ancienne forme est
      retouchee puis reexportee, sinon elle est recopiee a l'octet) et `retouch_directory` pour les pages du repertoire des heliports.
+  9. `--helicopteres <zip>` (addendum 1 du lot ac-marque-pied) : le recueil d'une chart du zip *airfields* publie porte, a la fin, les pages
+     11-<n>H de l'aerodrome, qui n'ont pas d'entree dans ce zip. `manquantes` = pages de l'ancien recueil - entrees de page de la chart ;
+     si `manquantes` > 0, l'option est obligatoire : son zip est la SORTIE de cet outil sur le zip *helicopters* de la meme release, et
+     ses pages `<stem>_11-<n>H` (PDF `.../pdf/<stem>_11-<n>H.pdf`) completent le recueil, a la fin, dans l'ordre naturel : leur nombre
+     egale `manquantes`, leur SVG a le pied de la forme neuve, leur texte egale celui des dernieres pages de l'ancien recueil.
 Chaque page 10-9* est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
 recueil `pdf/<stem>_charts.pdf` de chaque chart est refait. Sortie : un nouveau zip, memes entrees dans le meme ordre ; les
 entrees hors charts sont recopiees a l'octet, sauf, pour 5, les JPEG des pages touchees et le PDF du repertoire (un zip sans page de
@@ -36,6 +41,7 @@ chart ni repertoire des heliports aux noms ci-dessus est recopie tel quel). Un f
 deja : arret. Au moindre doute, rien n'est ecrit.
 """
 import argparse
+import contextlib
 import html
 import io
 import math
@@ -1006,6 +1012,7 @@ class Result:
     foot_kept: list = field(default_factory=list)    # noms de celles qui le portaient deja
     added: dict = field(default_factory=dict)        # {stem: [pages 11-x ajoutees]} (`--ajouter`)
     ignored: list = field(default_factory=list)      # noms des fichiers du dossier `--ajouter` qui ne sont pas des pages 11-x
+    completed: list = field(default_factory=list)    # [(stem, pages)] : recueils completes des pages 11-xH de `--helicopteres`
 
 
 def find_added_pages(folder, ignored=None):
@@ -1033,16 +1040,55 @@ def find_added_pages(folder, ignored=None):
     return dict(sorted(found.items(), key=lambda kv: dcsdata.natural_key(kv[0])))
 
 
-def republish_zip(theatre, zip_in, zip_out, add_dir=None):
+_HELI_PDF = re.compile(r'^(?P<dir>(?:.*/)?)pdf/(?P<stem>.+)_(?P<suffix>11-\d+H)\.pdf$')
+
+
+def _page_texts(pdf_bytes):
+    return [pg.extract_text() for pg in PdfReader(io.BytesIO(pdf_bytes)).pages]
+
+
+def helicopter_pages(zheli, stem, missing, old_texts, name):
+    """[(suffixe, PDF en octets)] des `missing` pages 11-<n>H de `stem` dans le zip de sortie *helicopters* (`zheli`, ouvert), dans l'ordre
+    naturel, apres les controles de l'addendum 1 : leur nombre egale `missing`, leur SVG a le pied de la forme neuve, leur texte egale
+    celui des `missing` dernieres pages de l'ancien recueil (`old_texts`). Sinon RepublishError."""
+    found = []
+    for n in zheli.namelist():
+        m = _HELI_PDF.match(n)
+        if m and m['stem'] == stem:
+            found.append((m['suffix'], n, m['dir']))
+    found.sort(key=lambda t: dcsdata.natural_key(t[0]))
+    if len(found) != missing:
+        raise RepublishError(f'{stem} : le recueil a {missing} pages sans entree, le zip de `--helicopteres` a {len(found)} pages 11-<n>H de cette chart '
+                             f'(attendu : {missing})')
+    out = []
+    for (suffix, entry, d), old in zip(found, old_texts[-missing:]):
+        svg_name = f'{d}svg/{stem}_{suffix}.svg'
+        if svg_name not in zheli.namelist():
+            raise RepublishError(f'{stem}_{suffix} : entree {svg_name} absente du zip de `--helicopteres`')
+        form = footer_form(zheli.read(svg_name).decode('utf-8'), f'{stem}_{suffix} (--helicopteres)')[0]
+        if form != 'neuve':
+            raise RepublishError(f'{stem}_{suffix} : le zip de `--helicopteres` n\'a pas le pied de la forme neuve (page non traitee par cet outil)')
+        data = zheli.read(entry)
+        texts = _page_texts(data)
+        if len(texts) != 1 or texts[0] != old:
+            raise RepublishError(f'{stem}_{suffix} : le texte de la page du zip de `--helicopteres` differe de celui de la page correspondante '
+                                 f'de l\'ancien recueil de {name}')
+        out.append((suffix, data))
+    return out
+
+
+def republish_zip(theatre, zip_in, zip_out, add_dir=None, heli_zip=None):
     """Calcule les nouvelles pages et les recueils, puis ecrit `zip_out`. Retourne un `Result`. `add_dir` : dossier de pages 11-x a
-    ajouter (`find_added_pages`) ; chaque page entre dans le zip juste avant le recueil de sa chart (pdf, png, svg)."""
+    ajouter (`find_added_pages`) ; chaque page entre dans le zip juste avant le recueil de sa chart (pdf, png, svg). `heli_zip` : la
+    sortie de cet outil sur le zip *helicopters* (`--helicopteres`), dont les pages 11-xH completent les recueils qui les portent."""
     zip_in, zip_out = Path(zip_in), Path(zip_out)
     if zip_out.exists():
         raise RepublishError(f'{zip_out} existe deja (pas d\'ecrasement)')
     res = Result()
     added = find_added_pages(add_dir, res.ignored) if add_dir is not None else {}
     index = update_coords.arp_index(theatre)
-    with zipfile.ZipFile(zip_in) as zin, tempfile.TemporaryDirectory(prefix='republish_') as tmp:
+    with zipfile.ZipFile(zip_in) as zin, (zipfile.ZipFile(heli_zip) if heli_zip else contextlib.nullcontext()) as zheli, \
+            tempfile.TemporaryDirectory(prefix='republish_') as tmp:
         tmp = Path(tmp)
         infos = zin.infolist()
         names = {i.filename for i in infos}
@@ -1143,9 +1189,25 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
                 continue                               # pages 11-xH seules (zip helicopters) : pas de recueil, recopiees telles quelles
             if entry not in names:
                 raise RepublishError(f'{stem} : recueil {entry} absent du zip')
+            before = len(PdfReader(io.BytesIO(zin.read(entry))).pages)
+            missing = before - len([m for m in members if not isinstance(m[1], str)])         # pages du recueil sans entree dans le zip
+            if missing > 0:
+                if zheli is None:
+                    raise RepublishError(f'{stem} : le recueil a {missing} pages de plus que la chart n\'a d\'entrees (les pages 11-<n>H) : '
+                                         f'passer l\'option --helicopteres <zip>, la sortie de cet outil sur le zip helicopters de la meme release')
+                old_texts = _page_texts(zin.read(entry))
+                hp = helicopter_pages(zheli, stem, missing, old_texts, entry)
+                for suffix, data in hp:
+                    pdf_p = tmp / f'heli_{k}_{suffix}.pdf'
+                    pdf_p.write_bytes(data)
+                    members.append((suffix, pdf_p))
+                members.sort(key=lambda t: _approach_key(t[0]))
+                res.completed.append((stem, missing))
             sources = []
             for _, n in members:
-                if isinstance(n, str):                 # page ajoutee : son PDF du dossier
+                if isinstance(n, Path):                # page 11-<n>H prise dans la sortie helicopters (`--helicopteres`)
+                    sources.append(n)
+                elif isinstance(n, str):                 # page ajoutee : son PDF du dossier
                     sources.append(added[n]['pdf'])
                 elif f'{d}pdf/{pages[n][1]}.pdf' in new:       # page reexportee (10-9*, ou 10-8 et 11-x au pied retouche)
                     sources.append(new[f'{d}pdf/{pages[n][1]}.pdf'])
@@ -1157,7 +1219,6 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None):
                     sources.append(new[f'{d}pdf/{pages[n][1]}.pdf'])
             out = tmp / f'recueil{k}.pdf'
             export.merge_pdfs(sources, out)
-            before = len(PdfReader(io.BytesIO(zin.read(entry))).pages)
             after = len(PdfReader(str(out)).pages)
             if before + len(res.added.get(stem, [])) != after:
                 raise RepublishError(f'{stem} : recueil de {after} pages, l\'ancien en avait {before}'
@@ -1196,6 +1257,7 @@ def parse_args(argv):
     ap.add_argument('--zip', required=True, help='zip de release (airfields ou helicopters)')
     ap.add_argument('--out', required=True, help='nouveau zip (ne doit pas exister)')
     ap.add_argument('--ajouter', metavar='DOSSIER', help="dossier de pages d'approche 11-x (la sortie de build_chart.py --approches-seulement) a ajouter aux charts du zip")
+    ap.add_argument('--helicopteres', metavar='ZIP', help="zip *airfields* dont des recueils portent des pages 11-xH : la SORTIE de cet outil sur le zip helicopters de la meme release")
     ap.add_argument('--moves', help='fichier TSV (nouveau) : une ligne par etiquette deplacee ou retiree (page, calque, texte, avant, apres)')
     return ap.parse_args(argv)
 
@@ -1206,7 +1268,7 @@ def main(argv):
         print(f'ARRET : {args.moves} existe deja (pas d\'ecrasement)', file=sys.stderr)
         return 1
     try:
-        res = republish_zip(args.theatre, args.zip, args.out, args.ajouter)
+        res = republish_zip(args.theatre, args.zip, args.out, args.ajouter, args.helicopteres)
     except (RepublishError, dcsdata.DataError, FileNotFoundError, zipfile.BadZipFile) as e:
         print(f'ARRET : {e}', file=sys.stderr)
         return 1
@@ -1238,6 +1300,7 @@ def main(argv):
     print(f"graduations glissees : {len(slid)} ; retirees : {len(grads) - len(slid)} (sur {len({m[0] for m in grads})} pages)")
     print(f"pages a fond F10 : {len(res.f10)}" + ''.join(f'\n  {n}' for n in res.f10))
     print(f'recueils refaits : {res.charts}')
+    print(f"recueils completes par --helicopteres : {len(res.completed)} ; pages ajoutees a leur fin : {sum(n for _, n in res.completed)}")
     foot_kinds = (('10-8', lambda n: _VICINITY.match(n.rsplit('_', 1)[1])), ('10-9*', lambda n: n.rsplit('_', 1)[1].startswith('10-9')),
                   ('11-x', lambda n: _APPROACH.match(n.rsplit('_', 1)[1])))
     print(f"pictogramme au pied : {len(res.foot)} pages SVG retouchees ("
