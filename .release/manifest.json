@@ -2,5 +2,11 @@
  "tag": "AC-V1.12.0",
  "title": "AC-V1.12.0 (trial)",
  "commit": "7b2fbd99ca59cc19aa6c3002fbb0d9725adfe170",
- "assets": []
+ "assets": [
+  {
+   "name": "DCS_Airfield_Charts_Trial.zip",
+   "size": 136,
+   "sha256": "6dbbf7aa3a182bc2581f50951072114f7facb71c784c1a09a3a1d578dfb8e397"
+  }
+ ]
 }
