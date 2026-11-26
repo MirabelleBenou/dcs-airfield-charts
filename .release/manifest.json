@@ -1,0 +1,37 @@
+{
+ "tag": "AC-V1.12.0",
+ "title": "AC-V1.12.0 — 26 November 2026",
+ "commit": "82ec055445f74f92caad9d1d03e37a5cd81f00df",
+ "assets": [
+  {
+   "name": "DCS_Airfield_Charts_GermanyColdWar_1985_airfields.zip",
+   "size": 590059599,
+   "sha256": "14917efcd99ba46d0b4e61fc1304ce0712bd0609028bc14420f2ddcf9211b05c"
+  },
+  {
+   "name": "DCS_Airfield_Charts_GermanyColdWar_1985_helicopters.zip",
+   "size": 104548442,
+   "sha256": "eb1db4687a621572512c856bdc400b3cbd1e94de01cf6e7fd4b65e1ebdb0b8fe"
+  },
+  {
+   "name": "DCS_Airfield_Charts_GermanyColdWar_1985_lotatc.zip",
+   "size": 856527,
+   "sha256": "53e2cf7f0d5ab20a7809beda2c3fcd1ac6f024581a7a4d39525ecaf65f2dafdf"
+  },
+  {
+   "name": "DCS_Airfield_Charts_Syria_1985_airfields.zip",
+   "size": 339449016,
+   "sha256": "75163eb010f51de6b4b64afc19e951b9c8aa98ed87e7539655a9b1f283e84046"
+  },
+  {
+   "name": "DCS_Airfield_Charts_Syria_1985_helicopters.zip",
+   "size": 106168348,
+   "sha256": "cc9abad779a96b8ae98e2255cecc5d847e5c41138168fc236ae5740149c3d165"
+  },
+  {
+   "name": "DCS_Airfield_Charts_Syria_1985_lotatc.zip",
+   "size": 576650,
+   "sha256": "eaedc6479fe29c77489a50df8266e8111c664ad30533a44be238bd74388d2611"
+  }
+ ]
+}
