@@ -86,3 +86,9 @@ def test_retouch_9_idempotent_and_identity():
     assert republish.retouch_ndb_freq(once) == (once, 0)
     plain = '<g><text>1250</text><text>113.70 CH45X</text><text>A  B</text></g>'
     assert republish.retouch_ndb_freq(plain) == (plain, 0)
+
+
+def test_retouch_ndb_text_on_extracted_pdf_text():
+    assert republish.retouch_ndb_text('CKR 320000\n113.70 · 320000\n1250 CH45X\n') == 'CKR 320\n113.70 · 320\n1250 CH45X\n'
+    assert republish.retouch_ndb_text('ELEV 3407 FT') == 'ELEV 3407 FT'
+    assert republish.retouch_ndb_text('NDB\n320000320000\n30003000\n') == 'NDB\n320320\n30003000\n'

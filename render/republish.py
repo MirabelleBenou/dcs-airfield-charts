@@ -1001,6 +1001,23 @@ def retouch_ndb_freq(svg_text):
     return _TEXT_ELEMENT.sub(fix, svg_text), count
 
 
+def retouch_ndb_text(text):
+    """Le texte extrait d'un PDF (morceaux separes par ' ' ou par un saut de ligne), avec la regle de `retouch_ndb_freq` : sert a comparer
+    une page 11-xH deja retouchee (zip *helicopters* de sortie) a la page correspondante de l'ancien recueil (le texte extrait colle un
+    texte dessine deux fois : `320000320000`, `30003000`)."""
+    def one(part):
+        if _DIGITS.fullmatch(part) and int(part) >= NDB_KHZ_TROP_HAUT and int(part) % 1000 == 0:
+            return str(int(part) // 1000)
+        return part
+
+    def fix(part):
+        h = len(part) // 2
+        if len(part) % 2 == 0 and part[:h] == part[h:]:                      # texte dessine deux fois : `320000320000`, `30003000`
+            return one(part[:h]) * 2
+        return one(part)
+    return ''.join(p if i % 2 else fix(p) for i, p in enumerate(re.split(r'( |\n)', text)))
+
+
 # ---------- une page ----------
 def retouch_page(svg_text, name, suffix, index):
     """(nouveau SVG, details) : toutes les retouches ; details = {fields, header, bar, image, xlink, moves, unplaced, north, foot}."""
@@ -1103,7 +1120,7 @@ def helicopter_pages(zheli, stem, missing, old_texts, name):
             raise RepublishError(f'{stem}_{suffix} : le zip de `--helicopteres` n\'a pas le pied de la forme neuve (page non traitee par cet outil)')
         data = zheli.read(entry)
         texts = _page_texts(data)
-        if len(texts) != 1 or texts[0] != old:
+        if len(texts) != 1 or texts[0] != retouch_ndb_text(old):      # lot ac-corrections : l'ancien recueil porte encore la frequence en Hz
             raise RepublishError(f'{stem}_{suffix} : le texte de la page du zip de `--helicopteres` differe de celui de la page correspondante '
                                  f'de l\'ancien recueil de {name}')
         out.append((suffix, data))
