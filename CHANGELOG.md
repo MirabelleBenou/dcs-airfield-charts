@@ -10,7 +10,7 @@ Each version is a GitHub release, tagged `AC-V<major>.<minor>.<patch>`. A new ve
 - **Minor** version (1.**x**.0): new charts, a new tool or document, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts or files.
 
-## Unreleased
+## AC-V1.12.0 — 26 November 2026
 
 **A website to find, view and download the charts.**
 
@@ -31,6 +31,11 @@ Each version is a GitHub release, tagged `AC-V<major>.<minor>.<patch>`. A new ve
 **Every release page explains the version numbers.**
 
 - The notes of a release end with the "Version numbers" paragraph of this changelog; the release workflow checks it.
+
+**Downloads.**
+
+- The Cold War Germany zips of AC-V1.11.0 are attached again, unchanged. The Syria zips are those of AC-V1.11.0 with the pages of Chukurova corrected; in `downloads/`, only the Chukurova PDF and the reading guide change.
+- The two LotAtc zips are built again for this version: only their `README.txt` changes.
 
 ## AC-V1.11.0 — 23 November 2026
 
