@@ -46,7 +46,7 @@ class Beacon:
     id: str
     type: str                  # 'ILS_LOCALIZER', 'VOR_DME', 'AIRPORT_HOMER' ...
     callsign: str
-    frequency: float           # Hz (NDB : Hz aussi, 395000.0)
+    frequency: float           # Hz (NDB : Hz aussi, 395000.0) ; une NDB lue a 2 MHz ou plus (mille fois trop haut dans le jeu) est divisee par 1000
     channel: int = None
     x: float = 0.0
     z: float = 0.0
@@ -54,6 +54,8 @@ class Beacon:
 
 
 _BLOCK = re.compile(r'beaconId\s*=\s*\'([^\']+)\'')
+NDB_TYPES = ('AIRPORT_HOMER', 'AIRPORT_HOMER_WITH_MARKER', 'HOMER')
+NDB_HZ_TROP_HAUT = 2_000_000       # une NDB lue a 2 MHz ou plus est mille fois trop haute dans beacons.lua (CKR : 320 000 000 Hz)
 
 
 def parse_beacons_lua(path):
@@ -73,8 +75,11 @@ def parse_beacons_lua(path):
         if typ is None or pos is None:
             continue
         ch = grab(r'channel\s*=\s*(\d+)', int)
+        freq = grab(r'frequency\s*=\s*([-\d.eE+]+)', float) or 0.0
+        if typ in NDB_TYPES and freq >= NDB_HZ_TROP_HAUT:
+            freq /= 1000
         out[m.group(1)] = Beacon(m.group(1), typ, grab(r"callsign\s*=\s*'([^']*)'") or '',
-                                 grab(r'frequency\s*=\s*([-\d.eE+]+)', float) or 0.0, ch,
+                                 freq, ch,
                                  float(pos.group(1)), float(pos.group(3)), grab(r'direction\s*=\s*([-\d.eE+]+)', float) or 0.0)
     return out
 

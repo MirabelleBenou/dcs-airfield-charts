@@ -17,7 +17,10 @@ import release  # noqa: E402
 REPO = 'owner/charts'
 TOKEN = 'ghs_TOPSECRETTOKEN0123456789'
 TITRE = 'AC-V1.7.0 — 16 November 2026'
-CHANGELOG = f'# Changelog\n\n## Unreleased\n\n## {TITRE.split(" ")[0]} — 16 November 2026\n\n- x\n'
+NUMEROS = ('Each version is a GitHub release, tagged `AC-V<major>.<minor>.<patch>`.\n\n- **Major** version: a redesign.\n- **Patch** version: corrections.')
+CHANGELOG = (f'# Changelog\n\nWhat changed.\n\n### Version numbers\n\n{NUMEROS}\n\n## Unreleased\n\n'
+             f'## {TITRE.split(" ")[0]} — 16 November 2026\n\n- x\n')
+NOTES = f'Release text\n\n## Version numbers\n\n{NUMEROS}\n'
 ZIP = b'PK\x03\x04 not really a zip but bytes'
 
 
@@ -94,7 +97,7 @@ class FakeApi:
         raise AssertionError(f'unexpected call {methode} {chemin}')
 
 
-def monte(tmp_path, *, branche='release/AC-V1.7.0', tag='AC-V1.7.0', changelog=CHANGELOG, notes='Release text\n',
+def monte(tmp_path, *, branche='release/AC-V1.7.0', tag='AC-V1.7.0', changelog=CHANGELOG, notes=NOTES,
           assets=None, manifeste=True, manifest_edit=None, main_avance=False, hors_release=False, extra_asset=None,
           essai=False):
     """Depot origin nu, un commit C sur main, la branche release, puis un clone `action` sur la tete de la branche."""
@@ -172,7 +175,7 @@ def test_publication_reussie(tmp_path):
         ('GET', f'{base}/git/ref/tags/AC-V1.7.0'),
     ]
     b = api.bodies[0]
-    assert b == {'tag_name': 'AC-V1.7.0', 'target_commitish': c, 'name': TITRE, 'body': 'Release text\n',
+    assert b == {'tag_name': 'AC-V1.7.0', 'target_commitish': c, 'name': TITRE, 'body': NOTES,
                  'draft': True, 'prerelease': False}
     r = api.releases[101]
     assert r['draft'] is False and api.tags['AC-V1.7.0'] == c
@@ -203,7 +206,7 @@ DEFAUTS = [
     ('1-nom-de-branche', {'branche': 'release/autre'}, '1'),
     ('2-fichier-hors-release', {'hors_release': True}, '2'),
     ('2-commit-pas-tete-de-main', {'main_avance': True}, '2'),
-    ('3-changelog-sans-titre', {'changelog': '# Changelog\n\n## Unreleased\n'}, '3'),
+    ('3-changelog-sans-titre', {'changelog': '# Changelog\n\n### Version numbers\n\nx\n\n## Unreleased\n'}, '3'),
     ('5-fichier-en-trop', {'extra_asset': 'DCS_Airfield_Charts_Extra.zip'}, '5'),
     ('5-nom-invalide', {'assets': {'mauvais nom.zip': ZIP}}, '5'),
     ('6-notes-vides', {'notes': '  \n'}, '6'),
@@ -278,7 +281,7 @@ def test_essai_reussi(tmp_path):
     assert api.writes == []
     check = sur_origin(origin, br, '.release/CHECK.md')
     lignes = check.strip().splitlines()
-    assert len(lignes) == 6 and all(' OK ' in l for l in lignes)
+    assert len(lignes) == 7 and all(' OK ' in l for l in lignes)
     assert 'head of main: no' in lignes[1]
     assert br in branches(origin)
     assert sur_origin(origin, br, '.release/FAILED.md') is None
@@ -465,7 +468,7 @@ def test_essai_avec_morceaux(tmp_path, monkeypatch):
     assert release.run(deps, br) == 0
     assert api.writes == []
     lignes = (deps.root / '.release' / 'CHECK.md').read_text(encoding='utf-8').strip().splitlines()
-    assert len(lignes) == 6 and all(' OK ' in l for l in lignes)
+    assert len(lignes) == 7 and all(' OK ' in l for l in lignes)
     assert '5. OK' in lignes[4] and 'joined from parts' in lignes[4]
     assert list(rt.iterdir()) == []
 
@@ -488,3 +491,45 @@ def test_joints_supprimes_apres_echec_au_televersement(tmp_path, monkeypatch):
     assert release.run(deps, br) == 1
     assert [m for m, _ in api.writes] == ['POST', 'POST', 'DELETE']
     assert list(rt.iterdir()) == [] and deps.joints == {}
+
+
+# ------------------------------------------------------------------ controle 7 : les numeros de version
+
+def _essai_7(tmp_path, **opts):
+    deps, api, origin, c, br = monte(tmp_path, branche='release/essai-un', **opts)
+    code = release.run(deps, br)
+    assert api.writes == []
+    return code, sur_origin(origin, br, '.release/CHECK.md').strip().splitlines(), origin, br
+
+
+def test_controle_7_paragraphe_juste_sur_le_vrai_changelog(tmp_path):
+    reel = (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
+    titre = TITRE.split(' ')[0]
+    bloc = reel.split('### Version numbers', 1)[1].split('## Unreleased', 1)[0].strip()
+    changelog = reel.replace('## Unreleased', f'## {titre} — 16 November 2026', 1)      # a la release, la section est renommee
+    for texte in (reel + f'\n## {titre} — 16 November 2026\n', changelog):
+        notes = f'Release text\n\n## Version numbers\n\n{bloc}\n'
+        code, lignes, _, _ = _essai_7(tmp_path / str(len(texte)), changelog=texte, notes=notes)
+        assert code == 0 and len(lignes) == 7
+        assert lignes[6] == '7. OK - "Version numbers" paragraph matches the CHANGELOG header'
+    code, lignes, _, _ = _essai_7(tmp_path / 'juste', notes=NOTES)
+    assert code == 0 and lignes[6].startswith('7. OK')
+
+
+def test_controle_7_paragraphe_absent(tmp_path):
+    code, lignes, origin, br = _essai_7(tmp_path, notes='Release text\n')
+    assert code == 1 and lignes[6] == '7. FAILED - notes.md has no "## Version numbers" paragraph'
+    assert all(' OK ' in l for l in lignes[:6])
+
+
+def test_controle_7_un_mot_change(tmp_path):
+    code, lignes, origin, br = _essai_7(tmp_path, notes=NOTES.replace('corrections', 'fixes'))
+    assert code == 1
+    assert lignes[6] == '7. FAILED - the "Version numbers" paragraph of notes.md differs from the CHANGELOG header'
+
+
+def test_controle_7_changelog_sans_bloc(tmp_path):
+    sans = CHANGELOG.replace(f'### Version numbers\n\n{NUMEROS}\n\n', '')
+    code, lignes, origin, br = _essai_7(tmp_path, changelog=sans)
+    assert code == 1
+    assert lignes[6] == '7. FAILED - CHANGELOG.md at the commit has no "### Version numbers" block before "## Unreleased"'

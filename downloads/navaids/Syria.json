@@ -86,7 +86,7 @@
 {"airdromeId":87,"name":"HI12","icao":null,"beacons":[]},
 {"airdromeId":88,"name":"Kedem","icao":null,"beacons":[]},
 {"airdromeId":89,"name":"HS02","icao":null,"beacons":[]},
-{"airdromeId":90,"name":"Chukurova","icao":"LTDB","beacons":[{"type":"ILS_LOCALIZER","callsign":"ICKR","frequency":333950000,"channel":null,"runway":null},{"type":"ILS_GLIDESLOPE","callsign":"ICKU","frequency":329750000,"channel":null,"runway":"21L"},{"type":"ILS_GLIDESLOPE","callsign":"ICKR","frequency":333950000,"channel":null,"runway":"03R"},{"type":"VOR_DME","callsign":"CKR","frequency":113700000,"channel":null,"runway":null},{"type":"HOMER","callsign":"CKR","frequency":320000000,"channel":null,"runway":null},{"type":"ILS_LOCALIZER","callsign":"ICKU","frequency":329750000,"channel":null,"runway":null}]},
+{"airdromeId":90,"name":"Chukurova","icao":"LTDB","beacons":[{"type":"ILS_LOCALIZER","callsign":"ICKR","frequency":333950000,"channel":null,"runway":null},{"type":"ILS_GLIDESLOPE","callsign":"ICKU","frequency":329750000,"channel":null,"runway":"21L"},{"type":"ILS_GLIDESLOPE","callsign":"ICKR","frequency":333950000,"channel":null,"runway":"03R"},{"type":"VOR_DME","callsign":"CKR","frequency":113700000,"channel":null,"runway":null},{"type":"HOMER","callsign":"CKR","frequency":320000,"channel":null,"runway":null},{"type":"ILS_LOCALIZER","callsign":"ICKU","frequency":329750000,"channel":null,"runway":null}]},
 {"airdromeId":91,"name":"Teyman","icao":"LLBS","beacons":[{"type":"VOR_DME","callsign":"BSA","frequency":114300000,"channel":null,"runway":null}]},
 {"airdromeId":92,"name":"HS05","icao":null,"beacons":[]},
 {"airdromeId":93,"name":"HS06","icao":null,"beacons":[]},

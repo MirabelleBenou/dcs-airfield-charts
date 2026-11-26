@@ -34,7 +34,10 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
      si `manquantes` > 0, l'option est obligatoire : son zip est la SORTIE de cet outil sur le zip *helicopters* de la meme release, et
      ses pages `<stem>_11-<n>H` (PDF `.../pdf/<stem>_11-<n>H.pdf`) completent le recueil, a la fin, dans l'ordre naturel : leur nombre
      egale `manquantes`, leur SVG a le pied de la forme neuve, leur texte egale celui des dernieres pages de l'ancien recueil.
-Chaque page 10-9*, et chaque page 10-8 ou 11-x dont le pied a ete retouche, est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
+  10. la frequence d'une NDB (lot ac-corrections), APRES les retouches 0 a 4 puis 8 : sur chaque page SVG 10-8, 10-9* et 11-x (11-xH comprises),
+     dans chaque element texte, un morceau (decoupe sur l'espace simple) fait uniquement de chiffres ASCII, de valeur >= 100 000 et multiple de
+     1000, est remplace par sa valeur divisee par 1000 (`CKR 320000` -> `CKR 320`) : voir `retouch_ndb_freq`. Rien d'autre du SVG ne change.
+Chaque page 10-9*, et chaque page 10-8 ou 11-x dont le pied ou la frequence d'une NDB a ete retouche, est ensuite reexportee (SVG, PDF, PNG ; une page avec `<image>` : PNG a 256 couleurs, /Interpolate dans le PDF) et le
 recueil `pdf/<stem>_charts.pdf` de chaque chart est refait. Sortie : un nouveau zip, memes entrees dans le meme ordre ; les
 entrees hors charts sont recopiees a l'octet, sauf, pour 5, les JPEG des pages touchees et le PDF du repertoire (un zip sans page de
 chart ni repertoire des heliports aux noms ci-dessus est recopie tel quel). Un fichier de sortie qui existe
@@ -971,6 +974,33 @@ def retouch_footer(svg_text, name):
             'retouchee')
 
 
+# ---------- 9. la frequence d'une NDB (lot ac-corrections) ----------
+NDB_KHZ_TROP_HAUT = 100_000        # une frequence de NDB affichee en kHz ne depasse pas 1 800 ; 100 000 et plus vient d'une frequence de
+                                   # `beacons.lua` en Hz mille fois trop haute (lue avant le 2.1 du lot ac-corrections)
+_TEXT_ELEMENT = re.compile(r'(<text\b[^>]*>)([^<]*)(</text>)')
+_DIGITS = re.compile(r'[0-9]+')
+
+
+def retouch_ndb_freq(svg_text):
+    """(nouveau SVG, n) : `n` textes dont un morceau (decoupe sur ' ') est une frequence de NDB mille fois trop haute, divisee par 1000."""
+    count = 0
+
+    def fix(m):
+        nonlocal count
+        parts = m[2].split(' ')
+        out = []
+        for part in parts:
+            if _DIGITS.fullmatch(part) and int(part) >= NDB_KHZ_TROP_HAUT and int(part) % 1000 == 0:
+                part = str(int(part) // 1000)
+            out.append(part)
+        new = ' '.join(out)
+        if new == m[2]:
+            return m[0]
+        count += 1
+        return m[1] + new + m[3]
+    return _TEXT_ELEMENT.sub(fix, svg_text), count
+
+
 # ---------- une page ----------
 def retouch_page(svg_text, name, suffix, index):
     """(nouveau SVG, details) : toutes les retouches ; details = {fields, header, bar, image, xlink, moves, unplaced, north, foot}."""
@@ -989,8 +1019,9 @@ def retouch_page(svg_text, name, suffix, index):
     has_image = '<image' in svg
     svg, n_xlink = add_xlink_href(svg, name)
     svg, foot = retouch_footer(svg, name)                    # lot ac-marque-pied : apres les retouches 0 a 4
+    svg, n_ndb = retouch_ndb_freq(svg)                       # lot ac-corrections : apres le pied
     return svg, {'fields': fields, 'header': header, 'bar': bar, 'image': has_image, 'xlink': n_xlink, 'moves': moves, 'unplaced': unplaced,
-                'north': north, 'foot': foot}
+                'north': north, 'foot': foot, 'ndb': n_ndb}
 
 
 @dataclass
@@ -1014,6 +1045,7 @@ class Result:
     added: dict = field(default_factory=dict)        # {stem: [pages 11-x ajoutees]} (`--ajouter`)
     ignored: list = field(default_factory=list)      # noms des fichiers du dossier `--ajouter` qui ne sont pas des pages 11-x
     completed: list = field(default_factory=list)    # [(stem, pages)] : recueils completes des pages 11-xH de `--helicopteres`
+    ndb: dict = field(default_factory=dict)          # {page: n textes} : frequences de NDB retouchees (retouche 9)
 
 
 def find_added_pages(folder, ignored=None):
@@ -1105,10 +1137,13 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None, heli_zip=None):
         new = {}                                   # nom d'entree -> fichier temporaire
         for k, (name, files) in enumerate(added.items()):       # pages ajoutees : meme regle du pied que les pages 11-x du zip
             svg_new, foot = retouch_footer(files['svg'].read_text(encoding='utf-8'), name)
-            if foot == 'deja':
+            svg_new, n_ndb = retouch_ndb_freq(svg_new)
+            if n_ndb:
+                res.ndb[name] = n_ndb
+            if foot == 'deja' and not n_ndb:
                 res.foot_kept.append(name)
                 continue
-            res.foot.append(name)
+            (res.foot if foot == 'retouchee' else res.foot_kept).append(name)
             svg_p, pdf_p, png_p = export.export_page(svg_new, tmp / f'add{k}' / 'page')
             if svg_p.read_bytes() != svg_new.encode('utf-8'):
                 raise RepublishError(f'{name} : le SVG ecrit differe du SVG calcule')
@@ -1127,10 +1162,13 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None, heli_zip=None):
                         raise RepublishError(f'{name} : entree {d}{sub}/{name}.{ext} absente du zip')
                 (res.vicinity if _VICINITY.match(suffix) else res.approach).append(name)
                 svg_new, foot = retouch_footer(svg_old, name)
-                if foot == 'deja':                               # forme neuve : recopiee a l'octet
+                svg_new, n_ndb = retouch_ndb_freq(svg_new)
+                if n_ndb:
+                    res.ndb[name] = n_ndb
+                if foot == 'deja' and not n_ndb:                 # forme neuve, sans frequence de NDB a corriger : recopiee a l'octet
                     res.foot_kept.append(name)
                     continue
-                res.foot.append(name)
+                (res.foot if foot == 'retouchee' else res.foot_kept).append(name)
                 svg_p, pdf_p, png_p = export.export_page(svg_new, tmp / f'p{n}' / 'page')
                 if svg_p.read_bytes() != svg_new.encode('utf-8'):
                     raise RepublishError(f'{name} : le SVG ecrit differe du SVG calcule')
@@ -1147,6 +1185,8 @@ def republish_zip(theatre, zip_in, zip_out, add_dir=None, heli_zip=None):
                 raise RepublishError(f'{name} : le SVG ecrit differe du SVG calcule')
             new[f'{d}svg/{name}.svg'], new[f'{d}pdf/{name}.pdf'], new[f'{d}png/{name}.png'] = svg_p, pdf_p, png_p
             (res.foot if det['foot'] == 'retouchee' else res.foot_kept).append(name)
+            if det['ndb']:
+                res.ndb[name] = det['ndb']
             res.lines[name] = det['fields']
             if det['header'] == 'reecrit':
                 res.rewritten += 1
@@ -1326,6 +1366,7 @@ def main(argv):
         print(f"repertoire des heliports, pictogramme au pied : {len(dr.foot)} pages retouchees ; {len(dr.foot_kept)} deja porteuses")
     else:
         print('repertoire des heliports : aucun dans ce zip')
+    print(f'frequences NDB (retouche 9) : {sum(res.ndb.values())} textes retouches sur {len(res.ndb)} pages')
     print(f'entrees recopiees telles quelles : {res.copied}')
     if not res.pages and not res.approach and not res.vicinity:
         print('aucune page de chart dans ce zip : toutes les entrees sont recopiees telles quelles')

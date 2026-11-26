@@ -320,8 +320,41 @@ def _controle_notes(deps):
     return 'notes.md is not empty'
 
 
+def _bloc_numeros(texte):
+    """Le bloc qui suit la ligne `### Version numbers` du CHANGELOG, jusqu'a la ligne de titre `## ...` suivante exclue (`## Unreleased`,
+    ou le titre de la version une fois la section renommee), `strip()` ; None s'il n'y a pas de telle ligne avant ce titre, ou si le bloc est vide."""
+    lignes = texte.splitlines()
+    try:
+        debut = lignes.index('### Version numbers')
+    except ValueError:
+        return None
+    bloc = []
+    for l in lignes[debut + 1:]:
+        if l.startswith('## '):
+            break
+        bloc.append(l)
+    else:
+        return None
+    return '\n'.join(bloc).strip() or None
+
+
+def _controle_numeros(deps, m):
+    p = deps.git.run('show', f'{m["commit"]}:CHANGELOG.md', check=False)
+    source = _bloc_numeros(p.stdout) if p.returncode == 0 else None
+    if source is None:
+        raise Echec('7', 'CHANGELOG.md at the commit has no "### Version numbers" block before "## Unreleased"')
+    f = deps.root / RELEASE_DIR / 'notes.md'
+    lignes = f.read_text(encoding='utf-8').splitlines()
+    debut = max((i for i, l in enumerate(lignes) if l == '## Version numbers'), default=None)
+    if debut is None:
+        raise Echec('7', 'notes.md has no "## Version numbers" paragraph')
+    if '\n'.join(lignes[debut + 1:]).strip() != source:
+        raise Echec('7', 'the "Version numbers" paragraph of notes.md differs from the CHANGELOG header')
+    return '"Version numbers" paragraph matches the CHANGELOG header'
+
+
 def controles(deps, branche, brut, lignes):
-    """Les six controles dans l'ordre ; ajoute une ligne par controle execute a `lignes` ; leve Echec au premier defaut.
+    """Les sept controles dans l'ordre ; ajoute une ligne par controle execute a `lignes` ; leve Echec au premier defaut.
     Renvoie (manifeste, essai)."""
     def ligne(n, etat, msg):
         lignes.append(f'{n}. {etat} - {msg}')
@@ -335,6 +368,7 @@ def controles(deps, branche, brut, lignes):
         ligne(4, 'OK', _controle_tag(deps, m))
         ligne(5, 'OK', _controle_assets(deps, m))
         ligne(6, 'OK', _controle_notes(deps))
+        ligne(7, 'OK', _controle_numeros(deps, m))
     except Echec as e:
         ligne(e.quoi, 'FAILED', deps.scrub(e.message))
         raise
