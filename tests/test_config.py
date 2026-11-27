@@ -119,6 +119,26 @@ class ConfigTest(unittest.TestCase):
                 self.write('defaut.json', screen=bad)
                 self.assertIn('screen', self.fail())
 
+    def test_attente_vue_defaut(self):
+        self.write('defaut.json')
+        self.assertEqual(self.load()[0].attente_vue_s, 3.0)
+
+    def test_attente_vue_acceptee(self):
+        for good, expected in ((0.5, 0.5), (30, 30.0), (1.5, 1.5), (3, 3.0)):
+            with self.subTest(attente_vue_s=good):
+                self.write('defaut.json', attente_vue_s=good)
+                cfg = self.load()[0]
+                self.assertEqual(cfg.attente_vue_s, expected)
+                self.assertIsInstance(cfg.attente_vue_s, float)
+
+    def test_attente_vue_refusee(self):
+        for bad in (0, -1, 31, '3', True, float('nan'), float('inf'), [3]):
+            with self.subTest(attente_vue_s=bad):
+                self.write('defaut.json', attente_vue_s=bad)
+                msg = self.fail()
+                self.assertIn('attente_vue_s', msg)
+                self.assertIn('30', msg)
+
     def test_tilde_developpe(self):
         self.write('defaut.json', work_dir='~/dcs_charts_test_inexistant', dcs_install=str(self.dcs))
         home = self.tmp / 'home'

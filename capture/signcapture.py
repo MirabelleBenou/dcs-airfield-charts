@@ -50,7 +50,7 @@ AIM_HEIGHT_M = 1.5
 DEDUP_DIST_M = 15.0
 DEDUP_HEADING_DEG = 20.0
 NEAR_NODE_M = 130.0           # vue "piste" comptee pour une bretelle si son point vise est a moins de 130 m d'un de ses noeuds
-SECONDS_PER_VIEW = 4.5
+SECONDS_PER_VIEW = 4.0
 MIN_RN5_BYTES = 5000
 
 PASS_PREFIXES = ('taxiway_l', 'taxiway_l_mirror', 'auto__', 'taxi_point_holding_position')
@@ -62,8 +62,8 @@ SENS_INTERSECTION = 'vers l\'intersection (40 m)'
 
 # ---------- constantes de la prise de vues ----------
 WAIT_S = 3.0                  # attente apres la pose de la vue
-PAIR_GAP_S = 0.5              # delai entre les deux captures
-STABLE_TIMEOUT_S = 10.0       # au plus, apres l'attente, pour obtenir une vue stable
+PAIR_GAP_S = 0.5              # delai entre deux essais quand DCS n'est pas au premier plan
+STABLE_TIMEOUT_S = 10.0       # au plus, apres l'attente, pour que DCS soit au premier plan
 KEEPALIVE_S = 2.0             # jamais plus de 2 s entre deux requetes (le crochet relache apres 5 s)
 KEEP_DUE_S = 1.0              # la requete de tenue est renvoyee des qu'une seconde s'est ecoulee
 FIRST_TRIES_ECHEC = 3         # trois premieres vues tentees d'une base toutes en echec : arret
@@ -641,9 +641,12 @@ class _Hold:
             self.keep()
 
 
-def take_view(env, v):
-    """Prend une vue. Retourne (statut, image, position, erreur) ; statut `faite`, `instable` ou `echec` (image et position
-    None, erreur = reponse du crochet). Un crochet qui ne connait pas `cam` : CaptureStop."""
+def take_view(env, v, attente=WAIT_S):
+    """Prend une vue : attend `attente` secondes apres la pose de la camera, puis prend une image. Retourne
+    (statut, image, position, erreur) ; statut `faite` (DCS au premier plan), `instable` (DCS n'a pas pu etre mis devant
+    en STABLE_TIMEOUT_S : derniere image) ou `echec` (image et position None, erreur = reponse du crochet). Un crochet
+    qui ne connait pas `cam` : CaptureStop. Aucune comparaison de pixels : en vue libre, l'herbe, les arbres et les
+    nuages bougent toujours."""
     hold = _Hold(env, cam_line(v))
     reply = hold.send()
     if reply[:2] == ['err', 'unknown_command']:
@@ -653,20 +656,18 @@ def take_view(env, v):
     pos = [float(reply[1]), float(reply[2]), float(reply[3])]
     hold.keep()
     env.ensure_front(f'vue {v["numero"]}')
-    hold.wait(WAIT_S)
+    hold.wait(attente)
     t0 = env.now()
     while True:
         hold.keep()
         env.ensure_front(f'vue {v["numero"]}')
         hold.keep()
-        a = env.grab()
-        hold.wait(PAIR_GAP_S)
-        hold.keep()
-        b = env.grab()
-        if env.diff_frac(a, b) < env.stab_frac and env.in_front():
-            return 'faite', b, pos, None
+        img = env.grab()
+        if env.in_front():
+            return 'faite', img, pos, None
         if env.now() - t0 >= STABLE_TIMEOUT_S:
-            return 'instable', b, pos, None
+            return 'instable', img, pos, None
+        hold.wait(PAIR_GAP_S)
 
 
 def _load_index(path):
@@ -720,9 +721,10 @@ def capture_base(cfg, env, theatre, base, log=print):
             if e and e['statut'] == 'faite' and (out / e['img']).is_file() and (out / e['vignette']).is_file():
                 log(f'{base} {n}/{len(views)} deja faite')
                 continue
-            statut, img, pos, erreur = take_view(env, v)
+            statut, img, pos, erreur = take_view(env, v, cfg.attente_vue_s)
             entry = {'numero': n, 'statut': statut, 'img': None, 'vignette': None,
-                     'heure': datetime.now().isoformat(timespec='seconds'), 'position': pos, 'erreur': erreur}
+                     'heure': datetime.now().isoformat(timespec='seconds'), 'position': pos, 'erreur': erreur,
+                     'attente_s': float(cfg.attente_vue_s)}
             if img is not None:
                 entry['img'], entry['vignette'] = f'img/{name}', f'vignettes/{name}'
                 env.save_png(img, out / 'img' / name)

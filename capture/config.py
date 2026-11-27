@@ -9,10 +9,13 @@ Ordre de recherche du fichier JSON :
   3. config.json dans le dossier de ce fichier (capture/config.json)
 
 Cles : work_dir (obligatoire), dcs_install (obligatoire), screen (facultatif : [largeur, hauteur]),
-annee (facultatif : annee de la declinaison magnetique du rendu, defaut 1985), osm_dir (facultatif : defaut <work_dir>/osm).
+annee (facultatif : annee de la declinaison magnetique du rendu, defaut 1985), osm_dir (facultatif : defaut <work_dir>/osm),
+attente_vue_s (facultatif : prise des vues de panneaux, secondes d'attente apres la pose de la camera, defaut 3.0,
+0 < x <= 30).
 Modele : config.example.json.
 """
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -32,6 +35,7 @@ class Config(NamedTuple):
     source: Path                            # fichier de configuration lu
     annee: float = 1985.0                   # rendu : annee de la declinaison magnetique (decimale acceptee)
     osm_dir: Optional[Path] = None          # rendu : noms de taxiways OSM (defaut : work_dir / 'osm')
+    attente_vue_s: float = 3.0              # capture des panneaux : attente avant chaque vue (0 < x <= 30)
 
 
 def _fail(message):
@@ -116,6 +120,13 @@ def load_config(argv, environ=None, default_path=None):
         if not isinstance(data['osm_dir'], str) or not data['osm_dir'].strip():
             _fail(f'Fichier de configuration {src} : "osm_dir" doit etre un chemin.\n{hint}')
         osm_dir = _path(data['osm_dir'])
+    attente_vue_s = 3.0
+    if data.get('attente_vue_s') is not None:
+        w = data['attente_vue_s']
+        if (isinstance(w, bool) or not isinstance(w, (int, float)) or not math.isfinite(w) or not 0 < w <= 30):
+            _fail(f'Fichier de configuration {src} : "attente_vue_s" doit etre un nombre de secondes, '
+                  f'plus grand que 0 et au plus 30 (par exemple 3 ou 2.5).\n{hint}')
+        attente_vue_s = float(w)
 
     terrains = dcs_install / 'Mods' / 'terrains'
     if not terrains.is_dir():
@@ -125,4 +136,5 @@ def load_config(argv, environ=None, default_path=None):
         work_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         _fail(f'Fichier de configuration {src} : "work_dir" inutilisable : {work_dir} ({e})\n{hint}')
-    return Config(work_dir, dcs_install, terrains, screen, src, annee, osm_dir or work_dir / 'osm'), rest
+    return Config(work_dir, dcs_install, terrains, screen, src, annee, osm_dir or work_dir / 'osm',
+                  attente_vue_s), rest

@@ -16,6 +16,10 @@ Each version is a GitHub release, tagged `AC-V<major>.<minor>.<patch>`. A new ve
 
 - The PDFs no longer record the time they were written: a chart made again from the same data gives the same file, so a new release changes only the charts that really change. Nothing visible changes.
 
+**Taxiway signs: each view is taken after a fixed wait.**
+
+- `capture/signcapture.py capture`: a view is now taken once, after a fixed wait (3 s by default, `attente_vue_s` in `config.json`), instead of waiting for two identical screenshots: grass, trees and clouds move all the time in the free-camera view, so no view was ever found stable and each one took about 14 s. A view now takes about 4 s. `index.json` records the wait used (`attente_s`); `instable` now only means that DCS could not be brought to the foreground.
+
 ## AC-V1.12.0 — 26 November 2026
 
 **A website to find, view and download the charts.**

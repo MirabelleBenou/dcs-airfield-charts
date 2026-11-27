@@ -363,7 +363,7 @@ def test_visee_outputs_and_reproducible(samples, tmp_path):
     assert doc['entrees_non_typees'] == [208]
     assert all(b['vues_piste'] >= 2 for b in doc['bretelles'])
     summ = json.loads((out / 'visee.json').read_bytes())['bases']['Mahlwinkel']
-    assert summ['vues'] == 42 and summ['duree_estimee_s'] == 189.0 and summ['bretelles_laterales_sous_deux_vues'] == 0
+    assert summ['vues'] == 42 and summ['duree_estimee_s'] == 168.0 and summ['bretelles_laterales_sous_deux_vues'] == 0
     assert summ['entrees_non_typees'] == [208] and summ['entrees_non_typees_sans_vue_ids'] == []
     sc.cmd_visee(cfg, 'GermanyColdWar', ['Mahlwinkel'], log=lambda *a: None)
     assert (out / 'Mahlwinkel' / 'vues.json').read_bytes() == first
@@ -536,21 +536,85 @@ def test_capture_files_full_screen_and_central_band(capture_setup):
     assert Image.open(base_dir / 'vignettes' / '003.png').size == (200 - 2 * 20, 100 - 2 * 30)    # 10 % et 30 % retires
 
 
-def test_capture_unstable_view_after_10_s_and_move_on(capture_setup):
+def _cfg_wait(tmp_path, dcs, **over):
+    p = tmp_path / 'config_attente.json'
+    data = {'work_dir': str(tmp_path / 'work'), 'dcs_install': str(dcs)}
+    data.update(over)
+    p.write_text(json.dumps(data), encoding='utf-8')
+    return config.load_config(['x', '--config', str(p)])[0]
+
+
+def test_capture_moving_scene_is_faite_with_one_grab_per_view(capture_setup):
     cfg, base_dir = capture_setup
     server, clock, log = FakeHook(), Clock(), []
     lines = []
     try:
-        env = _make_env(server, clock, unstable_x={1002.0}, log=log)
+        # scene qui bouge toujours : chaque capture differe de la precedente
+        env = _make_env(server, clock, unstable_x={1001.0 + k for k in range(6)}, log=log)
         sc.capture_base(cfg, env, 'Syria', 'Test_Base', log=lines.append)
     finally:
         server.close()
     idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
-    assert [e['statut'] for e in idx['vues']] == ['faite', 'instable', 'faite', 'faite', 'faite', 'faite']
-    assert lines[1] == 'Test_Base 2/6 instable' and lines[0] == 'Test_Base 1/6 faite'
+    assert [e['statut'] for e in idx['vues']] == ['faite'] * 6
+    assert lines[:2] == ['Test_Base 1/6 faite', 'Test_Base 2/6 faite']
+    for n in range(1, 6):
+        t_a = [t for t, l in log if l.startswith(f'cam {1000 + n}.000')][0]
+        t_b = [t for t, l in log if l.startswith(f'cam {1001 + n}.000')][0]
+        assert abs((t_b - t_a) - 3.0) <= 0.6, n                  # l'attente par defaut
+        i_a = next(i for i, (_, l) in enumerate(log) if l.startswith(f'cam {1000 + n}.000'))
+        i_b = next(i for i, (_, l) in enumerate(log) if l.startswith(f'cam {1001 + n}.000'))
+        assert [l for _, l in log[i_a:i_b]].count('GRAB') == 1, n                    # une seule capture par vue
+
+
+def test_capture_wait_comes_from_the_configuration_and_is_in_the_index(tmp_path):
+    dcs = tmp_path / 'dcs'
+    (dcs / 'Mods' / 'terrains').mkdir(parents=True)
+    cfg = _cfg_wait(tmp_path, dcs, attente_vue_s=1.5)
+    base_dir = cfg.work_dir / 'panneaux' / 'Syria' / 'Test_Base'
+    base_dir.mkdir(parents=True)
+    (base_dir / 'vues.json').write_text(json.dumps({'base': 'Test_Base', 'vues': _views(3)}), encoding='utf-8')
+    server, clock, log = FakeHook(no_altitude_x={1003.0}), Clock(), []
+    try:
+        sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lambda *a: None)
+    finally:
+        server.close()
+    t1 = [t for t, l in log if l.startswith('cam 1001.000')][0]
     t2 = [t for t, l in log if l.startswith('cam 1002.000')][0]
-    t3 = [t for t, l in log if l.startswith('cam 1003.000')][0]
-    assert 12.9 <= t3 - t2 <= 13.6                          # 3 s d'attente puis 10 s au plus
+    assert abs((t2 - t1) - 1.5) <= 0.6
+    idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
+    assert [e['statut'] for e in idx['vues']] == ['faite', 'faite', 'echec']
+    assert all(e['attente_s'] == 1.5 for e in idx['vues'])      # l'echec aussi porte la valeur
+
+
+def test_capture_wait_defaults_to_3_s_in_the_index(capture_setup):
+    cfg, base_dir = capture_setup
+    assert cfg.attente_vue_s == 3.0
+    server, clock, log = FakeHook(), Clock(), []
+    try:
+        sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lambda *a: None)
+    finally:
+        server.close()
+    idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
+    assert all(e['attente_s'] == 3.0 and isinstance(e['attente_s'], float) for e in idx['vues'])
+
+
+def test_capture_resume_keeps_existing_entries_untouched(capture_setup):
+    cfg, base_dir = capture_setup
+    server, clock, log = FakeHook(), Clock(), []
+    try:
+        env = _make_env(server, clock, crash_x=1004.0, log=log)
+        with pytest.raises(KeyboardInterrupt):
+            sc.capture_base(cfg, env, 'Syria', 'Test_Base', log=lambda *a: None)
+        path = base_dir / 'index.json'
+        idx = json.loads(path.read_text(encoding='utf-8'))
+        for e in idx['vues']:
+            del e['attente_s']                                  # entrees d'une version anterieure
+        path.write_text(json.dumps(idx), encoding='utf-8')
+        sc.capture_base(cfg, _make_env(server, clock, log=log), 'Syria', 'Test_Base', log=lambda *a: None)
+    finally:
+        server.close()
+    idx = json.loads(path.read_text(encoding='utf-8'))
+    assert ['attente_s' in e for e in idx['vues']] == [False] * 3 + [True] * 3
 
 
 def test_capture_no_altitude_is_an_echec_and_continues(capture_setup):
@@ -753,16 +817,25 @@ def test_capture_hold_is_renewed_before_every_foreground_and_screen_grab(capture
             assert t - prev <= 1.2 + 1e-9, (l, t - prev)       # au plus la duree de l'operation precedente
 
 
-def test_capture_pair_is_redone_when_dcs_left_the_foreground(capture_setup):
+def test_capture_view_is_retaken_when_dcs_is_not_in_front_and_keeps_that_image(capture_setup):
+    from PIL import Image
     cfg, base_dir = capture_setup
     server, clock, log = FakeHook(), Clock(), []
     calls = {'n': 0}
 
     def in_front():
         calls['n'] += 1
-        return calls['n'] > 1                                   # la premiere paire : DCS n'est plus devant
+        return calls['n'] > 1                                   # premiere tentative : DCS n'est pas devant
     try:
         env = _make_env(server, clock, log=log, in_front=in_front)
+        shots = []
+        real_grab = env.grab
+
+        def grab():
+            real_grab()
+            shots.append(np.full((10, 20, 3), 10 * (len(shots) + 1), dtype=np.uint8))
+            return shots[-1]
+        env.grab = grab
         sc.capture_base(cfg, env, 'Syria', 'Test_Base', log=lambda *a: None)
     finally:
         server.close()
@@ -772,7 +845,9 @@ def test_capture_pair_is_redone_when_dcs_left_the_foreground(capture_setup):
             break
         if l == 'GRAB':
             n_grab_view1 += 1
-    assert n_grab_view1 == 4                                    # deux paires pour la vue 1, une pour les autres
+    assert n_grab_view1 == 2                                    # deux tentatives pour la vue 1, une pour les autres
+    assert len(shots) == 7
+    assert np.array(Image.open(base_dir / 'img' / '001.png'))[0, 0, 0] == 20      # l'image de la deuxieme tentative
     idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
     assert [e['statut'] for e in idx['vues']] == ['faite'] * 6
 
@@ -787,9 +862,10 @@ def test_capture_never_in_front_is_unstable_after_10_s(capture_setup):
         server.close()
     idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
     assert [e['statut'] for e in idx['vues']] == ['instable'] * 6
-    t2 = [t for t, l in log if l.startswith('cam 1002.000')][0]
-    t1 = [t for t, l in log if l.startswith('cam 1001.000')][0]
-    assert 12.9 <= t2 - t1 <= 13.6                              # 3 s puis 10 s au plus
+    for n in range(1, 6):
+        t_a = [t for t, l in log if l.startswith(f'cam {1000 + n}.000')][0]
+        t_b = [t for t, l in log if l.startswith(f'cam {1001 + n}.000')][0]
+        assert 3.0 + 9.9 <= t_b - t_a <= 3.0 + 10.6, n          # l'attente puis 10 s au plus
 
 
 # ---------- le crochet : commande `cam` (P6) ----------

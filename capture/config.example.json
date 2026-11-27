@@ -3,5 +3,6 @@
   "dcs_install": "C:/Program Files/Eagle Dynamics/DCS World",
   "screen": [1920, 1080],
   "annee": 1985,
-  "osm_dir": "~/DCS_Airfield_Charts/osm"
+  "osm_dir": "~/DCS_Airfield_Charts/osm",
+  "attente_vue_s": 3.0
 }
