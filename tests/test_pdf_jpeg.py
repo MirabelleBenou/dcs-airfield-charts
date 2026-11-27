@@ -60,15 +60,12 @@ def test_at_tanf_pdf_image_is_jpeg(work, tmp_path):
     assert out.stat().st_size <= 1_000_000
 
 
-def test_der_salman_pdf_without_image_is_not_rewritten(work, tmp_path, monkeypatch):
+def test_der_salman_pdf_without_image_gets_no_jpeg_step(work, tmp_path, monkeypatch):
     svg = _page(work, 'Der_Salman')
     assert '<image' not in svg
     calls = []
     monkeypatch.setattr(export, 'jpeg_images_in_pdf', lambda *a, **k: calls.append(a))
-
-    def no_pypdf(*a, **k):
-        raise AssertionError('pypdf ne doit pas rouvrir un PDF sans image')
-    monkeypatch.setattr('pypdf.PdfWriter', no_pypdf)
+    # la page est reecrite sans sa date, pas par le pas JPEG
     _, pdf, _ = export.export_page(svg, tmp_path / 'Der_Salman_10-9')
     assert calls == []                                           # le pas n'est pas execute
     assert _images(pdf) == []
