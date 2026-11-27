@@ -818,6 +818,10 @@ def rewrite_directory_pdf(pdf_bytes, new_jpegs, n_jpegs, name, out_path):
             raise RepublishError(f'{name} page {k} : image {img.get("/Filter")} {img.get("/Width")} x {img.get("/Height")}, '
                                  f'attendu DCTDecode {w} x {h}')
         img._data = data
+    info = writer._info.get_object() if writer._info is not None else None
+    for key in ('/CreationDate', '/ModDate'):               # le PDF du repertoire ecrit sans date : deux passes identiques
+        if info is not None and key in info:
+            del info[key]
     with open(out_path, 'xb') as fh:
         writer.write(fh)
     check = PdfReader(str(out_path))

@@ -10,6 +10,12 @@ Each version is a GitHub release, tagged `AC-V<major>.<minor>.<patch>`. A new ve
 - **Minor** version (1.**x**.0): new charts, a new tool or document, or a visible change to every chart.
 - **Patch** version (1.2.**x**): corrections to some charts or files.
 
+## Unreleased
+
+**Charts rebuilt from the same data are identical, byte for byte.**
+
+- The PDFs no longer record the time they were written: a chart made again from the same data gives the same file, so a new release changes only the charts that really change. Nothing visible changes.
+
 ## AC-V1.12.0 — 26 November 2026
 
 **A website to find, view and download the charts.**

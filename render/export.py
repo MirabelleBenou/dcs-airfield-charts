@@ -36,6 +36,7 @@ def export_page(svg_text, base_path):
     cairosvg.svg2pdf(bytestring=data, write_to=str(pdf_path))
     if '<image' in svg_text:
         jpeg_images_in_pdf(pdf_path)
+    strip_pdf_dates(pdf_path)
     png_path = base_path.with_suffix('.png')
     cairosvg.svg2png(bytestring=data, write_to=str(png_path), output_width=PNG_SIZE[0], output_height=PNG_SIZE[1])
     if '<image' in svg_text:
@@ -67,6 +68,20 @@ def jpeg_images_in_pdf(pdf_path, quality=JPEG_QUALITY):
             image.indirect_reference.get_object()[NameObject('/Interpolate')] = BooleanObject(True)
     with open(pdf_path, 'wb') as fh:
         writer.write(fh)
+
+
+def strip_pdf_dates(path):
+    """Retire /CreationDate et /ModDate du dictionnaire Info du PDF (deux passes identiques a l'octet) ; reecrit au meme chemin."""
+    from pypdf import PdfWriter
+    from pypdf.generic import NameObject
+    w = PdfWriter(clone_from=str(path))
+    info = w._info.get_object() if w._info is not None else None
+    if info is not None:
+        for k in ('/CreationDate', '/ModDate'):
+            if NameObject(k) in info:
+                del info[NameObject(k)]
+    with open(path, 'wb') as fh:
+        w.write(fh)
 
 
 def merge_pdfs(paths, out):

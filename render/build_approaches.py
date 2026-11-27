@@ -625,20 +625,6 @@ def text_overlaps(svg):
     return out
 
 
-def strip_pdf_dates(path):
-    """Retire /CreationDate et /ModDate du dictionnaire Info du PDF (deux passes identiques a l'octet) ; reecrit au meme chemin."""
-    from pypdf import PdfWriter
-    from pypdf.generic import NameObject
-    w = PdfWriter(clone_from=str(path))
-    info = w._info.get_object() if w._info is not None else None
-    if info is not None:
-        for k in ('/CreationDate', '/ModDate'):
-            if NameObject(k) in info:
-                del info[NameObject(k)]
-    with open(path, 'wb') as fh:
-        w.write(fh)
-
-
 def render_pages(pl, alt, x0, z0, year, work, log=print):
     """Dessine et exporte toutes les pages dans `work` : {(stem, index): (svg, pdf, png, info)}."""
     out = {}
@@ -661,7 +647,6 @@ def render_pages(pl, alt, x0, z0, year, work, log=print):
                     log(f'chevauchement : {t.stem}_{idx} « {a} » / « {b} »')
                 base = Path(work) / f'{t.stem}_{idx}'
                 svg_p, pdf_p, png_p = export.export_page(po.svg, base)
-                strip_pdf_dates(pdf_p)
                 out[(t.stem, idx)] = (svg_p, pdf_p, png_p, po.info)
     return out
 
