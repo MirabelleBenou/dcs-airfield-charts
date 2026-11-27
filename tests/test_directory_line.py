@@ -160,15 +160,15 @@ def old_foot(im, no):
     """Le pied d'une page publiee avant le lot ac-marque-pied : le texte de gauche a MARGIN_X, pas de pictogramme."""
     im = im.copy()
     d = ImageDraw.Draw(im)
-    left = directory.FOOT_INDEX if no <= N_INDEX else directory.FOOT_LEFT
+    left = republish.FOOT_INDEX_PUBLIE if no <= N_INDEX else republish.FOOT_LEFT_PUBLIE         # le texte publie
     directory.draw_text(d, (directory.MARGIN_X, 2379), left, 'medium', 29, directory.GREY, 'ls')
     directory.draw_text(d, (directory.PAGE_PX[0] - directory.MARGIN_X + 1, 2379), 'NOT FOR REAL-WORLD NAVIGATION', 'bold', 29, directory.INK, 'rs')
     return im
 
 
 def new_foot(im, no):
-    """Le pied d'une page qui porte deja le pictogramme."""
-    return republish.redraw_directory_foot(im, directory.FOOT_INDEX if no <= N_INDEX else directory.FOOT_LEFT)
+    """Le pied d'une page publiee qui porte deja le pictogramme (le texte publie)."""
+    return republish.redraw_directory_foot(im, republish.FOOT_INDEX_PUBLIE if no <= N_INDEX else republish.FOOT_LEFT_PUBLIE)
 
 
 def make_zip(path, pages, n=47, skip_jpeg=None, extra=(), foot=old_foot):
@@ -447,12 +447,26 @@ def test_republish_picks_the_index_text_for_pages_1_to_3_and_the_plan_text_after
     root, _, out, _, _, _ = synth
     rows = slice(republish.FOOT_ROWS[0], republish.FOOT_ROWS[1] + 1)
     with zipfile.ZipFile(out) as z:
-        for no, own, other in ((1, directory.FOOT_INDEX, directory.FOOT_LEFT), (3, directory.FOOT_INDEX, directory.FOOT_LEFT),
-                               (4, directory.FOOT_LEFT, directory.FOOT_INDEX), (47, directory.FOOT_LEFT, directory.FOOT_INDEX)):
+        idx, plan = republish.FOOT_INDEX_PUBLIE, republish.FOOT_LEFT_PUBLIE                # les textes publies
+        for no, own, other in ((1, idx, plan), (3, idx, plan), (4, plan, idx), (47, plan, idx)):
             im = Image.open(io.BytesIO(z.read(f'{FOLDER}heliports/Syria_heliports_directory_p{no:02d}.jpg'))).convert('RGB')
             assert republish.foot_gap(im, republish.redraw_directory_foot(_white(), own)) < 1
             assert republish.foot_gap(im, republish.redraw_directory_foot(_white(), other)) > 3
     assert rows.start == 2336 and rows.stop == 2400
+
+
+def test_republished_directory_foot_keeps_the_published_text(synth):
+    """Lot ac-donnees-jeu : le pied redessine d'une page publiee porte le texte publie (« pydcs »), pas celui du moteur."""
+    assert republish.FOOT_LEFT_PUBLIE == 'All plans at the same scale · pads and numbers: DCS (pydcs) · background: F10 map · WGS84'
+    assert republish.FOOT_INDEX_PUBLIE == 'Page: page of the PDF collection · position: pydcs airfield · nearest town: towns.json list'
+    assert directory.FOOT_LEFT != republish.FOOT_LEFT_PUBLIE and directory.FOOT_INDEX != republish.FOOT_INDEX_PUBLIE
+    _, _, out, _, _, _ = synth
+    with zipfile.ZipFile(out) as z:
+        for no, published, engine in ((1, republish.FOOT_INDEX_PUBLIE, directory.FOOT_INDEX),
+                                      (4, republish.FOOT_LEFT_PUBLIE, directory.FOOT_LEFT)):
+            im = Image.open(io.BytesIO(z.read(f'{FOLDER}heliports/Syria_heliports_directory_p{no:02d}.jpg'))).convert('RGB')
+            assert republish.foot_gap(im, republish.redraw_directory_foot(_white(), published)) < 1
+            assert republish.foot_gap(im, republish.redraw_directory_foot(_white(), engine)) > 1
 
 
 def _with_defect(tmp_path, area_w, area_h):

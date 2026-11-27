@@ -158,6 +158,8 @@ def test_refuses_airdrome_without_name_or_arp(tmp_path, capsys):
     refused(tmp_path, capsys, af(tmp_path, [V, 'N;1', airdrome(1).replace('display_name=Base;', '')]), 'sans display_name')
     refused(tmp_path, capsys, af(tmp_path, [V, 'N;1', airdrome(1).replace('reference_point.y=-100;', '')]),
             'sans reference_point.y')
+    refused(tmp_path, capsys, af(tmp_path, [V, 'N;1', airdrome(1).replace('reference_point.x=1000.5;', '')]),
+            'sans reference_point.x')
 
 
 @pytest.mark.parametrize('field', ig.STAND_FIELDS)
@@ -261,6 +263,79 @@ def test_refuses_duplicate_aircraft_type(tmp_path, capsys):
     u = 'U;A-10A;heli=false;height=4.47;length=16.26;wing_span=17.53'
     p = response(tmp_path, 'u.txt', ['V;2.9.32.30490;me_db_api=present', 'N;2', u, u])
     refused(tmp_path, capsys, ['aircraft', str(p)], 'type A-10A en double')
+
+
+UA = 'V;2.9.32.30490;me_db_api=present'
+UL = 'U;A-10A;heli=false;height=4.47;length=16.26;wing_span=17.53'
+S1 = 'S;1;1;' + STAND.format(i=1, name='P1', x=0)
+REFUS = [   # (commande, lignes de la reponse, extrait du message)
+    ('airfields', [V, 'N;1', airdrome(1), 'F;7;frequencyList.1.1=122200000'], 'frequences sans aerodrome A (id 7)'),
+    ('airfields', [V, 'N;1', airdrome(1), 'S;1'], 'ligne S incomplete'),
+    ('aircraft', [UA, 'N;1', 'U;A-10A'], 'ligne U incomplete'),
+    ('airfields', [V, 'N;1', airdrome(1).replace('runways.0.', 'runways.1.')], 'indices de pistes discontinus'),
+    ('airfields', [V, 'N;1', airdrome(1).replace('beacons.1.', 'beacons.2.')], 'indices de balises discontinus'),
+    ('airfields', ['V', 'N;1', airdrome(1)], 'V sans version'),
+    ('airfields', ['V;', 'N;1', airdrome(1)], 'V sans version'),
+    ('aircraft', [UA, 'N;1', UL.replace('heli=false', 'heli=yes')], "heli vaut 'yes'"),
+    ('aircraft', [UA, 'N;1', UL.replace('heli=false;', '')], 'heli vaut None'),
+    ('airfields', [V, 'N;x', airdrome(1)], "N n'est pas un entier"),
+    ('airfields', [V, 'N;1', airdrome(1) + ';sanségal'], 'champ sans « = »'),
+    ('airfields', [V, 'N;1', airdrome(1).replace('beacons.0.runwayId=1', 'beacons.0.runwayId=1.5')],
+     "beacons.0.runwayId n'est pas un entier"),
+    ('airfields', [V, 'N;1', airdrome(1).replace('runways.0.id=1', 'runways.0.id=x')], "runways.0.id n'est pas un entier"),
+    ('airfields', [V, 'N;1', 'A;x;display_name=B;reference_point.x=1;reference_point.y=2'], "l'id de l'aerodrome n'est pas un entier"),
+    ('airfields', [V, 'N;1', airdrome(1).replace('reference_point.x=1000.5', 'reference_point.x=abc')],
+     "reference_point.x n'est pas un nombre"),
+    ('airfields', [V, 'N;1', airdrome(1), S1.replace('params.LENGTH=21', 'params.LENGTH=21m')], "params.LENGTH n'est pas un nombre"),
+    ('airfields', [V, airdrome(1)], 'ligne N absente'),
+    ('airfields', ['N;1', airdrome(1)], 'ligne V absente'),
+    ('aircraft', [UA, 'N;2', UL], '1 types U pour N = 2'),
+    ('airfields', [V, 'N;1', airdrome(1).replace('runways.0.start=09', 'runways.0.start=')], "start '' vide ou sans chiffre de tete"),
+    ('airfields', [V, 'N;1', airdrome(1).replace('runways.0.end=27', 'runways.0.end=L')], "end 'L' vide ou sans chiffre de tete"),
+    ('airfields', [V, 'N;1', airdrome(1), S1, S1.replace('name=P1', 'name=P2')],
+     'aerodrome 1 : deux parkings au crossroad_index 1 (P1 et P2)'),
+]
+
+
+@pytest.mark.parametrize('cmd,lines,needle', REFUS, ids=[f'{i}-{c[2][:30]}' for i, c in enumerate(REFUS)])
+def test_refuses_each_other_case(tmp_path, capsys, cmd, lines, needle):
+    p = response(tmp_path, 'r.txt', lines)
+    argv = [cmd] + (['--theatre', 'Syria'] if cmd == 'airfields' else []) + [str(p)]
+    refused(tmp_path, capsys, argv, needle)
+
+
+def test_refuses_invalid_utf8(tmp_path, capsys):
+    body = quote('\n'.join([V, 'N;1', airdrome(1, 'B@')])).replace('@', '\\255')
+    p = response(tmp_path, 'r.txt', None, raw_body=body)
+    refused(tmp_path, capsys, ['airfields', '--theatre', 'Syria', str(p)], "pas de l'UTF-8")
+
+
+def test_collect_without_response():
+    with pytest.raises(ig.GameDataError, match='aucune reponse'):
+        ig.collect([], ('A',))
+
+
+def test_write_is_atomic_and_an_oserror_stops(tmp_path, capsys, monkeypatch):
+    a, b = two_slices(tmp_path)
+    out = tmp_path / 'game' / 'Syria.json'
+    out.parent.mkdir()
+    out.write_bytes(b'ancien')
+    real = ig.os.replace
+
+    def boom(src, dst):
+        raise OSError('disque plein')
+    monkeypatch.setattr(ig.os, 'replace', boom)
+    code, so, err = run(['airfields', '--theatre', 'Syria', '--out', str(out), str(a), str(b)], capsys)
+    assert code == 1 and so == '' and err.startswith('ARRET : ') and 'disque plein' in err
+    assert out.read_bytes() == b'ancien' and sorted(p.name for p in out.parent.iterdir()) == ['Syria.json']   # rien a moitie
+    monkeypatch.setattr(ig.os, 'replace', real)
+    blocker = tmp_path / 'fichier'
+    blocker.write_bytes(b'x')
+    code, _, err = run(['airfields', '--theatre', 'Syria', '--out', str(blocker / 'sous' / 'f.json'), str(a), str(b)], capsys)
+    assert code == 1 and err.startswith('ARRET : ')                           # dossier impossible a creer : OSError
+    assert run(['airfields', '--theatre', 'Syria', '--out', str(out), str(a), str(b)], capsys)[0] == 0
+    assert json.loads(out.read_text(encoding='utf-8'))['theatre'] == 'Syria'
+    assert sorted(p.name for p in out.parent.iterdir()) == ['Syria.json']
 
 
 # ------------------------------------------------------------------ le chargeur (render/gamedata.py)

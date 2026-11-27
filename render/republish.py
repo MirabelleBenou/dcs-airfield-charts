@@ -120,7 +120,7 @@ def check_or_rewrite_header(svg_text, name, index):
         raise RepublishError(f"{name} : le deuxieme texte de la ligne ne commence pas par « ARP » : {texts[1]!r}")
     hits = index.get(texts[1], [])
     if len(hits) != 1:
-        raise RepublishError(f'{name} : {texts[1]!r} designe {len(hits)} aerodromes pydcs '
+        raise RepublishError(f'{name} : {texts[1]!r} designe {len(hits)} aerodromes du jeu '
                              f'({", ".join(n for n, _, _ in hits) or "aucun"}) au lieu d\'un seul')
     _, lat, lon = hits[0]
     try:
@@ -691,6 +691,10 @@ DIR_PAIR_MAX = 6.0                 # ecart absolu moyen (RGB, 0-255) : au plus 6
 FOOT_ROWS = (2336, 2399)           # lot ac-marque-pied : lignes du pied (bornes incluses), repeintes en blanc puis redessinees
 FOOT_HAS_MAX = 3.0                 # ecart moyen sous ce seuil : la page porte deja le pictogramme
 FOOT_GREY_ZONE = (1.0, 8.0)        # un ecart dans cet intervalle : le seuil ne separerait plus les deux cas, arret
+# Lot ac-donnees-jeu : une page publiee se reprend sans changer ce qu'elle dit. Les textes de gauche du pied du repertoire tels
+# que les pages publiees les portent (avant le lot ; le moteur, lui, ecrit directory.FOOT_LEFT et directory.FOOT_INDEX).
+FOOT_LEFT_PUBLIE = 'All plans at the same scale · pads and numbers: DCS (pydcs) · background: F10 map · WGS84'
+FOOT_INDEX_PUBLIE = 'Page: page of the PDF collection · position: pydcs airfield · nearest town: towns.json list'
 
 
 def band_box(x, w, base2):
@@ -909,7 +913,7 @@ def retouch_directory(theatre, zin, infos, tmp):
                                  f'(release anterieure) ou page modifiee ; cet outil ne relit que le repertoire en anglais')
             res.rows.append((no, site, town, size, g36, gs, decision))
         # lot ac-marque-pied : le pied, sur le resultat de la retouche de la ville (un seul encodage)
-        redrawn = redraw_directory_foot(work, directory.FOOT_INDEX if no <= n_index else directory.FOOT_LEFT)
+        redrawn = redraw_directory_foot(work, FOOT_INDEX_PUBLIE if no <= n_index else FOOT_LEFT_PUBLIE)
         gap = foot_gap(im, redrawn)
         res.foot_gaps[no] = gap
         if FOOT_GREY_ZONE[0] <= gap <= FOOT_GREY_ZONE[1]:

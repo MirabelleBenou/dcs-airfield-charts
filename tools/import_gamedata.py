@@ -15,8 +15,10 @@ Sorties : `dcs-airfields-v1` (aerodromes, pistes, radios de tour, balises, parki
 """
 import argparse
 import json
+import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 THEATRES = ('GermanyColdWar', 'Syria', 'Caucasus')
@@ -180,6 +182,9 @@ def _runways(a, where):
         miss = [f for f in ('id', 'name', 'start', 'end') if f not in r]
         if miss:
             raise GameDataError(f'{where} : piste {i} sans {", ".join(miss)}')
+        for f in ('start', 'end'):
+            if not re.match(r'^\d', r[f]):
+                raise GameDataError(f'{where} : piste {i} : {f} {r[f]!r} vide ou sans chiffre de tete')
         out.append({'id': integer(r['id'], where, f'runways.{i}.id'), 'name': r['name'], 'start': r['start'],
                     'end': r['end']})
     return out
@@ -275,6 +280,12 @@ def airfields_data(theatre, files):
     for aid, lst in stands.items():
         if aid not in heads:
             raise GameDataError(f'{lst[0][0]} : parking sans aerodrome A (id {aid})')
+        seen = {}
+        for where, s in lst:
+            if s['crossroad_index'] in seen:
+                raise GameDataError(f'{where} : aerodrome {aid} : deux parkings au crossroad_index {s["crossroad_index"]} '
+                                    f'({seen[s["crossroad_index"]]} et {s["name"]})')
+            seen[s['crossroad_index']] = s['name']
     for aid, (where, _) in freqs.items():
         if aid not in heads:
             raise GameDataError(f'{where} : frequences sans aerodrome A (id {aid})')
@@ -354,6 +365,22 @@ def aircraft_text(data):
 
 # ------------------------------------------------------------------ commande
 
+def write_atomic(out, data):
+    """Ecrit `data` dans `out` par un fichier temporaire du meme dossier (cree au besoin), puis `os.replace` : jamais de
+    fichier a moitie ecrit ; OSError si l'ecriture echoue (le temporaire est efface)."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f'.{out.name}.', suffix='.tmp', dir=out.parent)
+    try:
+        with os.fdopen(fd, 'wb') as f:
+            f.write(data)
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, out)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description='Importe les faits du jeu releves dans l\'editeur de mission de DCS.')
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -375,12 +402,10 @@ def main(argv=None):
             data = aircraft_data(args.responses)
             text = aircraft_text(data)
             line = f'aircraft: {len(data["aircraft"])} types'
+        write_atomic(Path(args.out), text.encode('utf-8'))
     except (GameDataError, OSError) as e:
         print(f'ARRET : {e}', file=sys.stderr)
         return 1
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_bytes(text.encode('utf-8'))
     print(line)
     return 0
 

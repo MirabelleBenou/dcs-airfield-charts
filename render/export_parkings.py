@@ -144,6 +144,7 @@ def aircraft_data(present=None, game=None):
                 raise ExportError(f'type {k} : {f} absent')
         types[k] = {'heli': bool(v['heli']), 'length': _r(v['length'], 3), 'width': _r(v['width'], 3),
                     'height': _r(v['height'], 3)}
+    extras = 0
     if present is not None and Path(present).is_file():
         old = json.loads(Path(present).read_text(encoding='utf-8'))
         if old.get('format') != FORMAT_AIRCRAFT:
@@ -151,10 +152,11 @@ def aircraft_data(present=None, game=None):
         for k, v in old['aircraft'].items():
             if k not in types:
                 types[k] = v
-    return {'format': FORMAT_AIRCRAFT,
-            'source': f'DCS World {doc["dcs_version"]} mission editor (Eagle Dynamics): aircraft sizes; '
-                      f'types not installed: {PYDCS_NOT_INSTALLED}',
-            'aircraft': {k: types[k] for k in sorted(types)}}
+                extras += 1
+    source = f'DCS World {doc["dcs_version"]} mission editor (Eagle Dynamics): aircraft sizes'
+    if extras:                                       # la mention de pydcs seulement si un type vient du fichier present
+        source += f'; types not installed: {PYDCS_NOT_INSTALLED}'
+    return {'format': FORMAT_AIRCRAFT, 'source': source, 'aircraft': {k: types[k] for k in sorted(types)}}
 
 
 def aircraft_text(data):

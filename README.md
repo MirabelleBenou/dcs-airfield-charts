@@ -224,7 +224,7 @@ The ICAO code and the radio beacons of every airfield come from `render/export_n
 python -I render/export_navaids.py --ourairports airports.csv --beacons "<DCS>/Mods/terrains" --out downloads/navaids
 ```
 
-It writes one `<theatre>.json` per theatre (eleven files) to the folder and prints a line per file; the other eight theatres have the ICAO code only.
+It writes one `<theatre>.json` per theatre read in the game (three files: Caucasus, Cold War Germany, Syria) to the folder, leaves the other files as they are and prints a line per file; the other eight theatres have the ICAO code only.
 
 Tests: `python -m pytest` (see the table above for the tests that need samples).
 

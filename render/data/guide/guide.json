@@ -1999,7 +1999,7 @@
      "heading": "Appendix B — Limits and credits",
      "paragraphs": [
       "**Limits.** For DCS World only, not for real-world navigation. No minima. The MSA counts the ground, not the obstacles. The approaches are standard patterns on DCS data, not published procedures. The aircraft table reflects the modules as documented in November 2026; a module update can change it.",
-      "**Credits.** Data: DCS World and its files (Eagle Dynamics), read with pydcs; taxiway names © OpenStreetMap contributors (ODbL); ICAO codes from OurAirports; magnetic field IGRF-14; font Barlow Condensed (SIL OFL). Relief read in DCS: non-commercial use. DCS Airfield Charts is written with Claude (Anthropic)."
+      "**Credits.** Data: DCS World and its files (Eagle Dynamics); taxiway names © OpenStreetMap contributors (ODbL); ICAO codes from OurAirports; magnetic field IGRF-14; font Barlow Condensed (SIL OFL). Relief read in DCS: non-commercial use. DCS Airfield Charts is written with Claude (Anthropic)."
      ]
     }
    ]

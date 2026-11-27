@@ -24,7 +24,7 @@ Each version is a GitHub release, tagged `AC-V<major>.<minor>.<patch>`. A new ve
 
 - Airfields, runways, tower radios, beacons and parking stands of Syria, Cold War Germany and the Caucasus are now read from the DCS World 2.9.32 mission editor and kept in `render/data/game/`; aircraft sizes too. pydcs is no longer a dependency, so a DCS update can be followed the same day. Syria and the Caucasus do not change. Cold War Germany follows DCS 2.9.32: 20 new airfields and the changed parking stands appear in `downloads/parkings/` and `downloads/navaids/`; its charts are rebuilt in a later release.
 - The other theatres in `downloads/parkings/` and `downloads/navaids/` are unchanged (still from pydcs 84f6335) until they are read in the game.
-- Chart footers no longer mention pydcs.
+- Charts drawn from now on no longer mention pydcs in their footer; pages already published keep theirs until they are redrawn.
 
 ## AC-V1.12.0 — 26 November 2026
 

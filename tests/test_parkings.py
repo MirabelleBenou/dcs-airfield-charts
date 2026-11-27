@@ -154,7 +154,13 @@ def test_aircraft_extras_kept_as_they_are(tmp_path):
     assert d['aircraft'] == {'A': {'heli': True, 'length': 9.87654, 'width': 1, 'height': 2},
                              'B': {'heli': False, 'length': 1.235, 'width': 2.0, 'height': 3.0}}
     assert d['source'] == 'DCS World 9.9 mission editor (Eagle Dynamics): aircraft sizes; types not installed: pydcs 84f6335 (LGPL-3.0)'
-    assert list(ep.aircraft_data(tmp_path / 'absent.json', game=game)['aircraft']) == ['B']
+    alone = ep.aircraft_data(tmp_path / 'absent.json', game=game)           # sans fichier present : le jeu seul
+    assert list(alone['aircraft']) == ['B']
+    assert alone['source'] == 'DCS World 9.9 mission editor (Eagle Dynamics): aircraft sizes'
+    present.write_text(json.dumps({'format': 'dcs-aircraft-sizes-v1', 'source': 'x', 'aircraft': {
+        'B': {'heli': True, 'length': 0, 'width': 0, 'height': 0}}}), encoding='utf-8')
+    same = ep.aircraft_data(present, game=game)                             # aucun type de plus : pas de mention de pydcs
+    assert same == alone
 
 
 def _terrain(slots, airports=None):
