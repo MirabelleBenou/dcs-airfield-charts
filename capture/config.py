@@ -15,7 +15,6 @@ attente_vue_s (facultatif : prise des vues de panneaux, secondes d'attente apres
 Modele : config.example.json.
 """
 import json
-import math
 import os
 import sys
 from pathlib import Path
@@ -123,7 +122,7 @@ def load_config(argv, environ=None, default_path=None):
     attente_vue_s = 3.0
     if data.get('attente_vue_s') is not None:
         w = data['attente_vue_s']
-        if (isinstance(w, bool) or not isinstance(w, (int, float)) or not math.isfinite(w) or not 0 < w <= 30):
+        if (isinstance(w, bool) or not isinstance(w, (int, float)) or not 0 < w <= 30):    # NaN et inf sont refuses par la plage
             _fail(f'Fichier de configuration {src} : "attente_vue_s" doit etre un nombre de secondes, '
                   f'plus grand que 0 et au plus 30 (par exemple 3 ou 2.5).\n{hint}')
         attente_vue_s = float(w)

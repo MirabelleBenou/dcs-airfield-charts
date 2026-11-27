@@ -132,7 +132,7 @@ class ConfigTest(unittest.TestCase):
                 self.assertIsInstance(cfg.attente_vue_s, float)
 
     def test_attente_vue_refusee(self):
-        for bad in (0, -1, 31, '3', True, float('nan'), float('inf'), [3]):
+        for bad in (0, -1, 31, '3', True, float('nan'), float('inf'), [3], 10 ** 400):
             with self.subTest(attente_vue_s=bad):
                 self.write('defaut.json', attente_vue_s=bad)
                 msg = self.fail()

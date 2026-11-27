@@ -857,11 +857,22 @@ def test_capture_never_in_front_is_unstable_after_10_s(capture_setup):
     server, clock, log = FakeHook(), Clock(), []
     try:
         env = _make_env(server, clock, log=log, in_front=lambda: False)
+
+        def no_diff(*a):
+            raise AssertionError('aucune comparaison de pixels dans take_view')
+        env.diff_frac = no_diff
         sc.capture_base(cfg, env, 'Syria', 'Test_Base', log=lambda *a: None)
     finally:
         server.close()
     idx = json.loads((base_dir / 'index.json').read_text(encoding='utf-8'))
     assert [e['statut'] for e in idx['vues']] == ['instable'] * 6
+    # une capture par essai : deux captures consecutives d'une meme vue sont espacees d'au moins PAIR_GAP_S
+    for n in range(1, 7):
+        i_a = next(i for i, (_, l) in enumerate(log) if l.startswith(f'cam {1000 + n}.000'))
+        nxt = [i for i, (_, l) in enumerate(log) if l.startswith(f'cam {1001 + n}.000')]
+        grabs = [t for t, l in log[i_a:nxt[0] if nxt else len(log)] if l == 'GRAB']
+        assert len(grabs) >= 2, n
+        assert all(b - a >= sc.PAIR_GAP_S - 1e-9 for a, b in zip(grabs, grabs[1:])), n
     for n in range(1, 6):
         t_a = [t for t, l in log if l.startswith(f'cam {1000 + n}.000')][0]
         t_b = [t for t, l in log if l.startswith(f'cam {1001 + n}.000')][0]
