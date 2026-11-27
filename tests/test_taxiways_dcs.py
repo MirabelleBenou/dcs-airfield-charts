@@ -177,11 +177,11 @@ def test_konya_page_footer_credits_osm_only_for_the_icao_when_the_names_come_fro
     _write_game(fresh_work, _game_doc(fresh_work, ref))
     data = analysis.analyze(fresh_work, 'Syria', 'Konya', 1985, log=lambda *a: None)
     svg = compose.build_pages(data, log=lambda *a: None)[0].svg
-    assert 'via pydcs · ICAO © OpenStreetMap contributors' in svg and 'taxiways ©' not in svg
+    assert '(Eagle Dynamics) · ICAO © OpenStreetMap contributors' in svg and 'taxiways ©' not in svg
 
 
 # ---------- le pied de page : trois textes, trois marges ----------
-BASE_FOOTER = 'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics), via pydcs'
+BASE_FOOTER = 'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics)'
 
 
 def _data(source, icao):
@@ -214,9 +214,9 @@ def test_footer_never_touches_the_right_hand_notice_and_keeps_3_mm(source, icao,
     assert marque.TEXT_SHIFT_MM == 4.2
     assert margin >= page.FOOTER_MARGIN_MM == 3.0
     if expected.endswith('taxiways © OpenStreetMap contributors'):
-        assert margin == pytest.approx(13.73 - 4.2, abs=0.01)
+        assert margin == pytest.approx(21.65 - 4.2, abs=0.01)        # sans « , via pydcs » : 13.73 - 4.2 avant
     elif expected.endswith('ICAO © OpenStreetMap contributors'):
-        assert margin == pytest.approx(16.99 - 4.2, abs=0.01)
+        assert margin == pytest.approx(24.91 - 4.2, abs=0.01)        # 16.99 - 4.2 avant
     print(f'marge {source}/{icao}/{osm} : {margin:.2f} mm')
 
 
@@ -226,7 +226,7 @@ def test_footer_draws_the_text_in_the_svg():
     d = Doc()
     page.footer(d, _data('jeu', 'LTAN'), True)
     svg = d.render()
-    assert 'via pydcs · ICAO © OpenStreetMap contributors' in svg and 'NOT FOR REAL-WORLD NAVIGATION' in svg
+    assert '(Eagle Dynamics) · ICAO © OpenStreetMap contributors' in svg and 'NOT FOR REAL-WORLD NAVIGATION' in svg
     left = re.search(r'<text x="([^"]*)" y="203.7"[^>]*>DCS AIRFIELD', svg)
     assert left and left.group(1) == '10.2'                                            # X0 + 4,2 : apres le pictogramme
     assert svg.index('NOT FOR REAL-WORLD NAVIGATION') < svg.index('<svg x="6" y="201.7" width="2.6" height="2.6" viewBox="0 0 360 360">')

@@ -93,7 +93,7 @@ def test_p1_10_9_of_konya_has_the_table_texts(rendered):
     t = set(page_texts(pages['10-9'].svg))
     want = {'AIRFIELD', 'NAVAIDS', 'RWY', 'MAG HDG', 'LENGTH × WIDTH', 'THR ELEV', 'ILS', 'OPEN', 'SHELTER (HAS, HANGAR)',
             'HELICOPTER ONLY', f'ELEV {data.elev_ft} FT', f'PARKING: {len(data.parkings)} ({data.n_shelter} SHELTERED)',
-            'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics), via pydcs · taxiways © OpenStreetMap contributors',
+            'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics) · taxiways © OpenStreetMap contributors',
             'NOT FOR REAL-WORLD NAVIGATION'}
     assert want <= t, want - t
     assert '11037 × 188 FT (3364 × 57 M)' in t                      # pas de separateur des milliers
@@ -125,7 +125,7 @@ def test_p1_approach_page_of_konya(rendered):
     for s in ('NAVAIDS', 'CRS', 'THR', 'GP', 'TCH', 'LOC', 'NM FROM THR', 'ALTITUDE FT', 'GRID NORTH (GAME NORTH) UP',
               'PROFILE — 3.0° GLIDE PATH', 'THR 01L 3396 FT', '3.0°', 'KNY 390 · 1.8 NM FROM THR',
               'Not a real approach chart: DCS gives no procedure and no minima. Course: cockpit compass heading (grid − 1985 declination).',
-              '3° glide path assumed, from the glide slope antenna (353 m past the threshold); terrain not shown. Data: beacons.lua, pydcs.'):
+              '3° glide path assumed, from the glide slope antenna (353 m past the threshold); terrain not shown. Data: beacons.lua, DCS mission editor.'):
         assert s in t, s
     assert not any(x in ('CAP', 'SEUIL', 'PENTE', 'BALISES') for x in t)
 
@@ -202,9 +202,9 @@ def test_the_directory_pages_are_in_english(work, monkeypatch):
         directory.draw_directory_page('Syria', pg, cache, [])
     plans = list(written)
     for s in ('HELIPORT DIRECTORY', 'NAME', 'PADS', 'POSITION', 'NEAREST TOWN', 'PAGE', 'NOT FOR REAL-WORLD NAVIGATION',
-              'Page: page of the PDF collection · position: pydcs airfield · nearest town: towns.json list'):
+              'Page: page of the PDF collection · position: DCS airfield reference point · nearest town: towns.json list'):
         assert s in index, s
-    assert 'All plans at the same scale · pads and numbers: DCS (pydcs) · background: F10 map · WGS84' in plans
+    assert 'All plans at the same scale · pads and numbers: DCS mission editor · background: F10 map · WGS84' in plans
     assert any(re.fullmatch(r'\d+ PADS?', x) for x in plans) and any(re.fullmatch(r'ELEV \d+ FT', x) for x in plans)
     assert any(re.fullmatch(r'PADS \d+×\d+ M', x) for x in plans)
     assert any(re.fullmatch(r'\d+\.\d km [NESW]{1,2} of .+', x) for x in plans)

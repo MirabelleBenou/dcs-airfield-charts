@@ -20,6 +20,12 @@ Each version is a GitHub release, tagged `AC-V<major>.<minor>.<patch>`. A new ve
 
 - `capture/signcapture.py capture`: a view is now taken once, after a fixed wait (3 s by default, `attente_vue_s` in `config.json`), instead of waiting for two identical screenshots: grass, trees and clouds move all the time in the free-camera view, so no view was ever found stable and each one took about 14 s. A view now takes about 4 s. `index.json` records the wait used (`attente_s`); `instable` now only means that DCS could not be brought to the foreground.
 
+**Game facts now come from the DCS mission editor itself.**
+
+- Airfields, runways, tower radios, beacons and parking stands of Syria, Cold War Germany and the Caucasus are now read from the DCS World 2.9.32 mission editor and kept in `render/data/game/`; aircraft sizes too. pydcs is no longer a dependency, so a DCS update can be followed the same day. Syria and the Caucasus do not change. Cold War Germany follows DCS 2.9.32: 20 new airfields and the changed parking stands appear in `downloads/parkings/` and `downloads/navaids/`; its charts are rebuilt in a later release.
+- The other theatres in `downloads/parkings/` and `downloads/navaids/` are unchanged (still from pydcs 84f6335) until they are read in the game.
+- Chart footers no longer mention pydcs.
+
 ## AC-V1.12.0 — 26 November 2026
 
 **A website to find, view and download the charts.**

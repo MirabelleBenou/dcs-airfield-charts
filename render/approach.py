@@ -369,7 +369,7 @@ def build_page(data, e, ant, s_gs, n, log=print):
     doc.add(R, line(X0, rule_y, X1, rule_y, INK, 0.35))
     year = f'{int(data.year)}'
     m1 = f'Not a real approach chart: DCS gives no procedure and no minima. Course: cockpit compass heading (grid \u2212 {year} declination).'
-    m2 = f'3\u00b0 glide path assumed, from the glide slope antenna ({int(round(s_gs))} m past the threshold); terrain not shown. Data: beacons.lua, pydcs.'
+    m2 = f'3\u00b0 glide path assumed, from the glide slope antenna ({int(round(s_gs))} m past the threshold); terrain not shown. Data: beacons.lua, DCS mission editor.'
     doc.add(R, text(X0, rule_y + 3.8, m1, pt(5.4), 'regular', INK2))
     doc.add(R, text(X0, rule_y + 7.0, m2, pt(5.4), 'regular', INK2))
     page.footer(doc, data, False)

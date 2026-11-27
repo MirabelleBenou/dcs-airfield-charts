@@ -32,7 +32,7 @@ The goal is to share a complete set of charts for every airfield, as PDF and PNG
 
 - What changed from one version to the next: [CHANGELOG.md](CHANGELOG.md) (each version is also a GitHub release).
 
-Not yet covered: T3, which the F10 map does not draw; Nicosia, which pydcs does not list as an airfield; the heliport HMed22, which has no taxiway points in DCS and could not be captured. Runways are found on the F10 map guided by the game's runway list, so their count and names follow DCS (including the parking names DCS repeats at some bases). Taxiway names appear only where OpenStreetMap has them. These charts are for DCS only, not for real-world navigation.
+Not yet covered: T3, which the F10 map does not draw; Nicosia, which the DCS mission editor does not list as an airfield; the heliport HMed22, which has no taxiway points in DCS and could not be captured. Runways are found on the F10 map guided by the game's runway list, so their count and names follow DCS (including the parking names DCS repeats at some bases). Taxiway names appear only where OpenStreetMap has them. These charts are for DCS only, not for real-world navigation.
 
 ## Example charts
 
@@ -75,11 +75,11 @@ What a chart shows: pavement, runways and their markings, buildings and hardened
 | `capture/signread.py` | taxiway signs, second half (work in progress): reads the location signs (yellow letter on black) on the images of `capture`, by template matching with glyphs taken at run time from the game's own sign textures; writes `lecture.json` and `lecture.tsv` (`lire`) |
 | `capture/signattr.py` | taxiway signs, third part (work in progress): places the letters read by `signread.py` on the ground, gives them to the runway exits of the `.rn5` graph, and writes `attribution.json` and the airfield's taxiway names from the game, `<work_dir>/taxiways_dcs/<theatre>/<Base>.json` (`attribuer`) |
 | `capture/f10tiles.py`, `render/tiles.py` | map tiles from the F10 map (work in progress): grid capture at the scale of a target zoom, reprojection to XYZ tiles, zoom levels, tar parts; `render/tiles.py` is the pure part (geometry, reprojection, pyramid, archives), testable without DCS |
-| `render/` | the renderer: vectorises a captured base (pavement, buildings, runways), reads the game facts through pydcs, lays out the A5 pages and exports SVG, PDF and PNG; `build_chart.py` renders a base, `fetch_osm.py` downloads real taxiway names from OpenStreetMap; fonts in `render/fonts/` |
+| `render/` | the renderer: vectorises a captured base (pavement, buildings, runways), reads the game facts from the DCS mission editor, lays out the A5 pages and exports SVG, PDF and PNG; `build_chart.py` renders a base, `fetch_osm.py` downloads real taxiway names from OpenStreetMap; fonts in `render/fonts/` |
 | `tests/` | `python -m pytest`; the tests that need captured samples or DCS files run when `DCS_CHARTS_SAMPLES` points to a folder holding them, and are skipped otherwise |
 | `downloads/` | the published charts: one PDF per airfield in `downloads/<theatre>/` (with its index), and a zip per theatre holding every page as PDF, PNG and SVG |
 | `downloads/DCS_Airfield_Charts_Reading_Guide.pdf` | the reading guide (A4, English): how to read every page of an airfield, how to fly with the charts, and which approach pages each aircraft can fly; rebuilt from the zips of a release by `render/build_guide.py` |
-| `downloads/parkings/` | every parking stand of every DCS theatre, with the identifiers a mission file uses, its position and the aircraft it takes (JSON, from pydcs; see its README) |
+| `downloads/parkings/` | every parking stand of every DCS theatre, with the identifiers a mission file uses, its position and the aircraft it takes (JSON, from the DCS mission editor; see its README) |
 | `downloads/navaids/` | the ICAO code of every DCS airfield that has one, and the radio beacons of Caucasus, Cold War Germany and Syria (JSON; see its README) |
 
 ## Installation (Windows)
@@ -156,9 +156,9 @@ Map imagery © Eagle Dynamics SA — captured from the DCS World F10 map. Non-co
 
 ## Rendering charts
 
-Dependencies: Python 3.12+ and `pip install -r requirements.txt`. The game facts (airfield, runway headings, parking slots, tower frequencies) are read with [pydcs](https://github.com/pydcs/dcs), pinned to one commit and imported as a library; the navaids are read from `<dcs_install>/Mods/terrains/<Theatre>/beacons.lua`. [CairoSVG](https://cairosvg.org/) needs the Cairo library: on Linux and macOS it comes with the system packages; on Windows install the GTK runtime, or run the renderer under WSL.
+Dependencies: Python 3.12+ and `pip install -r requirements.txt`. The game facts (airfield, runway headings, parking slots, tower frequencies) are read in the DCS mission editor and kept in `render/data/game/`; the navaids are read from `<dcs_install>/Mods/terrains/<Theatre>/beacons.lua`. [CairoSVG](https://cairosvg.org/) needs the Cairo library: on Linux and macOS it comes with the system packages; on Windows install the GTK runtime, or run the renderer under WSL.
 
-Theatres rendered so far: **Syria** and **GermanyColdWar** (captured in full; pydcs keeps it under its `germany` module, the theatre name stays `GermanyColdWar` everywhere, and the chart header reads GERMANY COLD WAR).
+Theatres rendered so far: **Syria** and **GermanyColdWar** (captured in full; the theatre name stays `GermanyColdWar` everywhere, and the chart header reads GERMANY COLD WAR).
 
 ```
 python -I render/build_chart.py <Theatre> <Base> [--annee 1985] [--icao LTAN] [--osm <file>] [--out <folder>] [--config <path>]
@@ -176,7 +176,7 @@ The pages for the Route Planner of [DCS Mission Plan](https://github.com/Mirabel
 python -I render/build_fiches.py <Theatre> --zips <airfields zip> <helicopters zip> --airfields <airfields.json> --edition AC-V1.4.2 --out <folder>
 ```
 
-Input: the *airfields* and *helicopters* zips of the theatre (`GermanyColdWar` or `Syria`) and the `airfields.json` of Mission Plan. Each chart is matched to its DCS airfield by the ARP written on its page (the nearest airfield of `airfields.json`, 500 m at most); each heliport is matched to its box on a directory page by replaying the directory layout with `render/directory.py` and pydcs alone, and the replay is checked against the published pages (it stops, writing nothing, if a page does not match). Output: `<folder>/<Theatre>/` with the page images (a page over 1 MB is re-encoded as JPEG) and `index.json` (format `dcs-fiches-v1`), and `<folder>/DCS_Airfield_Charts_<Theatre>_1985_route_planner.zip` with the same files at its root. An existing output folder is never overwritten.
+Input: the *airfields* and *helicopters* zips of the theatre (`GermanyColdWar` or `Syria`) and the `airfields.json` of Mission Plan. Each chart is matched to its DCS airfield by the ARP written on its page (the nearest airfield of `airfields.json`, 500 m at most); each heliport is matched to its box on a directory page by replaying the directory layout with `render/directory.py` and the facts of the DCS mission editor alone, and the replay is checked against the published pages (it stops, writing nothing, if a page does not match). Output: `<folder>/<Theatre>/` with the page images (a page over 1 MB is re-encoded as JPEG) and `index.json` (format `dcs-fiches-v1`), and `<folder>/DCS_Airfield_Charts_<Theatre>_1985_route_planner.zip` with the same files at its root. An existing output folder is never overwritten.
 
 The plan of each chart for [DCS Mission Plan](https://github.com/MirabelleBenou/dcs-mission-plan), which draws the parking stands of an airfield on it, is cut from the same zips, again without drawing anything:
 
@@ -210,13 +210,13 @@ python -I render/republish.py <Theatre> --zip <release zip> --out <new zip>
 
 Input: one zip of the release (*airfields* or *helicopters*). On each chart page, the coordinates line is checked against the five fields the renderer writes (elevation, ARP, degrees-minutes-seconds, MGRS, variation), or rewritten to them if it still has three; the scale bar of a `10-9` page gets the length in metres at its end when it has none; a page drawn on the F10 map gets its `xlink:href`. On a 10-9 page, the north arrows are redrawn for the game's north and every runway heading becomes the grid heading minus the variation; a page already converted is left as it is. Each page is exported again as SVG, PDF and PNG (a page on the F10 map as a 256-colour PNG) and the PDF collection of each chart is rebuilt. Output: a new zip with the same entries in the same order; in a *helicopters* zip, a directory box whose nearest-town line runs into the pad dimensions gets that line set smaller, on its JPEG page and in the directory PDF; every page of the directory gets the pictogram at its foot; every other entry that is not a chart page is copied byte for byte. It stops, writing nothing, if a page does not match, and an existing output file is never overwritten. `render/update_coords.py` remains, for the coordinates line only. Approach pages `11-x` and vicinity pages `10-8` only get the pictogram at their foot, then are exported again; `--ajouter <folder>` adds the approach pages of a `build_chart.py --approches-seulement` output to the charts of the zip, before each collected PDF, and rebuilds it. An *airfields* zip whose collected PDFs also hold the helicopter approach pages `11-xH` of an airfield needs `--helicopteres <zip>`, the output of this tool on the *helicopters* zip of the same release: those pages are taken from it.
 
-The parking stands of every DCS theatre, with the identifiers a mission file uses, come from pydcs alone, without a capture:
+The parking stands of every DCS theatre, with the identifiers a mission file uses, come from the DCS mission editor, without a capture. The game facts are read in the DCS mission editor by a probe, then imported with `python -I tools/import_gamedata.py airfields --theatre <Theatre> --out render/data/game/<Theatre>.json <responses…>` (and `aircraft` for the aircraft sizes).
 
 ```
 python -I render/export_parkings.py --out downloads/parkings
 ```
 
-It writes one `<theatre>.json` per theatre and `aircraft.json` (the size of every aircraft type) to the folder, and prints a line per file; run it again after a pydcs update to refresh the published files.
+It writes one `<theatre>.json` per theatre read in the DCS mission editor and `aircraft.json` (the size of every aircraft type) to the folder, and prints a line per file; run it again after the game facts are read again in the DCS mission editor to refresh the published files.
 
 The ICAO code and the radio beacons of every airfield come from `render/export_navaids.py`, which needs two inputs: OurAirports' `airports.csv` at the commit the tool pins (it refuses any other file) and the `Mods/terrains` folder of a DCS install, for the `beacons.lua` of Caucasus, Cold War Germany and Syria:
 
@@ -228,7 +228,7 @@ It writes one `<theatre>.json` per theatre (eleven files) to the folder and prin
 
 Tests: `python -m pytest` (see the table above for the tests that need samples).
 
-Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL, imported, no code copied); [OurAirports](https://github.com/davidmegginson/ourairports-data) (public domain) for the ICAO codes in `downloads/navaids/`; [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports. Squadron Ready Room insignia: original artwork of the project; lettering from Oswald (SIL Open Font License 1.1), converted to outlines ([licence](render/data/marque/OFL-Oswald.txt)). The website uses the Barlow Condensed and Oswald fonts (SIL Open Font License 1.1).
+Credits and licences: [pydcs](https://github.com/pydcs/dcs) (LGPL) for the projection parameters and, until they are read in the game, the parking stands and navaids of the theatres not yet installed; [OurAirports](https://github.com/davidmegginson/ourairports-data) (public domain) for the ICAO codes in `downloads/navaids/`; [ppigrf](https://github.com/IAGA-VMOD/ppigrf) for the IGRF-14 geomagnetic field; taxiway names © OpenStreetMap contributors, [ODbL 1.0](https://www.openstreetmap.org/copyright), attribution printed on the charts that use them; [Barlow Condensed](https://github.com/jpt/barlow) (SIL Open Font License 1.1, `render/fonts/OFL.txt`); [CairoSVG](https://cairosvg.org/) (LGPL) and [pypdf](https://github.com/py-pdf/pypdf) for the exports. Squadron Ready Room insignia: original artwork of the project; lettering from Oswald (SIL Open Font License 1.1), converted to outlines ([licence](render/data/marque/OFL-Oswald.txt)). The website uses the Barlow Condensed and Oswald fonts (SIL Open Font License 1.1).
 
 ## Approach charts
 

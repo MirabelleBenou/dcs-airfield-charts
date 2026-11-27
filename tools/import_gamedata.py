@@ -4,7 +4,8 @@
     python -I tools/import_gamedata.py aircraft --out <fichier> <reponse>
 
 Une reponse : une ligne d'en-tete `-- env gui, <date>`, puis la valeur rendue par la sonde, une chaine Lua au format `%q`
-(entre guillemets). Ses lignes, une par fait, champs separes par `;`, tables aplaties en `cle.sous-cle=valeur` :
+(entre guillemets), puis au plus la ligne `-- second retour : true` du crochet ; tout autre texte apres la chaine est
+refuse. Ses lignes, une par fait, champs separes par `;`, tables aplaties en `cle.sous-cle=valeur` :
 `V;<version de DCS>;<sources...>`, `N;<nombre>`, `A;<id>;<aerodrome>`, `S;<id>;<cle>;<parking>`, `F;<id>;<frequences>`,
 `U;<type>;heli=<true|false>;<champs>` (appareils), `E;<quoi>;...` (une erreur de la sonde).
 
@@ -22,6 +23,7 @@ THEATRES = ('GermanyColdWar', 'Syria', 'Caucasus')
 FORMAT_AIRFIELDS = 'dcs-airfields-v1'
 FORMAT_AIRCRAFT = 'dcs-aircraft-game-v1'
 HEADER = '-- env gui, '
+TRAILER = b'-- second retour : true'     # ligne du crochet de la sonde apres la chaine : au plus une fois, ou absente
 
 # bandes des radios de tour (Hz) : HF sous 30 MHz, VHF basse sous 88 MHz, VHF haute sous 200 MHz, UHF au-dela
 BANDS = ((30_000_000, 'hf_hz'), (88_000_000, 'vhf_low_hz'), (200_000_000, 'vhf_high_hz'), (None, 'uhf_hz'))
@@ -84,7 +86,7 @@ def unquote(raw, where):
         else:
             raise GameDataError(f'{where} : echappement inconnu \\{e.decode("utf-8", "replace")}')
     rest = body[i + 1:]
-    if rest not in (b'', b'\n'):
+    if rest not in (b'', b'\n') + tuple(b'\n' + TRAILER + end for end in (b'', b'\n')):
         first = rest.lstrip(b'\n').split(b'\n', 1)[0].decode('utf-8', 'replace')
         raise GameDataError(f'{where} : le corps n\'est pas entre guillemets (texte apres la chaine : « {first} »)')
     try:

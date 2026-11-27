@@ -26,7 +26,7 @@ FORMAT = 'dcs-msa-v1'
 ATTRIBUTION = ('Terrain: DCS World, Eagle Dynamics SA — terrain elevation read in the game. Non-commercial use only. '
                'Not for real-world navigation.')
 SOURCE_RELIEF = 'DCS World terrain elevation read in the game, 100 m grid'
-SOURCE_TERRAINS = 'downloads/parkings/{cle}.json (pydcs 84f6335, LGPL-3.0)'
+SOURCE_TERRAINS = 'downloads/parkings/{cle}.json (DCS mission editor)'
 
 
 class _Usage(Exception):
@@ -127,7 +127,7 @@ def _qui(t):
 
 
 def regle(annee):
-    return {'radius_nm': msa.RAYON_NM, 'centre': 'airfield reference point (pydcs)',
+    return {'radius_nm': msa.RAYON_NM, 'centre': 'airfield reference point (DCS mission editor)',
             'sectors': 'magnetic bearing to the centre: 000-090, 090-180, 180-270, 270-360',
             'variation': f'IGRF-14 at the centre, {annee:g}', 'margin_ft': msa.MARGE_FT,
             'mountain_margin_ft': msa.MARGE_MONTAGNE_FT, 'mountain_threshold_m': int(msa.SEUIL_MONTAGNE_M),

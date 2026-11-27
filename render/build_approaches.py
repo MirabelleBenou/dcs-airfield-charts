@@ -4,9 +4,9 @@ Usage : python -I render/build_approaches.py <Theatre> --zips <airfields.zip> <h
                                               --grille <relief_<cle>.npy> --out <dossier> [--annee 1985]
 
 Pour chaque terrain charte (une page `<stem>_10-9.svg` du zip *airfields*) qui a au moins une balise utilisable (VOR/DME, VOR,
-NDB, TACAN ou RSBN de `beacons.lua`) a 3 NM au plus de sa position pydcs (cas A) : une page avion par sens de piste et, s'il a
+NDB, TACAN ou RSBN de `beacons.lua`) a 3 NM au plus de sa position dans le jeu (cas A) : une page avion par sens de piste et, s'il a
 un NDB, une page helicoptere par sens. La geometrie (seuils, pistes, en-tete) est relue sur la page 10-9, calee sur les places
-de pydcs (`plans.fit`) ; aucune capture F10. Les pages ILS `11-x` de la base de ces terrains sont remplacees, leur recueil
+du jeu (`plans.fit`) ; aucune capture F10. Les pages ILS `11-x` de la base de ces terrains sont remplacees, leur recueil
 `pdf/<stem>_charts.pdf` est refait ; les pages `11-xH` vont dans le zip *helicopters* (et dans le recueil du terrain). Toute
 autre entree est recopiee a l'octet. Les deux zips de sortie portent les noms de ceux de la base, sous `<out>/`.
 Codes : 0 fait, 1 usage, 2 arret (rien n'est ecrit).
@@ -356,7 +356,7 @@ class Terrain:
     folder: str                   # dossier racine du zip (`<nom du zip>/`)
     header: Header
     airport: str
-    pos: tuple                    # position pydcs (x, z)
+    pos: tuple                    # position dans le jeu (x, z)
     gap: float                    # ecart du calage (mm)
     runways: list
     ends: list

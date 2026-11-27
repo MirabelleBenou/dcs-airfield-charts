@@ -1,6 +1,5 @@
-"""Projection DCS <-> lat/lon (pydcs), convergence de la grille, declinaison magnetique (IGRF-14), formats de cartes."""
+"""Projection DCS <-> lat/lon (parametres de pydcs), convergence de la grille, declinaison magnetique (IGRF-14), formats de cartes."""
 import functools
-import importlib
 import math
 from datetime import datetime, timedelta
 
@@ -11,9 +10,9 @@ GEOD = Geod(ellps='WGS84')
 GRID_PROBE_M = 500.0
 
 
-# Lot « ac-germany » : theatres dont le module pydcs n'a pas le nom du theatre DCS. pydcs range GermanyColdWar
-# (dossier du jeu Mods/terrains/GermanyColdWar) sous `dcs.terrain.germany`. Le nom du theatre reste GermanyColdWar partout
-# ailleurs (arguments, dossiers de capture et de sortie).
+# Lot « ac-germany » : theatres dont la cle courte n'a pas le nom du theatre DCS (GermanyColdWar, dossier du jeu
+# Mods/terrains/GermanyColdWar, a la cle `germany`, le nom de son module dans pydcs). Le nom du theatre reste
+# GermanyColdWar partout ailleurs (arguments, dossiers de capture et de sortie).
 THEATRE_MODULES = {'GermanyColdWar': 'germany'}
 
 # Lot « ac-germany » : nom affiche d'un theatre (en-tete de la chart, titre du repertoire des heliports) ;
@@ -35,8 +34,8 @@ def _table_get(table, theatre):
 
 
 def theatre_module(theatre):
-    """Nom du module pydcs d'un theatre : table THEATRE_MODULES (GermanyColdWar -> germany), sinon le nom en minuscules
-    sans espaces (Syria -> syria, PersianGulf -> persiangulf ...)."""
+    """Cle courte d'un theatre (le nom de son module dans pydcs) : table THEATRE_MODULES (GermanyColdWar -> germany),
+    sinon le nom en minuscules sans espaces (Syria -> syria, PersianGulf -> persiangulf ...)."""
     return _table_get(THEATRE_MODULES, theatre) or theatre.replace(' ', '').lower()
 
 
@@ -52,6 +51,34 @@ def theatre_towns_key(theatre):
     return _table_get(THEATRE_TOWNS, theatre) or theatre
 
 
+# Source : « pydcs 84f6335, LGPL-3.0 : paramètres de projection » (les valeurs seules, aucun code recopié).
+# Cle courte (theatre_module) -> (meridien central, false easting, false northing).
+PROJECTIONS = {
+    'germany': (21, 35427.619999985734, -6061633.128000011),
+    'syria': (39, 282801.00000003993, -3879865.9999999935),
+    'caucasus': (33, -99516.9999999732, -4998114.999999984),
+}
+SCALE_FACTOR = 0.9996
+
+
+class TransverseMercator:
+    """Parametres d'une projection transverse de Mercator ; `to_crs()` : la chaine PROJ que construit pydcs."""
+
+    def __init__(self, central_meridian, false_easting, false_northing, scale_factor=SCALE_FACTOR):
+        self.central_meridian = central_meridian
+        self.false_easting = false_easting
+        self.false_northing = false_northing
+        self.scale_factor = scale_factor
+
+    def proj4(self):
+        return ' '.join(['+proj=tmerc', '+lat_0=0', f'+lon_0={self.central_meridian}', f'+k_0={self.scale_factor}',
+                         f'+x_0={self.false_easting}', f'+y_0={self.false_northing}', '+towgs84=0,0,0,0,0,0,0',
+                         '+units=m', '+vunits=m', '+ellps=WGS84', '+no_defs', '+axis=neu'])
+
+    def to_crs(self):
+        return CRS.from_proj4(self.proj4())
+
+
 class Projection:
     """Projection transverse de Mercator du theatre (parametres de pydcs, +axis=neu)."""
 
@@ -64,8 +91,10 @@ class Projection:
 
     @classmethod
     def for_theatre(cls, theatre):
-        mod = importlib.import_module(f'dcs.terrain.{theatre_module(theatre)}.projection')
-        return cls(mod.PARAMETERS)
+        key = theatre_module(theatre)
+        if key not in PROJECTIONS:
+            raise ModuleNotFoundError(f'aucune projection pour le theatre {theatre} (GermanyColdWar, Syria ou Caucasus)')
+        return cls(TransverseMercator(*PROJECTIONS[key]))
 
     def to_latlon(self, x, z):
         lat, lon = self._fwd.transform(x, z)

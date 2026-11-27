@@ -1,4 +1,4 @@
-"""Lot ac-germany : module pydcs et nom affiche d'un theatre, revetement de l'aerodrome seul.
+"""Lot ac-germany : cle courte et nom affiche d'un theatre, revetement de l'aerodrome seul.
 Les tests purs (tables, masque synthetique) tournent sans echantillons ; les deux derniers executent quand
 DCS_CHARTS_SAMPLES designe le dossier `echantillons/` du lot."""
 import html
@@ -16,7 +16,7 @@ def texts(svg):
     return [html.unescape(t) for t in re.findall(r'<text[^>]*>([^<]*)</text>', svg)]
 
 
-# ---------- 4.1 : le module pydcs ----------
+# ---------- 4.1 : la cle courte (le nom du module dans pydcs) ----------
 def test_pydcs_module_table():
     assert geo.theatre_module('GermanyColdWar') == 'germany'
     assert geo.theatre_module('Syria') == 'syria'
@@ -26,7 +26,7 @@ def test_pydcs_module_table():
 
 def test_germany_cold_war_loads_through_the_table():
     t = dcsdata.load_terrain('GermanyColdWar')
-    assert t.name == 'GermanyCW' and len(t.airports) > 100
+    assert t.name == 'GermanyColdWar' and len(t.airports) > 100
     proj = geo.Projection.for_theatre('GermanyColdWar')
     lat, lon = proj.to_latlon(0.0, 0.0)
     assert 40 < lat < 60 and 0 < lon < 25

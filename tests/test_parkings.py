@@ -1,30 +1,34 @@
-"""Lot parkings : fichiers de downloads/parkings/ face a pydcs (sans echantillon)."""
+"""Lot parkings : fichiers de downloads/parkings/ face aux faits du jeu (sans echantillon). Les trois theatres releves
+dans le jeu (GAME) se regenerent depuis render/data/game/ ; les huit autres restent tels que pydcs 84f6335 les a produits."""
 import json
+import shutil
 from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
 
 from render import export_parkings as ep
+from render import gamedata
 
 ROOT = Path(__file__).resolve().parent.parent
 PUB = ROOT / 'downloads' / 'parkings'
 KEYS = [k for _, k in ep.THEATRES]
+GAME_FILES = sorted([f'{k}.json' for k in ep.GAME] + ['aircraft.json'])
+PYDCS_SOURCE = 'pydcs 84f6335 (LGPL-3.0): parking stands of the DCS mission editor'
 
 
-def _expected_commit():
-    import re
-    m = re.search(r'^pydcs @ git\+\S+@([0-9a-f]{40})$', (ROOT / 'requirements.txt').read_text(encoding='utf-8'), re.M)
-    return m.group(1)
+def _version():
+    return json.loads((gamedata.GAME_DIR / 'Syria.json').read_text(encoding='utf-8'))['dcs_version']
 
 
 def _source():
-    return f'pydcs {_expected_commit()[:7]} (LGPL-3.0): parking stands of the DCS mission editor'
+    return f'DCS World {_version()} mission editor (Eagle Dynamics): parking stands; non-commercial use'
 
 
 @pytest.fixture(scope='module')
 def fresh(tmp_path_factory):
     d = tmp_path_factory.mktemp('parkings')
+    shutil.copy(PUB / 'aircraft.json', d / 'aircraft.json')         # les types que le jeu n'a pas viennent du fichier present
     ep.export(d, log=lambda *_: None)
     return d
 
@@ -35,16 +39,27 @@ def _load(path):
 
 def test_commited_files_identical_to_command_output(fresh):
     names = sorted(p.name for p in fresh.iterdir())
-    assert names == sorted([f'{k}.json' for k in KEYS] + ['aircraft.json'])
-    assert len(names) == 12
+    assert names == GAME_FILES and len(names) == 4
     for n in names:
         assert (PUB / n).read_bytes() == (fresh / n).read_bytes(), n
 
 
 def test_two_passes_same_bytes(fresh, tmp_path):
+    shutil.copy(PUB / 'aircraft.json', tmp_path / 'aircraft.json')
     ep.export(tmp_path, log=lambda *_: None)
     for p in fresh.iterdir():
         assert (tmp_path / p.name).read_bytes() == p.read_bytes()
+    ep.export(tmp_path, log=lambda *_: None)                         # sur sa propre sortie : les memes octets
+    for p in fresh.iterdir():
+        assert (tmp_path / p.name).read_bytes() == p.read_bytes()
+
+
+def test_other_theatres_neither_written_nor_erased(tmp_path):
+    (tmp_path / 'Kola.json').write_bytes(b'kola')
+    written = ep.export(tmp_path, log=lambda *_: None)
+    assert sorted(written) == GAME_FILES
+    assert (tmp_path / 'Kola.json').read_bytes() == b'kola'
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(GAME_FILES + ['Kola.json'])
 
 
 def test_publication_readme_and_no_extra_file():
@@ -61,23 +76,26 @@ def test_theatre_file(module, key):
     assert list(d) == ['format', 'theatre', 'source', 'airdromes']
     assert d['format'] == 'dcs-parkings-v1'
     assert d['theatre'] == key
-    assert d['source'] == _source()
     ids = [a['airdromeId'] for a in d['airdromes']]
     assert ids == sorted(ids) and len(set(ids)) == len(ids)
-    terrain = ep.load_terrain(module)
-    import importlib
-    listed = importlib.import_module(f'dcs.terrain.{module}.airports').ALL_AIRPORTS
-    assert len(terrain.airports) == len(listed)
-    assert len(d['airdromes']) == len(listed)
     assert all(list(a) == ['airdromeId', 'name', 'x', 'y', 'parkings'] for a in d['airdromes'])
+    for a in d['airdromes']:
+        pk = [p['parking'] for p in a['parkings']]
+        assert pk == sorted(pk) and len(set(pk)) == len(pk)
+        for p in a['parkings']:
+            assert set(p) == {'parking', 'parking_id', 'x', 'y', 'heli', 'plane', 'length', 'width', 'height'}
+    if key not in ep.GAME:
+        assert d['source'] == PYDCS_SOURCE                           # fige jusqu'a son releve dans le jeu
+        return
+    assert d['source'] == _source()
+    terrain = ep.load_terrain(key)
+    assert len(d['airdromes']) == len(terrain.airports)
     n = 0
     by_id = {a['airdromeId']: a for a in d['airdromes']}
     for ap in terrain.airports.values():
         a = by_id[ap.id]
         assert a['name'] == ap.name
         assert a['x'] == round(ap.position.x, 2) and a['y'] == round(ap.position.y, 2)
-        pk = [p['parking'] for p in a['parkings']]
-        assert pk == sorted(pk) and len(set(pk)) == len(pk)
         assert len(a['parkings']) == len(ap.parking_slots)
         got = {p['parking']: p for p in a['parkings']}
         for s in ap.parking_slots:
@@ -87,9 +105,14 @@ def test_theatre_file(module, key):
             assert p['heli'] is bool(s.helicopter) and p['plane'] is bool(s.airplanes)
             assert p['length'] == round(s.length, 3) and p['width'] == round(s.width, 3)
             assert p['height'] == (None if s.height is None else round(s.height, 3))
-            assert set(p) == {'parking', 'parking_id', 'x', 'y', 'heli', 'plane', 'length', 'width', 'height'}
             n += 1
     assert n == sum(len(a['parkings']) for a in d['airdromes'])
+
+
+def test_game_counts():
+    counts = {k: (len(d['airdromes']), sum(len(a['parkings']) for a in d['airdromes']))
+              for k in ep.GAME for d in [_load(PUB / f'{k}.json')]}
+    assert counts == {'GermanyCW': (247, 7724), 'Syria': (224, 3976), 'Caucasus': (21, 900)}
 
 
 def test_syria_first_airdrome():
@@ -103,26 +126,40 @@ def test_syria_first_airdrome():
 
 
 def test_aircraft_file():
-    from dcs.helicopters import helicopter_map
-    from dcs.planes import plane_map
     d = _load(PUB / 'aircraft.json')
     assert list(d) == ['format', 'source', 'aircraft']
     assert d['format'] == 'dcs-aircraft-sizes-v1'
-    assert d['source'] == _source()
+    assert d['source'] == (f'DCS World {_version()} mission editor (Eagle Dynamics): aircraft sizes; '
+                           'types not installed: pydcs 84f6335 (LGPL-3.0)')
     keys = list(d['aircraft'])
     assert keys == sorted(keys)
-    classes = list(plane_map.values()) + list(helicopter_map.values())
-    assert set(keys) == {c.id for c in classes}
-    assert len(keys) == len(classes)
-    for c in classes:
-        assert d['aircraft'][c.id] == {'heli': bool(c.helicopter), 'length': round(c.length, 3),
-                                       'width': round(c.width, 3), 'height': round(c.height, 3)}, c.id
+    game = _load(gamedata.GAME_DIR / 'aircraft.json')['aircraft']
+    assert len(game) == 172 and set(game) <= set(keys)
+    for k, v in game.items():
+        assert d['aircraft'][k] == {'heli': v['heli'], 'length': round(v['length'], 3), 'width': round(v['width'], 3),
+                                    'height': round(v['height'], 3)}, k
+    assert len(keys) == 175                                          # 172 du jeu, 3 de pydcs que le jeu n'a pas
     assert d['aircraft']['Mi-24P'] == {'heli': True, 'length': 20.953, 'width': 17.3, 'height': 4.354}
+
+
+def test_aircraft_extras_kept_as_they_are(tmp_path):
+    game = tmp_path / 'game.json'
+    game.write_text(json.dumps({'format': 'dcs-aircraft-game-v1', 'dcs_version': '9.9', 'source': 's', 'aircraft': {
+        'B': {'heli': False, 'length': 1.23456, 'width': 2, 'height': 3}}}), encoding='utf-8')
+    present = tmp_path / 'aircraft.json'
+    present.write_text(json.dumps({'format': 'dcs-aircraft-sizes-v1', 'source': 'x', 'aircraft': {
+        'A': {'heli': True, 'length': 9.87654, 'width': 1, 'height': 2},
+        'B': {'heli': True, 'length': 0, 'width': 0, 'height': 0}}}), encoding='utf-8')
+    d = ep.aircraft_data(present, game=game)
+    assert d['aircraft'] == {'A': {'heli': True, 'length': 9.87654, 'width': 1, 'height': 2},
+                             'B': {'heli': False, 'length': 1.235, 'width': 2.0, 'height': 3.0}}
+    assert d['source'] == 'DCS World 9.9 mission editor (Eagle Dynamics): aircraft sizes; types not installed: pydcs 84f6335 (LGPL-3.0)'
+    assert list(ep.aircraft_data(tmp_path / 'absent.json', game=game)['aircraft']) == ['B']
 
 
 def _terrain(slots, airports=None):
     ap = NS(id=1, name='Fake', position=NS(x=0.0, y=0.0), parking_slots=slots)
-    return NS(airports={0: ap} if airports is None else airports)
+    return NS(airports={0: ap} if airports is None else airports, dcs_version='9.9')
 
 
 def _slot(idx, name='1', length=10, width=10):
@@ -143,25 +180,14 @@ def test_stops():
     b = _terrain([])
     b.airports[0].name = 'Other'
     with pytest.raises(ep.ExportError) as e:
-        ep.theatre_data('Fake', NS(airports={0: a.airports[0], 1: b.airports[0]}))
+        ep.theatre_data('Fake', NS(airports={0: a.airports[0], 1: b.airports[0]}, dcs_version='9.9'))
     assert 'Fake' in str(e.value) and 'Other' in str(e.value) and ' 1' in str(e.value)
 
 
-def test_installed_commit_check():
-    want = _expected_commit()
-    assert ep.installed_commit() == want
-    ep.check_installed(installed=want)
-    with pytest.raises(ep.ExportError) as e:
-        ep.check_installed(installed='0' * 40)
-    assert '0' * 40 in str(e.value) and want in str(e.value)
-    with pytest.raises(ep.ExportError):
-        ep.check_installed(installed='')
-
-
-def test_wrong_pydcs_writes_nothing(tmp_path, monkeypatch):
-    monkeypatch.setattr(ep, 'installed_commit', lambda: '0' * 40)
+def test_missing_game_file_writes_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(ep, 'GAME_AIRCRAFT', tmp_path / 'absent.json')
     out = tmp_path / 'out'
-    with pytest.raises(ep.ExportError):
+    with pytest.raises(ep.ExportError, match='absent.json'):
         ep.export(out, log=lambda *_: None)
     assert not out.exists()
     assert ep.main(['--out', str(out)]) == 1
@@ -172,25 +198,29 @@ def test_stop_midway_writes_nothing(tmp_path, monkeypatch):
     real = ep.load_terrain
     calls = []
 
-    def load(module):
-        calls.append(module)
-        if module == 'kola':
-            t = real(module)
+    def load(key):
+        calls.append(key)
+        t = real(key)
+        if key == 'Syria':
             ap = next(iter(t.airports.values()))
             ap.parking_slots.append(ap.parking_slots[0])
-            return t
-        return real(module)
+        return t
     monkeypatch.setattr(ep, 'load_terrain', load)
     out = tmp_path / 'out'
     out.mkdir()
     with pytest.raises(ep.ExportError):
         ep.export(out, log=lambda *_: None)
-    assert 'kola' in calls and list(out.iterdir()) == []
+    assert 'Syria' in calls and list(out.iterdir()) == []
 
 
-def test_aircraft_missing_height(monkeypatch):
-    import dcs.helicopters as H
-    cls = H.helicopter_map['Mi-24P']
-    monkeypatch.setattr(cls, 'height', None)
+def test_aircraft_missing_height(tmp_path):
+    game = tmp_path / 'game.json'
+    game.write_text(json.dumps({'format': 'dcs-aircraft-game-v1', 'dcs_version': '9.9', 'source': 's', 'aircraft': {
+        'Mi-24P': {'heli': True, 'length': 20.953, 'width': 17.3, 'height': None}}}), encoding='utf-8')
     with pytest.raises(ep.ExportError, match='Mi-24P'):
-        ep.aircraft_data()
+        ep.aircraft_data(game=game)
+
+
+def test_theatre_outside_the_game_refused():
+    with pytest.raises(ep.ExportError, match='Kola'):
+        ep.load_terrain('Kola')

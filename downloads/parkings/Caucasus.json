@@ -1,4 +1,4 @@
-{"format":"dcs-parkings-v1","theatre":"Caucasus","source":"pydcs 84f6335 (LGPL-3.0): parking stands of the DCS mission editor","airdromes":[
+{"format":"dcs-parkings-v1","theatre":"Caucasus","source":"DCS World 2.9.32.30490 mission editor (Eagle Dynamics): parking stands; non-commercial use","airdromes":[
 {"airdromeId":12,"name":"Anapa-Vityazevo","x":-5412.41,"y":243128.82,"parkings":[
 {"parking":1,"parking_id":"40","x":-4829.52,"y":244622.07,"heli":true,"plane":true,"length":78.723,"width":67.096,"height":18.0},
 {"parking":2,"parking_id":"90","x":-5155.08,"y":244536.28,"heli":false,"plane":true,"length":26.0,"width":22.0,"height":8.0},

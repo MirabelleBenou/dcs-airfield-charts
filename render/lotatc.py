@@ -49,7 +49,7 @@ A controller can also load a single file from the Draw tab of the LotAtc client.
 
 Positions are read from DCS World: the F10 map for the plan, the mission editor for the parking stands.
 They match the game, not the real airfields. Not for real-world navigation.
-Data: F10 map and DCS World files (Eagle Dynamics), via pydcs. Non-commercial use only.
+Data: F10 map and DCS World files (Eagle Dynamics). Non-commercial use only.
 Source: https://github.com/MirabelleBenou/dcs-airfield-charts
 """
 

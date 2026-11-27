@@ -270,7 +270,7 @@ def check_marque():
 
 
 def theatre_terrains(theatre):
-    """[nom, lat, lon, 'a' ou 'h'] de chaque aeroport pydcs : `a` s'il a des pistes ou une radio de tour, sinon `h`."""
+    """[nom, lat, lon, 'a' ou 'h'] de chaque aeroport du jeu : `a` s'il a des pistes ou une radio de tour, sinon `h`."""
     terrain = dcsdata.load_terrain(theatre)
     proj = geo.Projection.for_theatre(theatre)
     out = []
@@ -280,7 +280,7 @@ def theatre_terrains(theatre):
         out.append([ap.name, lat, lon, kind])
     names = [t[0] for t in out]
     if len(set(names)) != len(names):
-        raise SiteError(f'{theatre} : noms de terrain en double dans pydcs')
+        raise SiteError(f'{theatre} : noms de terrain en double dans le jeu')
     return out
 
 

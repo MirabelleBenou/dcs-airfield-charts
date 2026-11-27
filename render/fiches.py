@@ -6,7 +6,7 @@ qui nomme le terrain DCS de chaque page. Aucune chart n'est redessinee. La logiq
 
 - Une chart est rattachee a son terrain par l'ARP lu dans son SVG (terrain le plus proche d'`airfields.json`).
 - Une helistation est rattachee a sa vignette en rejouant la mise en page du repertoire (`render/directory.py`, appele
-  tel quel, a partir de pydcs seul), puis la mise en page est controlee contre les pages publiees.
+  tel quel, a partir des faits du jeu seuls), puis la mise en page est controlee contre les pages publiees.
 """
 import html
 import io
@@ -36,7 +36,7 @@ DARK_MAX, WHITE_MIN = 80, 200  # moyenne des gris : bande sombre < 80 ; page bla
 # Cle du Route Planner de chaque theatre d'Airfield Charts (insensible a la casse, comme les tables de render/geo.py).
 ROUTE_PLANNER_THEATRES = {'GermanyColdWar': 'GermanyCW', 'Syria': 'Syria'}
 
-# Aerodromes pydcs sans piste ni radio de tour qui ne sont pas dans le repertoire publie (jamais captures).
+# Aerodromes du jeu sans piste ni radio de tour qui ne sont pas dans le repertoire publie (jamais captures).
 DIRECTORY_EXCLUSIONS = {'Syria': {'HMed22'}}
 
 
@@ -182,8 +182,8 @@ def encode_page(data, name):
 
 # ---------- le repertoire des helistations : rejeu et controle ----------
 def replay_directory(theatre):
-    """Rejoue la mise en page du repertoire avec `render/directory.py` (appele tel quel) a partir de pydcs seul.
-    Retourne (sites, pages, nombre de pages d'index). Sites : aerodromes pydcs sans piste ni radio de tour, hors
+    """Rejoue la mise en page du repertoire avec `render/directory.py` (appele tel quel) a partir des faits du jeu seuls.
+    Retourne (sites, pages, nombre de pages d'index). Sites : aerodromes du jeu sans piste ni radio de tour, hors
     DIRECTORY_EXCLUSIONS ; dossier, elevation et position valent des valeurs neutres (aucune mise en page n'en depend)."""
     terrain = dcsdata.load_terrain(theatre)
     excluded = geo._table_get(DIRECTORY_EXCLUSIONS, theatre) or set()

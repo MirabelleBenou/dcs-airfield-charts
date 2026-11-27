@@ -28,7 +28,7 @@ BAND1_Y, BAND2_Y, BAND_H = 30.0, 36.2, 5.2            # sous le bandeau de la to
 BAND_TEXT_X, PAIRS_X = 7.5, 28.0
 PLAN_Y = 43.4
 PLAN_BOTTOM = {'avion': 125.2, 'helico': 131.2}
-FOOTER_TEXT = 'DCS AIRFIELD CHARTS · data: DCS World files and terrain (Eagle Dynamics), via pydcs · non-commercial use'
+FOOTER_TEXT = 'DCS AIRFIELD CHARTS · data: DCS World files and terrain (Eagle Dynamics) · non-commercial use'
 PX_PER_MM = 12
 TINTS = ((200, (246, 244, 237)), (600, (238, 233, 218)), (1600, (229, 220, 197)), (2600, (219, 206, 178)),
          (3600, (207, 190, 158)), (None, (192, 172, 138)))     # teintes du relief : bornes au-dessus de l'AD ELEV (ft)

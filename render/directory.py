@@ -80,7 +80,7 @@ class Aire:
 
 @dataclass
 class Site:
-    name: str                  # nom pydcs
+    name: str                  # nom du jeu
     folder: Path               # capture
     x: float                   # position de l'aerodrome (repere DCS)
     z: float
@@ -99,7 +99,7 @@ class Site:
 
 
 def series_of(name):
-    """Nom pydcs prive de ses chiffres finaux ; sans chiffres finaux : serie « OTHERS »."""
+    """Nom du jeu prive de ses chiffres finaux ; sans chiffres finaux : serie « OTHERS »."""
     s = re.sub(r'\d+$', '', name)
     return s if s != name else OTHERS
 
@@ -137,7 +137,7 @@ def direction8(dx, dy):
 
 
 def list_sites(cfg, theatre, log=print):
-    """Les captures `kind: heliport` de out/<theatre>/ appariees a pydcs, sauf celles dont l'aerodrome a une radio de tour."""
+    """Les captures `kind: heliport` de out/<theatre>/ appariees au jeu, sauf celles dont l'aerodrome a une radio de tour."""
     terrain = dcsdata.load_terrain(theatre)
     proj = geo.Projection.for_theatre(theatre)
     root = Path(cfg.work_dir) / 'out' / theatre.lower()
@@ -151,12 +151,12 @@ def list_sites(cfg, theatre, log=print):
         center = (bj.get('extent_rn4') or {}).get('center')
         ap = dcsdata.match_airport(terrain, center[0], center[1]) if center else None
         if ap is None:
-            log(f'{folder.name} : aucun aerodrome pydcs, ignore')
+            log(f'{folder.name} : aucun aerodrome du jeu, ignore')
             continue
         if getattr(ap, 'atc_radio', None) is not None:
             continue                                         # a sa chart
         if ap.name in seen:
-            raise DirectoryError(f'{folder.name} et {seen[ap.name]} designent le meme aerodrome pydcs ({ap.name})')
+            raise DirectoryError(f'{folder.name} et {seen[ap.name]} designent le meme aerodrome du jeu ({ap.name})')
         seen[ap.name] = folder.name
         facts = dcsdata.airport_facts(ap)
         aires = [Aire(s.name, s.x, s.z, float(s.length), float(s.width)) for s in facts.slots]
@@ -545,8 +545,8 @@ def footer(page, d, left):
     draw_text(d, (x1, 2379), 'NOT FOR REAL-WORLD NAVIGATION', 'bold', 29, INK, 'rs')
 
 
-FOOT_LEFT = 'All plans at the same scale · pads and numbers: DCS (pydcs) · background: F10 map · WGS84'
-FOOT_INDEX = 'Page: page of the PDF collection · position: pydcs airfield · nearest town: towns.json list'
+FOOT_LEFT = 'All plans at the same scale · pads and numbers: DCS mission editor · background: F10 map · WGS84'
+FOOT_INDEX = 'Page: page of the PDF collection · position: DCS airfield reference point · nearest town: towns.json list'
 INDEX_ROWS_PER_PAGE = 50
 INDEX_Y0, INDEX_PITCH = 300, 40
 

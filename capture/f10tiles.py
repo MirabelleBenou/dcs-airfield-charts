@@ -174,7 +174,7 @@ def _projection(theatre):
     try:
         return geo.Projection.for_theatre(theatre)
     except ImportError:
-        _refus(f'theatre inconnu de pydcs : {theatre}')
+        _refus(f'theatre inconnu du jeu : {theatre}')
 
 
 def grille_voulue(z):
@@ -282,7 +282,7 @@ def _ecrire_image(img, chemin, couche):
 
 
 def _terrain_aerodrome_proche(theatre, x, zc):
-    """(nom, x, z) de l'aerodrome du theatre (pydcs) le plus proche de (x, zc)."""
+    """(nom, x, z) de l'aerodrome du theatre (le jeu) le plus proche de (x, zc)."""
     from render import dcsdata
     terrain = dcsdata.load_terrain(theatre)
     best = None
@@ -291,7 +291,7 @@ def _terrain_aerodrome_proche(theatre, x, zc):
         if best is None or d < best[0]:
             best = (d, ap.name, float(ap.position.x), float(ap.position.y))
     if best is None:
-        raise f10capture.AskCdP(f'ARRET : aucun aerodrome pydcs pour {theatre}')
+        raise f10capture.AskCdP(f'ARRET : aucun aerodrome du jeu pour {theatre}')
     return best[1], best[2], best[3]
 
 

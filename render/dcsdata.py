@@ -1,16 +1,12 @@
-"""Faits du jeu : pydcs (aerodromes, pistes, parkings, radios) et beacons.lua (balises).
-
-pydcs est importe (licence LGPL : import d'une bibliotheque, aucun code recopie).
+"""Faits du jeu : les fichiers releves dans l'editeur de mission de DCS (`render/gamedata.py` : aerodromes, pistes,
+parkings, radios) et beacons.lua (balises).
 """
-import importlib
 import json
 import math
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-
-from . import geo
 
 MATCH_MAX_M = 3000.0
 WORLD_MAX_M = 5000.0          # balise `world_` rattachee a l'aerodrome le plus proche, a 5 km au plus (lot balises, 4.3)
@@ -21,16 +17,13 @@ class DataError(Exception):
 
 
 def load_terrain(theatre):
-    import dcs.terrain.terrain as T
-    mod = importlib.import_module(f'dcs.terrain.{geo.theatre_module(theatre)}')
-    for obj in vars(mod).values():
-        if isinstance(obj, type) and issubclass(obj, T.Terrain) and obj is not T.Terrain:
-            return obj()
-    raise DataError(f'pydcs : aucun terrain pour {theatre}')
+    """Terrain du jeu (`render/gamedata.py`) ; DataError, qui nomme le theatre, s'il n'a pas de fichier."""
+    from . import gamedata
+    return gamedata.load_terrain(theatre)
 
 
 def match_airport(terrain, x, z, max_m=MATCH_MAX_M):
-    """Aerodrome pydcs dont l'ARP est le plus proche de (x, z), a moins de `max_m` (sinon None)."""
+    """Aerodrome du jeu dont l'ARP est le plus proche de (x, z), a moins de `max_m` (sinon None)."""
     best, best_d = None, None
     for ap in terrain.airports.values():
         d = math.hypot(ap.position.x - x, ap.position.y - z)
@@ -91,9 +84,9 @@ def airfield_beacons(beacons, airport_id):
 
 
 def world_beacons_near(beacons, airports, airport_id, max_m=WORLD_MAX_M):
-    """Balises `world_...` rattachees a l'aerodrome `airport_id` : celles dont il est l'aerodrome pydcs le plus proche
+    """Balises `world_...` rattachees a l'aerodrome `airport_id` : celles dont il est l'aerodrome du jeu le plus proche
     (distance horizontale a `airport.position`), a `max_m` au plus. Retourne [(Beacon, distance_m)] dans l'ordre du fichier.
-    `airports` : objets pydcs (id, position.x, position.y)."""
+    `airports` : aerodromes du jeu (id, position.x, position.y)."""
     out = []
     for k, b in beacons.items():
         if not k.startswith('world_'):
@@ -118,7 +111,7 @@ class Slot:
 @dataclass
 class Approach:
     name: str                  # '01L'
-    heading: float             # cap pydcs (degres)
+    heading: float             # cap du jeu (degres)
 
 
 @dataclass
@@ -127,22 +120,22 @@ class AirportFacts:
     name: str
     x: float
     z: float
-    atc: dict                  # vhf_high_hz, uhf_hz, vhf_low_hz, hf_hz ; None si pydcs n'a pas de radio de tour
+    atc: dict                  # vhf_high_hz, uhf_hz, vhf_low_hz, hf_hz ; None si le jeu n'a pas de radio de tour
     approaches: list
     slots: list
-    rw_refs: list = field(default_factory=list)    # une entree par piste de pydcs : (Approach main, Approach opposite)
+    rw_refs: list = field(default_factory=list)    # une entree par piste du jeu : (Approach main, Approach opposite)
 
 
 def airport_facts(ap):
-    """Faits pydcs d'un aerodrome ; DataError si un fait attendu manque."""
+    """Faits du jeu d'un aerodrome ; DataError si un fait attendu manque."""
     atc = getattr(ap, 'atc_radio', None)
     if atc is None:
-        atc_d = None                                  # pas de radio de tour dans pydcs : le bandeau affiche des tirets (lot pistes-v1, 4.6)
+        atc_d = None                                  # pas de radio de tour dans le jeu : le bandeau affiche des tirets (lot pistes-v1, 4.6)
     else:
         try:
             atc_d = {'vhf_high_hz': atc.vhf_high_hz, 'uhf_hz': atc.uhf_hz, 'vhf_low_hz': atc.vhf_low_hz, 'hf_hz': atc.hf_hz}
         except AttributeError as e:
-            raise DataError(f"pydcs : atc_radio incomplet pour {ap.name} ({e})")
+            raise DataError(f"le jeu : atc_radio incomplet pour {ap.name} ({e})")
     aps, rw_refs = [], []
     for rw in ap.runways:
         pair = []
@@ -153,7 +146,7 @@ def airport_facts(ap):
     slots = []
     for s in ap.parking_slots:
         if s.slot_name is None:
-            raise DataError(f'pydcs : slot_name absent ({ap.name})')
+            raise DataError(f'le jeu : slot_name absent ({ap.name})')
         slots.append(Slot(str(s.slot_name), s.position.x, s.position.y, bool(s.helicopter and not s.airplanes),
                           bool(s.airplanes), s.length, s.width))
     return AirportFacts(ap.id, ap.name, ap.position.x, ap.position.y, atc_d, aps, slots, rw_refs)
@@ -181,7 +174,7 @@ def _norm_name(name):
 def declared_runways(theatre, base, airport_name=None):
     """Pistes declarees par le jeu (`Airbase:getRunways()`) d'une base d'un theatre : liste de dicts {Name, course, length,
     width, x, z} (radians, metres). Le nom se cherche sans tenir compte de la casse, `_` valant une espace, par le nom du
-    dossier de la base (`base`) puis par le nom pydcs (`airport_name`) ; le theatre aussi se trouve sans tenir compte de la
+    dossier de la base (`base`) puis par le nom du jeu (`airport_name`) ; le theatre aussi se trouve sans tenir compte de la
     casse. Liste vide si le theatre n'a pas de fichier ou la base pas d'entree."""
     doc = _declared_file(theatre)
     if not doc:

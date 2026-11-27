@@ -1,10 +1,11 @@
-"""Ecrit les codes OACI et les balises radio des aerodromes de chaque theatre de DCS : `<cle>.json` par theatre.
+"""Ecrit les codes OACI et les balises radio des aerodromes des theatres releves dans le jeu : `<cle>.json` par theatre.
 
     python -I render/export_navaids.py --ourairports <airports.csv> --beacons <dossier> --out <dossier>
 
-Format `dcs-navaids-v1`. Les aerodromes viennent de pydcs, le code OACI d'OurAirports (par la position), les balises du
+Format `dcs-navaids-v1`. Les aerodromes viennent des fichiers du jeu (`render/gamedata.py`), le code OACI d'OurAirports (par la position), les balises du
 `beacons.lua` du jeu (`<dossier>` est organise comme `Mods/terrains` de DCS). Sortie deterministe : un aerodrome par
-ligne, une balise de route par ligne.
+ligne, une balise de route par ligne. Seuls les theatres releves dans le jeu sont ecrits ; les autres fichiers du dossier
+de sortie ne sont ni ecrits ni effaces.
 """
 import argparse
 import bisect
@@ -19,9 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from render import dcsdata  # noqa: E402
-from render.export_parkings import (THEATRES, ExportError, _dumps, check_installed, load_terrain,  # noqa: E402
-                                    pinned_commit)
+from render import dcsdata, geo  # noqa: E402
+from render.export_parkings import GAME, ExportError, _dumps, load_terrain  # noqa: E402
 
 FORMAT = 'dcs-navaids-v1'
 OURAIRPORTS_COMMIT = '64af12951161ed52bc733eb4101224643c48850a'
@@ -138,8 +138,9 @@ def _freq(b):
     return int(f) if f else None
 
 
-def beacons_data(key, terrain, beacons_file):
-    """({airdromeId: [balises]}, [balises de route]) ; (None, None) sans fichier."""
+def beacons_data(key, terrain, beacons_file, projection=None):
+    """({airdromeId: [balises]}, [balises de route]) ; (None, None) sans fichier. `projection` : celle du theatre (par
+    defaut, celle de GAME[key]) pour la position des balises de route."""
     if beacons_file is None:
         return None, None
     parsed = dcsdata.parse_beacons_lua(beacons_file)
@@ -161,30 +162,27 @@ def beacons_data(key, terrain, beacons_file):
         if m:
             aid, n = int(m.group(1)), int(m.group(2))
             if aid not in ids:
-                raise ExportError(f'{key} : la balise {bid} n\'a pas d\'aerodrome (airdromeId {aid} absent de pydcs)')
+                raise ExportError(f'{key} : la balise {bid} n\'a pas d\'aerodrome (airdromeId {aid} absent du jeu)')
             runway = ends[bid][1] if bid in ends and ends[bid][0] == aid else None
             per_airfield[aid].append((n, {'type': b.type, 'callsign': b.callsign, 'frequency': _freq(b),
                                           'channel': b.channel, 'runway': runway}))
             continue
         m = _WORLD_ID.match(bid)
         if m:
-            ll = dcsdata_point(b.x, b.z, terrain).latlng()
+            if projection is None:
+                projection = geo.Projection.for_theatre(GAME.get(key, key))
+            lat, lon = projection.to_latlon(b.x, b.z)
             enroute.append((int(m.group(1)), {'type': b.type, 'callsign': b.callsign, 'frequency': _freq(b),
-                                              'channel': b.channel, 'lat': round(ll.lat, 6), 'lon': round(ll.lng, 6)}))
+                                              'channel': b.channel, 'lat': round(lat, 6), 'lon': round(lon, 6)}))
     return ({aid: [d for _, d in sorted(v, key=lambda t: t[0])] for aid, v in per_airfield.items()},
             [d for _, d in sorted(enroute, key=lambda t: t[0])])
 
 
-def dcsdata_point(x, z, terrain):
-    from dcs.mapping import Point
-    return Point(x, z, terrain)
-
-
 # ------------------------------------------------------------------- fichier
 
-def theatre_data(key, terrain, rows_index_codes, beacons_file, requirements=None):
-    """Dictionnaire `dcs-navaids-v1` d'un terrain pydcs. `rows_index_codes` : {airdromeId: code ou None}."""
-    per_airfield, enroute = beacons_data(key, terrain, beacons_file)
+def theatre_data(key, terrain, rows_index_codes, beacons_file, projection=None):
+    """Dictionnaire `dcs-navaids-v1` d'un terrain du jeu. `rows_index_codes` : {airdromeId: code ou None}."""
+    per_airfield, enroute = beacons_data(key, terrain, beacons_file, projection)
     airdromes = []
     seen = set()
     for ap in terrain.airports.values():
@@ -199,7 +197,7 @@ def theatre_data(key, terrain, rows_index_codes, beacons_file, requirements=None
         'format': FORMAT,
         'theatre': key,
         'source': {
-            'airfields': f'pydcs {pinned_commit(requirements)[:7]} (LGPL-3.0): airfield names and positions',
+            'airfields': f'DCS World {terrain.dcs_version} mission editor (Eagle Dynamics): airfield names and positions',
             'icao': f"OurAirports {OURAIRPORTS_COMMIT[:7]} (public domain): today's ICAO codes, "
                     f'matched by position within 3 km',
             'beacons': None if beacons_file is None else f'DCS game files: Mods/terrains/{folder}/beacons.lua',
@@ -227,20 +225,20 @@ def theatre_text(data):
     return '\n'.join(out) + '\n'
 
 
-def build_all(ourairports, beacons_dir, requirements=None):
-    """Calcule les onze textes sans rien ecrire ; retourne [(nom, texte, ligne de log)]."""
-    check_installed(requirements)
+def build_all(ourairports, beacons_dir):
+    """Calcule les trois textes sans rien ecrire ; retourne [(nom, texte, ligne de log)]."""
     check_ourairports(ourairports)
     rows = read_ourairports(ourairports)
     files = []
-    for module, key in THEATRES:
-        terrain = load_terrain(module)
+    for key in sorted(GAME):
+        terrain = load_terrain(key)
+        proj = geo.Projection.for_theatre(GAME[key])
         pts = []
         for ap in terrain.airports.values():
-            ll = ap.position.latlng()
-            pts.append((ap.id, ll.lat, ll.lng))
+            lat, lon = proj.to_latlon(ap.position.x, ap.position.y)
+            pts.append((ap.id, lat, lon))
         codes = match_icao(pts, rows)
-        data = theatre_data(key, terrain, codes, find_beacons_file(beacons_dir, key), requirements)
+        data = theatre_data(key, terrain, codes, find_beacons_file(beacons_dir, key), proj)
         text = theatre_text(data)
         n_icao = sum(1 for a in data['airdromes'] if a['icao'])
         if data['enroute'] is None:
@@ -253,9 +251,10 @@ def build_all(ourairports, beacons_dir, requirements=None):
     return files
 
 
-def export(ourairports, beacons_dir, out_dir, requirements=None, log=print):
-    """Ecrit les onze fichiers dans `out_dir` (rien si un arret) ; retourne {nom de fichier: texte}."""
-    files = build_all(ourairports, beacons_dir, requirements)
+def export(ourairports, beacons_dir, out_dir, log=print):
+    """Ecrit les trois fichiers dans `out_dir` (rien si un arret ; les autres fichiers du dossier restent) ; retourne
+    {nom de fichier: texte}."""
+    files = build_all(ourairports, beacons_dir)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     for name, text, line in files:
@@ -265,7 +264,7 @@ def export(ourairports, beacons_dir, out_dir, requirements=None, log=print):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description='Ecrit les codes OACI et les balises des aerodromes de chaque theatre DCS.')
+    ap = argparse.ArgumentParser(description='Ecrit les codes OACI et les balises des aerodromes des theatres releves dans le jeu.')
     ap.add_argument('--ourairports', required=True, help='airports.csv d\'OurAirports (au commit fige)')
     ap.add_argument('--beacons', required=True, help='dossier organise comme Mods/terrains de DCS')
     ap.add_argument('--out', required=True, help='dossier de sortie (cree s\'il manque)')

@@ -60,7 +60,7 @@ class Parking:
     z: float
     kind: str                  # 'open', 'shelter', 'heli'
     zone: int = -1
-    length: float = 20.0       # lot heliports-fond (4.2) : longueur pydcs du slot (m), 20 m si elle manque
+    length: float = 20.0       # lot heliports-fond (4.2) : longueur du slot dans le jeu (m), 20 m si elle manque
 
 
 @dataclass
@@ -90,7 +90,7 @@ class ChartData:
     osm_icao: str = None
     projection: object = None
     n_shelter: int = 0
-    heli_mode: bool = False    # lot heliports (4.1) : toutes les aires pydcs sont reservees aux helicopteres
+    heli_mode: bool = False    # lot heliports (4.1) : toutes les aires du jeu sont reservees aux helicopteres
     icao_known: bool = True    # un OACI a ete donne (option --icao ou fichier OSM) ; sinon `icao` porte le nom de la capture
     f10_img: object = None     # lot heliports-fond (4.3) : mosaique (RGB, icone et nom de l'heliport effaces), seulement sur fond F10
     taxiway_source: str = 'osm'  # origine des noms de taxiways : 'osm' (fichier OSM) ou 'jeu' (taxiways_dcs a pris la place des ways d'OSM)
@@ -269,7 +269,7 @@ def read_osm(path, proj, pav, g, mpp, ways_path=None):
 
 
 def heliport_has_radio(bj, theatre):
-    """Lot heliports (4.2) : un `base.json` de `kind: heliport` se rend en chart si son aerodrome pydcs a une radio de tour.
+    """Lot heliports (4.2) : un `base.json` de `kind: heliport` se rend en chart si son aerodrome du jeu a une radio de tour.
     L'aerodrome est apparie par le centre de l'emprise .rn4 de base.json (le .rn4 lui-meme n'existe que pour ces heliports)."""
     center = (bj.get('extent_rn4') or {}).get('center')
     if not center:
@@ -312,7 +312,7 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     terrain = dcsdata.load_terrain(theatre)
     ap = dcsdata.match_airport(terrain, *center)
     if ap is None:
-        raise ChartError(f'aucun aerodrome pydcs a moins de {dcsdata.MATCH_MAX_M:.0f} m de {base}')
+        raise ChartError(f'aucun aerodrome du jeu a moins de {dcsdata.MATCH_MAX_M:.0f} m de {base}')
     facts = dcsdata.airport_facts(ap)
     proj = geo.Projection.for_theatre(theatre)
     beacons_lua = Path(cfg.terrains) / theatre / 'beacons.lua'
@@ -334,7 +334,7 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
 
     def mag_heading(ln):
         """Cap magnetique (modulo 180) d'une droite candidate : azimut grille + convergence - declinaison (cadrage 4.1). Pour
-        l'appariement seulement : pydcs nomme ses pistes au monde reel, et avec le cap du cockpit (azimut grille - declinaison)
+        l'appariement seulement : le jeu nomme ses pistes au monde reel, et avec le cap du cockpit (azimut grille - declinaison)
         13 extremites de Cold War Germany passeraient au-dela de la tolerance de 13 deg (Dusseldorf : 16,2 deg)."""
         az = math.degrees(math.atan2(ln['d'][1], ln['d'][0]))
         return (az + proj.convergence(*ln['p']) - decl) % 180.0
@@ -355,8 +355,8 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
             if not rws and not (only_short and heli_mode):
                 raise ChartError('aucune piste detectee')
     else:
-        rws = []                                          # lot heliports (4.2) : aucune piste pydcs, la detection ne tourne pas
-        log('aucune piste dans pydcs : detection des pistes non lancee')
+        rws = []                                          # lot heliports (4.2) : aucune piste dans le jeu, la detection ne tourne pas
+        log('aucune piste dans le jeu : detection des pistes non lancee')
     if rws:                                              # lot « ac-germany » (4.3) : le revetement de l'aerodrome seul, apres la detection (masque complet)
         pav, n_comp, n_drop = vector.airfield_pavement(pav, g, [(r.p0, r.p1) for r in rws], [(sl.x, sl.z) for sl in facts.slots])
         log(f'revetement : {n_comp} composantes, {n_drop} ecartees (loin des pistes et des parkings)')
@@ -410,7 +410,7 @@ def analyze(cfg, theatre, base, year=1985.0, icao=None, osm_path=None, osm_dir=N
     icao_known = bool(icao or osm_icao)
 
     if facts.atc is None:
-        tower = {k: NO_FREQUENCY for k in ('vhf', 'uhf', 'fm', 'hf')}     # pas de radio de tour dans pydcs (cadrage 4.6)
+        tower = {k: NO_FREQUENCY for k in ('vhf', 'uhf', 'fm', 'hf')}     # pas de radio de tour dans le jeu (cadrage 4.6)
     else:
         tower = {'vhf': fmt_mhz(facts.atc['vhf_high_hz']), 'uhf': fmt_mhz(facts.atc['uhf_hz']),
                  'fm': fmt_mhz(facts.atc['vhf_low_hz']), 'hf': fmt_mhz(facts.atc['hf_hz'])}

@@ -337,8 +337,8 @@ def test_le_fichier_dcs_msa_v1(tmp_path, projection, capsys):
     assert doc['format'] == 'dcs-msa-v1' and doc['theatre'] == 'Syria' and doc['edition'] == 'test-ed'
     assert doc['source'] == {'relief': 'DCS World terrain elevation read in the game, 100 m grid',
                              'relief_grid_sha256': hashlib.sha256(g.alt.tobytes()).hexdigest(),
-                             'airfields': 'downloads/parkings/Syria.json (pydcs 84f6335, LGPL-3.0)'}
-    assert doc['rule'] == {'radius_nm': 25, 'centre': 'airfield reference point (pydcs)',
+                             'airfields': 'downloads/parkings/Syria.json (DCS mission editor)'}
+    assert doc['rule'] == {'radius_nm': 25, 'centre': 'airfield reference point (DCS mission editor)',
                            'sectors': 'magnetic bearing to the centre: 000-090, 090-180, 180-270, 270-360',
                            'variation': 'IGRF-14 at the centre, 1985', 'margin_ft': 1000, 'mountain_margin_ft': 2000,
                            'mountain_threshold_m': 1500, 'rounding': 'up to the next 100 ft',

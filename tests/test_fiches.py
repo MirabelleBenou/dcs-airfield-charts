@@ -215,7 +215,7 @@ def test_check_page_empty_cell_not_white_names_page_and_cell():
         fiches.check_page(5, gray, entries)
 
 
-# ---------- le rejeu reel de la mise en page (pydcs) ----------
+# ---------- le rejeu reel de la mise en page (faits du jeu) ----------
 @pytest.mark.parametrize('theatre,n_sites,n_pages,n_index', [('GermanyColdWar', 108, 30, 3), ('Syria', 141, 44, 3)])
 def test_replay_directory_counts(theatre, n_sites, n_pages, n_index):
     sites, pages, idx = fiches.replay_directory(theatre)

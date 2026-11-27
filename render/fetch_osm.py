@@ -127,7 +127,7 @@ def make_document(response, arp_latlon, fetched=None):
 
 
 def base_bbox_and_arp(theatre, base_json):
-    """(s, w, n, e) de zone_captured (4 coins) et (lat, lon) de l'ARP de l'aerodrome pydcs le plus proche."""
+    """(s, w, n, e) de zone_captured (4 coins) et (lat, lon) de l'ARP de l'aerodrome du jeu le plus proche."""
     from render import dcsdata, geo
     proj = geo.Projection.for_theatre(theatre)
     zc = base_json['zone_captured']

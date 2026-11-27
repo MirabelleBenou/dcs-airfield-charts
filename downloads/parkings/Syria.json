@@ -1,4 +1,4 @@
-{"format":"dcs-parkings-v1","theatre":"Syria","source":"pydcs 84f6335 (LGPL-3.0): parking stands of the DCS mission editor","airdromes":[
+{"format":"dcs-parkings-v1","theatre":"Syria","source":"DCS World 2.9.32.30490 mission editor (Eagle Dynamics): parking stands; non-commercial use","airdromes":[
 {"airdromeId":1,"name":"Abu al-Duhur","x":76048.96,"y":111344.93,"parkings":[
 {"parking":2,"parking_id":"26","x":76271.68,"y":112805.54,"heli":true,"plane":true,"length":40.0,"width":40.0,"height":12.0},
 {"parking":3,"parking_id":"25","x":76276.65,"y":112764.26,"heli":true,"plane":true,"length":36.0,"width":36.0,"height":15.0},

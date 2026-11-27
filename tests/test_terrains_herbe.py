@@ -124,11 +124,19 @@ def _facts(name):
     return dcsdata.airport_facts(ap)
 
 
+# DCS 2.9.32 nomme la piste de Worms 06-24 (pydcs 84f6335, DCS 2.9.31 : 25-7) ; les pistes declarees (releve en mission
+# de 2.9.31) disent encore 25 : aucune piste du jeu ne leur correspond plus (avant : une).
+GAME_2932_RENAMED = {'Worms': [('06', '24')]}
+
+
 @pytest.mark.parametrize('name', HERBE)
 def test_all_grass_strips_have_one_runway_matched_by_name(name):
     facts = _facts(name)
     declared = dcsdata.declared_runways(THEATRE, name, facts.name)
     refs = [(m.name, o.name) for m, o in facts.rw_refs]
+    if name in GAME_2932_RENAMED:
+        assert refs == GAME_2932_RENAMED[name] and runways.matching_refs(declared[0]['Name'], refs) == []
+        return
     assert len(runways.matching_refs(declared[0]['Name'], refs)) == 1
     rws = runways.runways_from_declared(declared, refs)
     assert len(rws) == 1

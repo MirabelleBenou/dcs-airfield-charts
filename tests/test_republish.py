@@ -64,6 +64,7 @@ def test_scale_block_1000_m_and_short_bars_are_unchanged():
 
 # ---------- la retouche egale a ce que scale_block ecrit ----------
 FOOT_TEXT = 'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics), via pydcs'
+NEW_FOOT_TEXT = 'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics)'      # le moteur, sans pydcs
 
 
 def foot_layer(new=False, left_x=None, extra=''):
@@ -503,16 +504,18 @@ def test_block_strips_the_blanks_of_the_file_and_refuses_a_missing_file(tmp_path
 
 
 def test_engine_footer_layer_equals_the_republish_retouch_of_the_old_form():
-    """Le calque Footer d'une page neuve (page.footer) est, a l'octet, celui qu'ecrit la retouche d'une page a l'ancienne forme."""
+    """Le calque Footer d'une page neuve (page.footer) est, a l'octet, celui qu'ecrit la retouche d'une page a l'ancienne forme,
+    au texte de gauche pres : la retouche garde celui de la page publiee (« via pydcs »), le moteur ne cite plus pydcs."""
     from types import SimpleNamespace
     d = svgdoc.Doc()
     page.footer(d, SimpleNamespace(taxiway_source='jeu', osm_icao=None), False)
-    assert '\n'.join(d.layers['Footer']) == foot_layer(new=True).split('\n', 1)[1].rsplit('\n', 1)[0]
+    new_form = foot_layer(new=True).replace(FOOT_TEXT, NEW_FOOT_TEXT)
+    assert '\n'.join(d.layers['Footer']) == new_form.split('\n', 1)[1].rsplit('\n', 1)[0]
     new_page = d.render()
     got, state = republish.retouch_footer(doc_svg('<rect x="1" y="1" width="2" height="2"/>'), 'X_10-9')
     assert state == 'retouchee'
     layer = lambda t: t[t.index('<g inkscape:groupmode="layer" id="layer-footer"'):t.rindex('</svg>')].rstrip('\n')
-    assert layer(got) == layer(new_page) == foot_layer(new=True)
+    assert layer(got) == foot_layer(new=True) and layer(new_page) == new_form
 
 
 def test_footer_retouch_changes_nothing_but_the_footer_layer():

@@ -6,7 +6,7 @@ Entree : un zip de la release (airfields ou helicopters). Chaque `…/svg/<page>
 puis la page est reexportee (SVG, PDF, PNG) et le recueil `pdf/<stem>_charts.pdf` de chaque chart est refait.
 Sortie : un nouveau zip, memes entrees dans le meme ordre ; les entrees hors charts (repertoire des heliports…) sont
 recopiees a l'octet (un zip sans page de chart, comme celui des helicopteres de Germany Cold War, est recopie tel quel). Un fichier de sortie qui existe deja : arret. Au moindre doute (page sans ses trois textes, ARP qui ne
-designe pas exactement un aerodrome pydcs, ecart de champs trop petit, recueil de longueur differente), rien n'est ecrit.
+designe pas exactement un aerodrome du jeu, ecart de champs trop petit, recueil de longueur differente), rien n'est ecrit.
 """
 import argparse
 import html
@@ -50,7 +50,7 @@ def row_elements(svg_text, page_name):
 
 
 def arp_index(theatre):
-    """{texte ARP: [(nom, lat, lon)]} des aerodromes pydcs du theatre (position projetee comme analysis.py)."""
+    """{texte ARP: [(nom, lat, lon)]} des aerodromes du jeu du theatre (position projetee comme analysis.py)."""
     terrain = dcsdata.load_terrain(theatre)
     proj = geo.Projection.for_theatre(theatre)
     out = {}
@@ -72,7 +72,7 @@ def rewrite_page(svg_text, page_name, index):
                           f'({sep1!r}, {sep2!r})')
     hits = index.get(arp, [])
     if len(hits) != 1:
-        raise UpdateError(f'{page_name} : {arp!r} designe {len(hits)} aerodromes pydcs '
+        raise UpdateError(f'{page_name} : {arp!r} designe {len(hits)} aerodromes du jeu '
                           f'({", ".join(n for n, _, _ in hits) or "aucun"}) au lieu d\'un seul')
     _, lat, lon = hits[0]
     try:

@@ -1,4 +1,5 @@
-"""Lot ac-oaci-balises-export : codes OACI et balises de downloads/navaids/ (sans echantillon ; la derniere partie en demande)."""
+"""Lot ac-oaci-balises-export : codes OACI et balises de downloads/navaids/ (sans echantillon ; la derniere partie en demande).
+Les trois theatres releves dans le jeu (ep.GAME) se regenerent ; les huit autres restent tels que pydcs 84f6335 les a produits."""
 import json
 import os
 import re
@@ -8,6 +9,7 @@ import pytest
 
 from render import export_navaids as en
 from render import export_parkings as ep
+from render import gamedata
 
 ROOT = Path(__file__).resolve().parent.parent
 PUB = ROOT / 'downloads' / 'navaids'
@@ -107,7 +109,7 @@ def _block(bid, typ, callsign, freq, pos, channel=None):
 
 @pytest.fixture(scope='module')
 def caucasus():
-    return ep.load_terrain('caucasus')
+    return ep.load_terrain('Caucasus')
 
 
 def _fake_lua(path, terrain):
@@ -179,14 +181,29 @@ def test_beacon_cited_by_two_ends_stops_even_with_same_name(tmp_path):
         en.beacons_data('Fake', terrain, f)
 
 
+def test_export_writes_the_three_game_theatres_only(tmp_path, monkeypatch):
+    monkeypatch.setattr(en, 'check_ourairports', lambda path: None)
+    csv = _csv(tmp_path, ['1,"UGKO","medium_airport","Kutaisi",42.176,42.482,"UGKO","UGKO"\n'])
+    out = tmp_path / 'out'
+    out.mkdir()
+    (out / 'Kola.json').write_bytes(b'kola')
+    written = en.export(csv, tmp_path / 'no_beacons', out, log=lambda *_: None)
+    assert sorted(written) == sorted(f'{k}.json' for k in ep.GAME)
+    assert (out / 'Kola.json').read_bytes() == b'kola'
+    assert sorted(p.name for p in out.iterdir()) == sorted([f'{k}.json' for k in ep.GAME] + ['Kola.json'])
+    d = json.loads((out / 'Caucasus.json').read_text(encoding='utf-8'))
+    assert {a['name']: a['icao'] for a in d['airdromes']}['Kutaisi'] == 'UGKO'
+    assert d['enroute'] is None and d['source']['beacons'] is None
+
+
 # ------------------------------------------------------ fichiers commites
 
 def _load(path):
     return json.loads(Path(path).read_text(encoding='utf-8'))
 
 
-def _commit():
-    return re.search(r'^pydcs @ git\+\S+@([0-9a-f]{40})$', (ROOT / 'requirements.txt').read_text(encoding='utf-8'), re.M).group(1)
+def _version():
+    return json.loads((gamedata.GAME_DIR / 'Syria.json').read_text(encoding='utf-8'))['dcs_version']
 
 
 def test_eleven_files_and_readme():
@@ -203,13 +220,16 @@ def test_committed_theatre(module, key):
     assert set(d) == {'format', 'theatre', 'source', 'airdromes', 'enroute'}
     src = d['source']
     assert set(src) == {'airfields', 'icao', 'beacons'}
-    assert src['airfields'] == f'pydcs {_commit()[:7]} (LGPL-3.0): airfield names and positions'
     assert src['icao'] == "OurAirports 64af129 (public domain): today's ICAO codes, matched by position within 3 km"
-    terrain = ep.load_terrain(module)
     aps = d['airdromes']
-    assert len(aps) == len(terrain.airports)
     assert [a['airdromeId'] for a in aps] == sorted(a['airdromeId'] for a in aps)
-    assert {a['airdromeId']: a['name'] for a in aps} == {ap.id: ap.name for ap in terrain.airports.values()}
+    if key in ep.GAME:
+        assert src['airfields'] == f'DCS World {_version()} mission editor (Eagle Dynamics): airfield names and positions'
+        terrain = ep.load_terrain(key)
+        assert len(aps) == len(terrain.airports)
+        assert {a['airdromeId']: a['name'] for a in aps} == {ap.id: ap.name for ap in terrain.airports.values()}
+    else:
+        assert src['airfields'] == 'pydcs 84f6335 (LGPL-3.0): airfield names and positions'   # fige
     park = _load(PARK / f'{key}.json')['airdromes']
     assert [(a['airdromeId'], a['name']) for a in aps] == [(a['airdromeId'], a['name']) for a in park]
     for a in aps:
@@ -233,8 +253,8 @@ def test_committed_theatre(module, key):
 
 def test_committed_icao_counts():
     counts = {k: sum(1 for a in _load(PUB / f'{k}.json')['airdromes'] if a['icao']) for k in KEYS}
-    assert counts['Caucasus'] == 12 and counts['PersianGulf'] == 28 and counts['Syria'] == 47 and counts['GermanyCW'] == 81
-    assert sum(counts.values()) == 292
+    assert counts['Caucasus'] == 12 and counts['PersianGulf'] == 28 and counts['Syria'] == 47 and counts['GermanyCW'] == 91
+    assert sum(counts.values()) == 302
 
 
 def test_soganlug_has_no_code():
@@ -247,10 +267,8 @@ def test_soganlug_has_no_code():
 
 def test_beacons_match_game_files(samples, tmp_path):
     terrains = samples / 'dcs_install' / 'Mods' / 'terrains'
-    for module, key in ep.THEATRES:
-        if key not in WITH_BEACONS:
-            continue
-        terrain = ep.load_terrain(module)
+    for key in WITH_BEACONS:
+        terrain = ep.load_terrain(key)
         f = en.find_beacons_file(terrains, key)
         assert f is not None
         per, enr = en.beacons_data(key, terrain, f)

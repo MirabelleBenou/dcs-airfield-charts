@@ -25,6 +25,25 @@ def test_projection_arp_konya():
     assert (x, z) == pytest.approx((ap.position.x, ap.position.y), abs=0.01)
 
 
+@pytest.mark.parametrize('theatre,x,z,lat,lon', [
+    ('Syria', 76048.957031, 111344.925781, 35.732306452623504, 37.10412796442225),
+    ('GermanyColdWar', -133238.0625, -530216.46875, 53.2023664293232, 12.52297475202279),
+    ('Caucasus', -5412.409668, 243128.820313, 45.004948084625696, 37.34782488305727),
+])
+def test_projection_constants(theatre, x, z, lat, lon):
+    """Les parametres de projection sont des constantes (pydcs 84f6335) : to_latlon a 1e-9 degre pres."""
+    assert geo.Projection.for_theatre(theatre).to_latlon(x, z) == pytest.approx((lat, lon), abs=1e-9)
+
+
+def test_projection_proj_string_and_other_theatres():
+    p = geo.Projection.for_theatre('germanycoldwar').params
+    assert p.proj4() == ('+proj=tmerc +lat_0=0 +lon_0=21 +k_0=0.9996 +x_0=35427.619999985734 +y_0=-6061633.128000011 '
+                         '+towgs84=0,0,0,0,0,0,0 +units=m +vunits=m +ellps=WGS84 +no_defs +axis=neu')
+    for name in ('Nevada', 'PersianGulf'):
+        with pytest.raises(ImportError, match=name):
+            geo.Projection.for_theatre(name)
+
+
 def test_convergence_is_small_and_signed():
     proj = geo.Projection.for_theatre('Syria')
     c = proj.convergence(343259.0, -282828.0)

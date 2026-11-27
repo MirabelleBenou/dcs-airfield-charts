@@ -310,7 +310,7 @@ def test_bands_and_mentions_of_adana(six):
     bal = texts(p.svg, 33.6)
     assert bal == ['NAVAIDS', 'VOR/DME', 'ADA 112.70 · 3.4 NM FROM THR', 'NDB', 'ADN 395 · 0.4 NM FROM THR']
     assert p.info['mentions'] == ("Not a real approach chart: DCS gives no procedure and no minima. Course: cockpit compass heading (grid − 1985 declination).",
-                                  "3° glide path assumed, from the glide slope antenna (331 m past the threshold); terrain not shown. Data: beacons.lua, pydcs.")
+                                  "3° glide path assumed, from the glide slope antenna (331 m past the threshold); terrain not shown. Data: beacons.lua, DCS mission editor.")
     allt = texts(p.svg)
     assert all(m in allt for m in p.info['mentions'])
     assert 'PROFILE — 3.0° GLIDE PATH' in allt and 'THR 05 56 FT' in allt and 'GRID NORTH (GAME NORTH) UP' in allt and '2 NM' in allt

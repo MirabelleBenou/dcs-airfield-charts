@@ -423,7 +423,7 @@ def footer_text(data, osm):
     """Texte de gauche du pied de page : OpenStreetMap n'est credite que pour ce qui vient d'OSM. Noms d'OSM (`osm` : des
     taxiways gardes) : « taxiways © OpenStreetMap contributors » ; noms du jeu (data.taxiway_source == 'jeu', fichier taxiways_dcs,
     couverts par « fichiers de DCS World ») : « OACI © OpenStreetMap contributors » si l'OACI vient du fichier OSM, sinon rien."""
-    s = 'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics), via pydcs'
+    s = 'DCS AIRFIELD CHARTS · data: F10 map and DCS World files (Eagle Dynamics)'
     if getattr(data, 'taxiway_source', 'osm') == 'jeu':
         if data.osm_icao:
             s += ' · ICAO © OpenStreetMap contributors'

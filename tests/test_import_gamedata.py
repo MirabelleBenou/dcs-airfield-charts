@@ -1,9 +1,12 @@
-"""tools/import_gamedata.py : refus et cas nominal, sur de petites reponses fabriquees ici (aucune reponse reelle)."""
+"""tools/import_gamedata.py : refus et cas nominal, sur de petites reponses fabriquees ici (aucune reponse reelle) ;
+le chargeur render/gamedata.py sur les fichiers du jeu commites."""
 import importlib.util
 import json
 from pathlib import Path
 
 import pytest
+
+from render import dcsdata, gamedata
 
 ROOT = Path(__file__).resolve().parent.parent
 _spec = importlib.util.spec_from_file_location('import_gamedata', ROOT / 'tools' / 'import_gamedata.py')
@@ -203,3 +206,183 @@ def test_refuses_body_not_quoted(tmp_path, capsys):
 def test_refuses_theatre_outside_the_three(tmp_path, capsys):
     refused(tmp_path, capsys, af(tmp_path, [V, 'N;1', airdrome(1)], theatre='Nevada'), "theatre 'Nevada'")
     refused(tmp_path, capsys, af(tmp_path, [V, 'N;1', airdrome(1)], theatre='GermanyCW'), "theatre 'GermanyCW'")
+
+
+def test_hook_line_after_the_string(tmp_path, capsys):
+    """La ligne du crochet `-- second retour : true` : acceptee (au plus une fois) ou absente ; tout autre texte, refuse."""
+    body = quote('\n'.join([V, 'N;1', airdrome(1)]))
+    ok = [body, body + '\n-- second retour : true', body + '\n-- second retour : true\n']
+    for i, raw in enumerate(ok):
+        p = tmp_path / f'ok{i}.txt'
+        p.write_bytes(('-- env gui, 2026-11-27 17:39:18\n' + raw).encode('utf-8'))
+        out = tmp_path / f'ok{i}.json'
+        assert run(['airfields', '--theatre', 'Syria', '--out', str(out), str(p)], capsys)[0] == 0, raw[-30:]
+    bad = ['\n-- second retour : false', '\n-- second retour : true\n-- second retour : true', '\n-- autre ligne',
+           '\n\n-- second retour : true', 'x']
+    for i, tail in enumerate(bad):
+        p = tmp_path / f'bad{i}.txt'
+        p.write_bytes(('-- env gui, 2026-11-27 17:39:18\n' + body + tail + '\n').encode('utf-8'))
+        refused(tmp_path, capsys, ['airfields', '--theatre', 'Syria', str(p)], 'texte apres la chaine')
+
+
+def test_refuses_other_header(tmp_path, capsys):
+    p = tmp_path / 'r.txt'
+    p.write_bytes(('-- env mission, 2026-11-27 17:39:18\n' + quote('\n'.join([V, 'N;1', airdrome(1)])) + '\n').encode('utf-8'))
+    refused(tmp_path, capsys, ['airfields', '--theatre', 'Syria', str(p)], "la ligne 1 n'est pas une en-tete")
+
+
+def test_refuses_raw_newline_in_the_string(tmp_path, capsys):
+    p = response(tmp_path, 'r.txt', None, raw_body='"' + V + '\nN;1"')
+    refused(tmp_path, capsys, ['airfields', '--theatre', 'Syria', str(p)], 'saut de ligne non echappe')
+
+
+def test_refuses_incomplete_runway_or_beacon(tmp_path, capsys):
+    refused(tmp_path, capsys, af(tmp_path, [V, 'N;1', airdrome(1).replace('runways.0.start=09;', '')]), 'piste 0 sans start')
+    refused(tmp_path, capsys, af(tmp_path, [V, 'N;1', airdrome(1).replace(';beacons.1.beaconId=airfield1_1', ';beacons.1.runwayId=1')]),
+            'balise 1 sans beaconId')
+
+
+def test_refuses_non_integer_frequency(tmp_path, capsys):
+    refused(tmp_path, capsys, af(tmp_path, [V, 'N;1', airdrome(1), 'F;1;frequencyList.1.1=122200000.5']),
+            "n'est pas un nombre entier de Hz")
+
+
+def test_refuses_flag_other_than_0_or_1(tmp_path, capsys):
+    stand = STAND.format(i=1, name='1', x=0).replace('params.FOR_HELICOPTERS=0', 'params.FOR_HELICOPTERS=2')
+    refused(tmp_path, capsys, af(tmp_path, [V, 'N;1', airdrome(1), 'S;1;1;' + stand]), "params.FOR_HELICOPTERS vaut '2'")
+
+
+def test_refuses_duplicate_f_line(tmp_path, capsys):
+    refused(tmp_path, capsys, af(tmp_path, [V, 'N;1', airdrome(1), 'F;1;name=a', 'F;1;name=b']),
+            "frequences de l'aerodrome 1 en double")
+
+
+def test_refuses_duplicate_aircraft_type(tmp_path, capsys):
+    u = 'U;A-10A;heli=false;height=4.47;length=16.26;wing_span=17.53'
+    p = response(tmp_path, 'u.txt', ['V;2.9.32.30490;me_db_api=present', 'N;2', u, u])
+    refused(tmp_path, capsys, ['aircraft', str(p)], 'type A-10A en double')
+
+
+# ------------------------------------------------------------------ le chargeur (render/gamedata.py)
+
+
+# Faits de la base (pydcs 84f6335), recopies : radios, pistes dans l'ordre, caps, balises des bouts de piste ; parkings :
+# nombre, premier et dernier, empreinte sha256 de la liste [nom, x, z, heli seul, avions, longueur, largeur] (en flottants).
+BASE_SYRIA = {
+    'Abu al-Duhur': dict(
+        id=1, x=76048.957031, z=111344.925781,
+        atc={'vhf_high_hz': 122200000, 'uhf_hz': 250500000, 'vhf_low_hz': 38950000, 'hf_hz': 4025000},
+        approaches=[('27', 270.0), ('09', 90.0)], beacons=[[('27', []), ('09', [])]],
+        n_slots=36, first=['26', 76271.684679983, 112805.5380375, False, True, 40.0, 40.0],
+        last=['30', 76293.3046875, 113035.640625, False, True, 18.449999, 13.049999],
+        sha='538d800434927aa07542b4631983256d36b318ef2500015f7f6bf7f8ce3e6b7e'),
+    'Incirlik': dict(
+        id=16, x=221207.773438, z=-35240.347656,
+        atc={'vhf_high_hz': 122100000, 'uhf_hz': 360100000, 'vhf_low_hz': 38750000, 'hf_hz': 3925000},
+        approaches=[('05', 50.0), ('23', 230.0)],
+        beacons=[[('05', ['airfield16_1', 'airfield16_2']), ('23', ['airfield16_3', 'airfield16_4'])]],
+        n_slots=126, first=['49', 221610.19207214, -35769.237346894, False, True, 26.0, 22.0],
+        last=['126', 220739.34375, -34893.79296875, False, True, 26.0, 24.0],
+        sha='20e32d7cdaf70457b69ee344ee4caabd5806562da6be27e602305b155429233b'),
+    'Damascus': dict(
+        id=7, x=-178652.320313, z=52081.296875,
+        atc={'vhf_high_hz': 118500000, 'uhf_hz': 253250000, 'vhf_low_hz': 41700000, 'hf_hz': 4900000},
+        approaches=[('05R', 50.0), ('23L', 230.0), ('05L', 50.0), ('23R', 230.0)],
+        beacons=[[('05R', ['airfield7_3', 'airfield7_6']), ('23L', [])], [('05L', []), ('23R', ['airfield7_1', 'airfield7_0'])]],
+        n_slots=71, first=['027', -182109.68730281, 50138.411195125, False, True, 26.0, 24.0],
+        last=['410', -180626.328125, 51986.86328125, False, True, 26.0, 24.0],
+        sha='a1c0af0bb7b0b8157325c891fc452eb52ac808059c79246174cbc0a492eab712'),
+}
+
+
+@pytest.mark.parametrize('name', sorted(BASE_SYRIA))
+def test_loader_facts_equal_the_base(name):
+    import hashlib
+    want = BASE_SYRIA[name]
+    ap = dcsdata.load_terrain('Syria').airports[name]
+    f = dcsdata.airport_facts(ap)
+    assert (f.id, f.name, f.x, f.z) == (want['id'], name, want['x'], want['z'])
+    assert f.atc == want['atc']
+    assert [(a.name, a.heading) for a in f.approaches] == want['approaches']
+    assert [[(e.name, [b.id for b in e.beacons]) for e in (r.main, r.opposite)] for r in ap.runways] == want['beacons']
+    slots = [[s.name, float(s.x), float(s.z), s.heli_only, s.airplanes, float(s.length), float(s.width)] for s in f.slots]
+    assert len(slots) == want['n_slots'] and slots[0] == want['first'] and slots[-1] == want['last']
+    assert hashlib.sha256(json.dumps(slots).encode()).hexdigest() == want['sha']
+
+
+def test_loader_terrain():
+    t = dcsdata.load_terrain('syria')
+    assert t.name == 'Syria' and t.dcs_version == '2.9.32.30490' and len(t.airports) == 224
+    assert [a.id for a in t.airports.values()] == sorted(a.id for a in t.airports.values())
+    assert (t.bounds.top, t.bounds.left, t.bounds.bottom, t.bounds.right) == (-320000, -579986, 300000, 579998)
+    g = dcsdata.load_terrain('GermanyColdWar')
+    assert g.name == 'GermanyColdWar' and len(g.airports) == 247
+    assert (g.bounds.top, g.bounds.left, g.bounds.bottom, g.bounds.right) == (200000, -600000, -1100000, -300000)
+    c = dcsdata.load_terrain('Caucasus')
+    assert (c.bounds.top, c.bounds.left, c.bounds.bottom, c.bounds.right) == (380000, -560000, -600000, 1130000)
+    assert sum(1 for a in c.airports.values() for s in a.parking_slots if s.height is None) == 68
+    assert dcsdata.load_terrain('Syria').airports['Incirlik'] is not t.airports['Incirlik']    # objets neufs
+
+
+def test_loader_order_rules(tmp_path, monkeypatch):
+    """Pistes et balises dans l'ordre de pydcs (1..n-1, puis 0) ; une piste d'id -1 n'a ni id ni balise ; cap = chiffres de
+    tete x 10 ; parkings par crossroad_index."""
+    a = {'id': 5, 'name': 'B', 'x': 1, 'z': 2, 'atc': None,
+         'runways': [{'id': 1, 'name': '09-27', 'start': '09', 'end': '27'},
+                     {'id': -1, 'name': '05L-23R', 'start': '05L', 'end': '23R'},
+                     {'id': 3, 'name': '18-36', 'start': '18', 'end': '36'}],
+         'beacons': [{'id': 'b0', 'runway_id': 1, 'side': '27'}, {'id': 'b1', 'runway_id': 1, 'side': '27'},
+                     {'id': 'b2', 'runway_id': -1, 'side': '05L'}, {'id': 'b3', 'runway_id': None, 'side': None},
+                     {'id': 'b4', 'runway_id': 1, 'side': '27'}],
+         'stands': [{'name': 'S2', 'crossroad_index': 9, 'x': 1, 'z': 2, 'heli': True, 'plane': False, 'length': 10,
+                     'width': 11, 'height': None},
+                    {'name': 'S1', 'crossroad_index': 4, 'x': 3, 'z': 4, 'heli': False, 'plane': True, 'length': 20,
+                     'width': 21, 'height': 5}]}
+    doc = {'format': 'dcs-airfields-v1', 'theatre': 'Caucasus', 'dcs_version': '9.9', 'source': 's', 'airdromes': [a]}
+    (tmp_path / 'Caucasus.json').write_text(json.dumps(doc), encoding='utf-8')
+    monkeypatch.setattr(gamedata, 'GAME_DIR', tmp_path)
+    gamedata._document.cache_clear()
+    try:
+        ap = gamedata.load_terrain('Caucasus').airports['B']
+    finally:
+        gamedata._document.cache_clear()
+    assert [(r.id, r.main.name, r.opposite.name) for r in ap.runways] == [(None, '05L', '23R'), (3, '18', '36'), (1, '09', '27')]
+    assert [(r.main.heading, r.opposite.heading) for r in ap.runways] == [(50, 230), (180, 360), (90, 270)]
+    assert [b.id for b in ap.runways[2].opposite.beacons] == ['b1', 'b4', 'b0']
+    assert ap.runways[0].main.beacons == [] and ap.runways[2].main.beacons == []
+    assert ap.atc_radio is None and (ap.position.x, ap.position.y) == (1.0, 2.0)
+    s1, s2 = ap.parking_slots
+    assert (s1.slot_name, s1.crossroad_idx, s1.helicopter, s1.airplanes, s1.length, s1.width, s1.height) == \
+        ('S1', 4, False, True, 20.0, 21.0, 5.0)
+    assert (s2.slot_name, s2.position.x, s2.position.y, s2.height) == ('S2', 1.0, 2.0, None)
+
+
+def test_loader_atc_radio():
+    atc = dcsdata.load_terrain('Syria').airports['Abu al-Duhur'].atc_radio
+    assert (atc.vhf_low_hz, atc.vhf_high_hz, atc.uhf_hz, atc.hf_hz) == (38950000, 122200000, 250500000, 4025000)
+
+
+def test_loader_refuses_other_theatre_or_missing_file(tmp_path, monkeypatch):
+    for name in ('Nevada', 'PersianGulf', 'GermanyCW'):
+        with pytest.raises(dcsdata.DataError, match=name):
+            dcsdata.load_terrain(name)
+    monkeypatch.setattr(gamedata, 'GAME_DIR', tmp_path)
+    gamedata._document.cache_clear()
+    try:
+        with pytest.raises(dcsdata.DataError, match='Syria'):
+            dcsdata.load_terrain('Syria')
+    finally:
+        gamedata._document.cache_clear()
+
+
+def test_committed_game_files_are_the_import_format():
+    for t, n_ap, n_st in (('GermanyColdWar', 247, 7724), ('Syria', 224, 3976), ('Caucasus', 21, 900)):
+        raw = (gamedata.GAME_DIR / f'{t}.json').read_bytes()
+        assert raw.endswith(b']}\n') and b'\r' not in raw
+        d = json.loads(raw.decode('utf-8'))
+        assert d['format'] == 'dcs-airfields-v1' and d['theatre'] == t and d['dcs_version'] == '2.9.32.30490'
+        assert len(d['airdromes']) == n_ap and sum(len(a['stands']) for a in d['airdromes']) == n_st
+        assert json.loads(ig.airfields_text(d)) == d and ig.airfields_text(d).encode('utf-8') == raw
+    a = json.loads((gamedata.GAME_DIR / 'aircraft.json').read_text(encoding='utf-8'))
+    assert a['format'] == 'dcs-aircraft-game-v1' and len(a['aircraft']) == 172
+    assert ig.aircraft_text(a) == (gamedata.GAME_DIR / 'aircraft.json').read_text(encoding='utf-8')
