@@ -26,6 +26,10 @@ Each version is a GitHub release, tagged `AC-V<major>.<minor>.<patch>`. A new ve
 - The other theatres in `downloads/parkings/` and `downloads/navaids/` are unchanged (still from pydcs 84f6335) until they are read in the game.
 - Charts drawn from now on no longer mention pydcs in their footer; pages already published keep theirs until they are redrawn.
 
+**Captures check the DCS window before and after every screenshot.**
+
+- All captures (charts, context, map tiles, taxiway signs) now read the size and place of the DCS window before and after each screenshot. If the window has moved or shrunk (seen on a two-screen PC, where Windows sometimes moves it to the other screen or narrows it), the screenshot is discarded, the window is put back where `fenetre_dcs` in `config.json` says, and the screenshot is taken again. Without `fenetre_dcs`, a window that no longer covers the primary screen stops the capture with a message. Each event is written to the log as a `FENETRE` line.
+
 ## AC-V1.12.0 — 26 November 2026
 
 **A website to find, view and download the charts.**

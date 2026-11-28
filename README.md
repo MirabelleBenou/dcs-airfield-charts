@@ -103,6 +103,7 @@ Copy `capture/config.example.json` to `capture/config.json` (ignored by git) and
 | `annee` | rendering only (optional, default `1985`): year used for the magnetic declination; a decimal such as `1987.5` is accepted |
 | `osm_dir` | rendering only (optional, default `<work_dir>/osm`): where the OpenStreetMap taxiway names are read and written |
 | `attente_vue_s` | taxiway sign capture only (optional, default `3`): seconds to wait after the free camera is placed before a view is taken; a decimal such as `2.5` is accepted, up to `30` |
+| `fenetre_dcs` | captures only (optional): where the DCS window must be, `[left, top, width, height]` in screen pixels, for example `[0, 0, 4806, 1440]` for a window that spans two screens; every screenshot checks it and puts the window back if it has moved; without it, the DCS window must cover the primary screen |
 
 The file is looked up in this order: the `--config <path>` command-line option, otherwise the `DCS_CHARTS_CONFIG` environment variable, otherwise `capture/config.json`. `~` is expanded. If the file is missing or incomplete, the script stops with a message saying so.
 
@@ -110,7 +111,7 @@ The file is looked up in this order: the `--config <path>` command-line option, 
 
 ## Unattended night captures (Windows, work in progress)
 
-`capture/autonome/nuit.py` plays a queue of captures written in advance, with nobody at the PC: F10 captures for the charts, wider F10 context captures (`--marge`) and taxiway sign views. The queue is a JSON file (`nuit.py verifier <nuit.json>` checks it and lists the commands, without DCS).
+`capture/autonome/nuit.py` plays a queue of captures written in advance, with nobody at the PC: F10 captures for the charts, wider F10 context captures (`--marge`) and taxiway sign views. The queue is a JSON file (`nuit.py verifier <nuit.json>` checks it and lists the commands, without DCS). Every screenshot checks the DCS window first (see `fenetre_dcs` above).
 
 1. Copy `capture/hook/ChartsAutonome-hook.lua` into `Saved Games\<DCS folder>\Scripts\Hooks\` and set `DOSSIER` on its first line to the folder `<work_dir>\autonome\`.
 2. Write the queue and arm the hook: `<work_dir>\autonome\file.lua` returns a table with `arme_le` (os.time()), `budget_s`, `attente_s`, `eteindre_au_budget` and `lancer`, the command that starts `nuit.py jouer <nuit.json>` (it must begin with `start`). An armed file older than 12 hours is ignored; `return false` keeps the hook silent.

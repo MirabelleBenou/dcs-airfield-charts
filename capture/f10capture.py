@@ -119,6 +119,10 @@ def wait_file(name):
 
 
 # ---------- fenetre DCS au premier plan ----------
+class _Rect(ctypes.Structure):
+    _fields_ = [('left', ctypes.c_long), ('top', ctypes.c_long), ('right', ctypes.c_long), ('bottom', ctypes.c_long)]
+
+
 _u32 = ctypes.windll.user32
 _k32 = ctypes.windll.kernel32
 _u32.GetForegroundWindow.restype = ctypes.c_void_p
@@ -128,6 +132,9 @@ _u32.IsIconic.argtypes = [ctypes.c_void_p]
 _u32.GetWindowTextW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int]
 _u32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
 _u32.IsWindowVisible.argtypes = [ctypes.c_void_p]
+_u32.IsWindow.argtypes = [ctypes.c_void_p]
+_u32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(_Rect)]
+_u32.MoveWindow.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
 _k32.OpenProcess.restype = ctypes.c_void_p
 _k32.QueryFullProcessImageNameW.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_wchar_p, ctypes.POINTER(ctypes.c_ulong)]
 _k32.CloseHandle.argtypes = [ctypes.c_void_p]
@@ -231,18 +238,118 @@ def screen_size():
     return _screen
 
 
-def grab():
-    """Ecran principal complet, RGB."""
+# ---------- controle de la fenetre de DCS a chaque prise d'ecran ----------
+FENETRE_RETOUR_S = 2.0        # apres une remise reussie : le temps que DCS redessine
+FENETRE_ATTENTE_S = 1.0       # apres chaque MoveWindow, avant de relire le rectangle
+FENETRE_ESSAIS = 5            # remises au plus, pour une fenetre mauvaise
+FENETRE_RELANCES = 3          # relances de suite d'une prise (move_and_stabilize) pour cause de remise
+fenetre_remises = 0           # remises reussies depuis le lancement du processus
+_dcs_hwnd = None              # handle de la fenetre de DCS, garde d'un appel a l'autre
+
+
+def _hwnd_dcs():
+    """Handle de la fenetre de DCS : celui qui est garde, ou, quand IsWindow le dit perime, une nouvelle recherche.
+    Introuvable : AskCdP."""
+    global _dcs_hwnd
+    if not _dcs_hwnd or not _u32.IsWindow(_dcs_hwnd):
+        _dcs_hwnd = find_dcs_window()
+        if not _dcs_hwnd:
+            raise AskCdP('ARRET : fenetre de DCS introuvable')
+    return _dcs_hwnd
+
+
+def _lire_fenetre_dcs():
+    """Rectangle de la fenetre de DCS : (gauche, haut, largeur, hauteur), en pixels d'ecran. Introuvable : AskCdP."""
+    r = _Rect()
+    _u32.GetWindowRect(_hwnd_dcs(), ctypes.byref(r))
+    return r.left, r.top, r.right - r.left, r.bottom - r.top
+
+
+def _remettre_fenetre_dcs(rect):
+    """Remet la fenetre de DCS au rectangle (gauche, haut, largeur, hauteur) : MoveWindow, fenetre repeinte."""
+    _u32.MoveWindow(_hwnd_dcs(), rect[0], rect[1], rect[2], rect[3], True)
+
+
+def _mss():
     global _sct
     if _sct is None:
         import mss
         _sct = mss.mss()
-    shot = _sct.grab(_sct.monitors[1])
-    img = np.asarray(shot)[:, :, :3][:, :, ::-1].copy()   # BGRA -> RGB
-    screen = screen_size()
-    if (img.shape[1], img.shape[0]) != screen:
-        raise AskCdP(f'ARRET : ecran {img.shape[1]}x{img.shape[0]} au lieu de {screen[0]}x{screen[1]}')
-    return img
+    return _sct
+
+
+def _moniteur_principal():
+    """Rectangle de l'ecran principal (le moniteur 1 de mss, celui que grab photographie) : (gauche, haut, largeur, hauteur)."""
+    m = _mss().monitors[1]
+    return m['left'], m['top'], m['width'], m['height']
+
+
+def _photo_ecran():
+    """Image RGB de l'ecran principal, telle que mss la prend (aucun controle)."""
+    shot = _mss().grab(_mss().monitors[1])
+    return np.asarray(shot)[:, :, :3][:, :, ::-1].copy()   # BGRA -> RGB
+
+
+def _fmt_rect(r):
+    return f'{r[0]},{r[1]},{r[2]},{r[3]}'
+
+
+def _fenetre_bonne(lue):
+    """Avec fenetre_dcs : le rectangle est exactement celui de la cle. Sans : la fenetre couvre en entier l'ecran principal."""
+    attendue = CFG.fenetre_dcs
+    if attendue is not None:
+        return tuple(lue) == tuple(attendue)
+    ml, mt, mw, mh = _moniteur_principal()
+    l, t, w, h = lue
+    return l <= ml and t <= mt and l + w >= ml + mw and t + h >= mt + mh
+
+
+def _trace_fenetre(lue, attendue, ok, essai):
+    print(f"FENETRE {datetime.now().isoformat(timespec='milliseconds')} lue {_fmt_rect(lue)} attendue "
+          f"{_fmt_rect(attendue) if attendue is not None else 'ecran principal'} : "
+          f"remise {'ok' if ok else 'echec'} (essai {essai})", flush=True)
+
+
+def _controler_fenetre():
+    """Controle la fenetre de DCS. Bonne : True. Mauvaise : avec fenetre_dcs, la remet (au plus FENETRE_ESSAIS essais, un
+    controle apres chacun), attend FENETRE_RETOUR_S et retourne False (l'appelant reprend sa prise) ; sans la cle, ou si la
+    remise reste sans effet : AskCdP."""
+    global fenetre_remises
+    lue = _lire_fenetre_dcs()
+    if _fenetre_bonne(lue):
+        return True
+    attendue = CFG.fenetre_dcs
+    if attendue is None:
+        _trace_fenetre(lue, None, False, 0)
+        raise AskCdP(f'ARRET : fenetre de DCS {_fmt_rect(lue)} ne couvre pas l\'ecran principal '
+                     f'(poser "fenetre_dcs" dans config.json)')
+    for essai in range(1, FENETRE_ESSAIS + 1):
+        _remettre_fenetre_dcs(attendue)
+        time.sleep(FENETRE_ATTENTE_S)
+        apres = _lire_fenetre_dcs()
+        ok = _fenetre_bonne(apres)
+        _trace_fenetre(lue, attendue, ok, essai)
+        if ok:
+            fenetre_remises += 1
+            time.sleep(FENETRE_RETOUR_S)
+            return False
+        lue = apres
+    raise AskCdP(f'ARRET : fenetre de DCS {_fmt_rect(lue)} au lieu de {_fmt_rect(attendue)} '
+                 f'({FENETRE_ESSAIS} remises sans effet)')
+
+
+def grab():
+    """Ecran principal complet, RGB. La fenetre de DCS est controlee avant et apres la photo : l'image n'est rendue que si
+    les deux controles sont bons (sinon elle est jetee, la fenetre remise, et on recommence)."""
+    while True:
+        if not _controler_fenetre():
+            continue
+        img = _photo_ecran()
+        screen = screen_size()
+        if (img.shape[1], img.shape[0]) != screen:
+            raise AskCdP(f'ARRET : ecran {img.shape[1]}x{img.shape[0]} au lieu de {screen[0]}x{screen[1]}')
+        if _controler_fenetre():
+            return img
 
 
 def crop(img):
@@ -255,11 +362,20 @@ def diff_frac(a, b):
 
 
 def move_and_stabilize(x, z, alt, expect_change=True, calme_s=None):
-    """Comme _move_and_stabilize, en s'assurant que DCS est au premier plan avant et apres (sinon on refait)."""
-    global _fg_fail_streak
+    """Comme _move_and_stabilize, en s'assurant que DCS est au premier plan avant et apres (sinon on refait), et que la
+    fenetre de DCS n'a pas du etre remise pendant la prise (sinon on refait aussi, sans image de reference d'avant la remise)."""
+    global _fg_fail_streak, _last
+    relances = 0
     while True:
         ensure_dcs_front('avant capture')
+        remises = fenetre_remises
         res = _move_and_stabilize(x, z, alt, expect_change, calme_s)
+        if fenetre_remises != remises:
+            relances += 1
+            if relances > FENETRE_RELANCES:
+                raise AskCdP(f'ARRET : fenetre de DCS remise {FENETRE_RELANCES} fois de suite pendant une prise')
+            _last = None
+            continue
         if dcs_in_front():
             return res
         _fg_incidents.append({'timestamp': datetime.now().isoformat(timespec='milliseconds'),
