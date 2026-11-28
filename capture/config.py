@@ -11,7 +11,9 @@ Ordre de recherche du fichier JSON :
 Cles : work_dir (obligatoire), dcs_install (obligatoire), screen (facultatif : [largeur, hauteur]),
 annee (facultatif : annee de la declinaison magnetique du rendu, defaut 1985), osm_dir (facultatif : defaut <work_dir>/osm),
 attente_vue_s (facultatif : prise des vues de panneaux, secondes d'attente apres la pose de la camera, defaut 3.0,
-0 < x <= 30).
+0 < x <= 30),
+fenetre_dcs (facultatif : [gauche, haut, largeur, hauteur] en pixels d'ecran, la place ou la fenetre de DCS doit etre ;
+chaque prise d'ecran la controle et la remet en place ; gauche et haut peuvent etre negatifs, largeur et hauteur > 0).
 Modele : config.example.json.
 """
 import json
@@ -35,6 +37,7 @@ class Config(NamedTuple):
     annee: float = 1985.0                   # rendu : annee de la declinaison magnetique (decimale acceptee)
     osm_dir: Optional[Path] = None          # rendu : noms de taxiways OSM (defaut : work_dir / 'osm')
     attente_vue_s: float = 3.0              # capture des panneaux : attente avant chaque vue (0 < x <= 30)
+    fenetre_dcs: Optional[Tuple[int, int, int, int]] = None   # captures : (gauche, haut, largeur, hauteur) de la fenetre de DCS
 
 
 def _fail(message):
@@ -126,6 +129,15 @@ def load_config(argv, environ=None, default_path=None):
             _fail(f'Fichier de configuration {src} : "attente_vue_s" doit etre un nombre de secondes, '
                   f'plus grand que 0 et au plus 30 (par exemple 3 ou 2.5).\n{hint}')
         attente_vue_s = float(w)
+    fenetre_dcs = None
+    if data.get('fenetre_dcs') is not None:
+        f = data['fenetre_dcs']
+        if (not isinstance(f, list) or len(f) != 4
+                or not all(isinstance(v, int) and not isinstance(v, bool) for v in f) or f[2] <= 0 or f[3] <= 0):
+            _fail(f'Fichier de configuration {src} : "fenetre_dcs" doit etre [gauche, haut, largeur, hauteur] en pixels '
+                  f'd\'ecran, quatre entiers (gauche et haut peuvent etre negatifs ou nuls, largeur et hauteur plus '
+                  f'grandes que 0), par exemple [0, 0, 4806, 1440].\n{hint}')
+        fenetre_dcs = (f[0], f[1], f[2], f[3])
 
     terrains = dcs_install / 'Mods' / 'terrains'
     if not terrains.is_dir():
@@ -136,4 +148,4 @@ def load_config(argv, environ=None, default_path=None):
     except OSError as e:
         _fail(f'Fichier de configuration {src} : "work_dir" inutilisable : {work_dir} ({e})\n{hint}')
     return Config(work_dir, dcs_install, terrains, screen, src, annee, osm_dir or work_dir / 'osm',
-                  attente_vue_s), rest
+                  attente_vue_s, fenetre_dcs), rest

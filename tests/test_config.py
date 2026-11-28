@@ -139,6 +139,30 @@ class ConfigTest(unittest.TestCase):
                 self.assertIn('attente_vue_s', msg)
                 self.assertIn('30', msg)
 
+    def test_fenetre_dcs_defaut(self):
+        self.write('defaut.json')
+        self.assertIsNone(self.load()[0].fenetre_dcs)
+
+    def test_fenetre_dcs_acceptee(self):
+        for good in ([0, 0, 4806, 1440], [-1366, 0, 4806, 1440]):
+            with self.subTest(fenetre_dcs=good):
+                self.write('defaut.json', fenetre_dcs=good)
+                cfg = self.load()[0]
+                self.assertEqual(cfg.fenetre_dcs, tuple(good))
+                self.assertIsInstance(cfg.fenetre_dcs, tuple)
+
+    def test_fenetre_dcs_refusee(self):
+        for bad in ([0, 0, 4806], [0, 0, 0, 1440], [0, 0, 4806, -1], [0, 0, 4806.0, 1440], [True, 0, 4806, 1440],
+                    '0,0,4806,1440', [0, 0, 4806, 1440, 0], [0, 0, 4806, 0], [0, 0, -4806, 1440], {'l': 0}, 5):
+            with self.subTest(fenetre_dcs=bad):
+                self.write('defaut.json', fenetre_dcs=bad)
+                msg = self.fail()
+                self.assertIn('fenetre_dcs', msg)
+                self.assertIn('[gauche, haut, largeur, hauteur]', msg)
+
+    def test_fenetre_dcs_en_dernier_champ(self):
+        self.assertEqual(config.Config._fields[-2:], ('attente_vue_s', 'fenetre_dcs'))
+
     def test_tilde_developpe(self):
         self.write('defaut.json', work_dir='~/dcs_charts_test_inexistant', dcs_install=str(self.dcs))
         home = self.tmp / 'home'
