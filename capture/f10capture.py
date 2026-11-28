@@ -57,7 +57,12 @@ GEOREF_VERSION = 2     # 2 : mosaic_coverage_m corrigee du recadrage de l'ecran 
 
 
 # ---------- hook ----------
+_derniere_requete = None      # derniere ligne envoyee au crochet (None : aucune, ou la camera a ete relachee)
+_derniere_requete_t = 0.0     # instant (perf_counter) de cet envoi
+
+
 def hook(line):
+    global _derniere_requete, _derniere_requete_t
     with socket.create_connection((HOST, PORT), timeout=5) as s:
         s.settimeout(5)
         s.sendall((line + '\n').encode())
@@ -67,6 +72,10 @@ def hook(line):
             if not d:
                 break
             buf += d
+    if line.strip() == 'release':
+        _derniere_requete = None
+    else:
+        _derniere_requete, _derniere_requete_t = line, time.perf_counter()
     return buf.decode().strip()
 
 
@@ -243,6 +252,8 @@ FENETRE_RETOUR_S = 2.0        # apres une remise reussie : le temps que DCS rede
 FENETRE_ATTENTE_S = 1.0       # apres chaque MoveWindow, avant de relire le rectangle
 FENETRE_ESSAIS = 5            # remises au plus, pour une fenetre mauvaise
 FENETRE_RELANCES = 3          # relances de suite d'une prise (move_and_stabilize) pour cause de remise
+FENETRE_TRANCHE_S = 0.5       # les attentes d'une remise se font par tranches de 0,5 s au plus
+FENETRE_RENVOI_S = 1.0        # entre deux tranches, la derniere ligne du crochet est renvoyee des qu'1 s s'est ecoulee
 fenetre_remises = 0           # remises reussies depuis le lancement du processus
 _dcs_hwnd = None              # handle de la fenetre de DCS, garde d'un appel a l'autre
 
@@ -259,10 +270,15 @@ def _hwnd_dcs():
 
 
 def _lire_fenetre_dcs():
-    """Rectangle de la fenetre de DCS : (gauche, haut, largeur, hauteur), en pixels d'ecran. Introuvable : AskCdP."""
-    r = _Rect()
-    _u32.GetWindowRect(_hwnd_dcs(), ctypes.byref(r))
-    return r.left, r.top, r.right - r.left, r.bottom - r.top
+    """Rectangle de la fenetre de DCS : (gauche, haut, largeur, hauteur), en pixels d'ecran. Introuvable : AskCdP.
+    GetWindowRect qui rend 0 (handle perime) : le handle garde est oublie, la fenetre cherchee de nouveau, une seule relecture."""
+    global _dcs_hwnd
+    for _ in range(2):
+        r = _Rect()
+        if _u32.GetWindowRect(_hwnd_dcs(), ctypes.byref(r)):
+            return r.left, r.top, r.right - r.left, r.bottom - r.top
+        _dcs_hwnd = None
+    raise AskCdP('ARRET : fenetre de DCS introuvable')
 
 
 def _remettre_fenetre_dcs(rect):
@@ -305,9 +321,35 @@ def _fenetre_bonne(lue):
 
 
 def _trace_fenetre(lue, attendue, ok, essai):
-    print(f"FENETRE {datetime.now().isoformat(timespec='milliseconds')} lue {_fmt_rect(lue)} attendue "
-          f"{_fmt_rect(attendue) if attendue is not None else 'ecran principal'} : "
+    """Une ligne FENETRE, videe tout de suite. attendue None (pas de cle) : aucune remise n'est tentee."""
+    stamp = datetime.now().isoformat(timespec='milliseconds')
+    if attendue is None:
+        print(f"FENETRE {stamp} lue {_fmt_rect(lue)} attendue ecran principal : pas de remise (fenetre_dcs absente)",
+              flush=True)
+        return
+    print(f"FENETRE {stamp} lue {_fmt_rect(lue)} attendue {_fmt_rect(attendue)} : "
           f"remise {'ok' if ok else 'echec'} (essai {essai})", flush=True)
+
+
+def _renvoyer_derniere_requete():
+    """Si une ligne a ete envoyee au crochet et qu'1 s ou plus s'est ecoulee depuis, la renvoie (par hook : la camera reste
+    tenue ; le crochet la relache apres 5 s sans requete) et le note pour l'entretien de _move_and_stabilize."""
+    global _last_send
+    if _derniere_requete is not None and time.perf_counter() - _derniere_requete_t >= FENETRE_RENVOI_S:
+        hook(_derniere_requete)
+        _last_send = time.perf_counter()
+
+
+def _attendre_en_tenant_la_camera(secondes):
+    """Attend `secondes` par tranches de FENETRE_TRANCHE_S au plus, en renvoyant la derniere ligne du crochet entre deux."""
+    fin = time.perf_counter() + secondes
+    _renvoyer_derniere_requete()
+    while True:
+        reste = fin - time.perf_counter()
+        if reste <= 0:
+            return
+        time.sleep(min(reste, FENETRE_TRANCHE_S))
+        _renvoyer_derniere_requete()
 
 
 def _controler_fenetre():
@@ -325,13 +367,13 @@ def _controler_fenetre():
                      f'(poser "fenetre_dcs" dans config.json)')
     for essai in range(1, FENETRE_ESSAIS + 1):
         _remettre_fenetre_dcs(attendue)
-        time.sleep(FENETRE_ATTENTE_S)
+        _attendre_en_tenant_la_camera(FENETRE_ATTENTE_S)
         apres = _lire_fenetre_dcs()
         ok = _fenetre_bonne(apres)
         _trace_fenetre(lue, attendue, ok, essai)
         if ok:
             fenetre_remises += 1
-            time.sleep(FENETRE_RETOUR_S)
+            _attendre_en_tenant_la_camera(FENETRE_RETOUR_S)
             return False
         lue = apres
     raise AskCdP(f'ARRET : fenetre de DCS {_fmt_rect(lue)} au lieu de {_fmt_rect(attendue)} '
@@ -340,16 +382,20 @@ def _controler_fenetre():
 
 def grab():
     """Ecran principal complet, RGB. La fenetre de DCS est controlee avant et apres la photo : l'image n'est rendue que si
-    les deux controles sont bons (sinon elle est jetee, la fenetre remise, et on recommence)."""
+    les deux controles sont bons (sinon elle est jetee, la fenetre remise, et on recommence). Au plus FENETRE_ESSAIS remises
+    reussies de suite dans un meme appel : a la suivante, AskCdP (une fenetre que Windows redeplace aussitot)."""
+    remises = 0
     while True:
-        if not _controler_fenetre():
-            continue
-        img = _photo_ecran()
-        screen = screen_size()
-        if (img.shape[1], img.shape[0]) != screen:
-            raise AskCdP(f'ARRET : ecran {img.shape[1]}x{img.shape[0]} au lieu de {screen[0]}x{screen[1]}')
         if _controler_fenetre():
-            return img
+            img = _photo_ecran()
+            screen = screen_size()
+            if (img.shape[1], img.shape[0]) != screen:
+                raise AskCdP(f'ARRET : ecran {img.shape[1]}x{img.shape[0]} au lieu de {screen[0]}x{screen[1]}')
+            if _controler_fenetre():
+                return img
+        remises += 1                      # une remise reussie vient d'avoir lieu (avant ou apres la photo)
+        if remises > FENETRE_ESSAIS:
+            raise AskCdP(f'ARRET : fenetre de DCS remise {FENETRE_ESSAIS} fois de suite pendant une prise d\'ecran')
 
 
 def crop(img):
@@ -369,7 +415,7 @@ def move_and_stabilize(x, z, alt, expect_change=True, calme_s=None):
     while True:
         ensure_dcs_front('avant capture')
         remises = fenetre_remises
-        res = _move_and_stabilize(x, z, alt, expect_change, calme_s)
+        res = _move_and_stabilize(x, z, alt, expect_change and relances == 0, calme_s)
         if fenetre_remises != remises:
             relances += 1
             if relances > FENETRE_RELANCES:

@@ -5,6 +5,7 @@ de la fenetre (`_lire_fenetre_dcs`), la remise (`_remettre_fenetre_dcs`), la pho
 rectangle de l'ecran principal (`_moniteur_principal`) sont remplaces ; `time` l'est aussi : aucune attente reelle."""
 import ctypes
 import re
+import sys
 import types
 from pathlib import Path
 
@@ -24,7 +25,9 @@ SUR_ECRAN_MFD = (3440, 0, 1366, 768)
 RETRECIE = (0, 0, 3440, 1440)
 
 LIGNE = re.compile(r'^FENETRE (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}) lue (-?\d+,-?\d+,\d+,\d+) attendue '
-                   r'(-?\d+,-?\d+,\d+,\d+|ecran principal) : remise (ok|echec) \(essai (\d)\)$')
+                   r'(-?\d+,-?\d+,\d+,\d+) : remise (ok|echec) \(essai (\d)\)$')
+LIGNE_SANS_CLE = re.compile(r'^FENETRE (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}) lue (-?\d+,-?\d+,\d+,\d+) '
+                            r'attendue ecran principal : pas de remise \(fenetre_dcs absente\)$')
 
 
 class Horloge:
@@ -54,6 +57,7 @@ class Faux:
         self.remises = []
         self.remise = lambda demande: demande
         self.apres_photo = lambda n: None
+        self.forcer = None                     # fonction(n lectures) -> rectangle lu, ou None (alors `rect`)
         self.horloge = Horloge()
         self.cfg = config.Config(tmp_path, tmp_path, tmp_path, ecran, tmp_path / 'config.json', fenetre_dcs=fenetre_dcs)
         monkeypatch.setattr(f10, 'CFG', self.cfg)
@@ -67,10 +71,15 @@ class Faux:
         monkeypatch.setattr(f10, 'fenetre_remises', 0)
         monkeypatch.setattr(f10, '_last', None)
         monkeypatch.setattr(f10, '_last_send', 0.0)
+        monkeypatch.setattr(f10, '_derniere_requete', None)
+        monkeypatch.setattr(f10, '_derniere_requete_t', 0.0)
 
     def lire(self):
-        self.evenements.append(('lire', self.rect))
-        return self.rect
+        n = len(self.indice('lire')) + 1
+        r = self.forcer(n) if self.forcer else None
+        r = self.rect if r is None else r
+        self.evenements.append(('lire', r))
+        return r
 
     def remettre(self, rect):
         self.evenements.append(('remettre', tuple(rect)))
@@ -123,7 +132,8 @@ def test_mauvaise_avant_la_photo_remise_puis_photo(faux, capsys):
     m = LIGNE.match(ls[0])
     assert m, ls[0]
     assert m.group(2, 3, 4, 5) == ('3440,0,1366,768', '0,0,4806,1440', 'ok', '1')
-    assert d.horloge.pauses == [f10.FENETRE_ATTENTE_S, f10.FENETRE_RETOUR_S] == [1.0, 2.0]
+    assert sum(d.horloge.pauses) == f10.FENETRE_ATTENTE_S + f10.FENETRE_RETOUR_S == 3.0
+    assert max(d.horloge.pauses) <= f10.FENETRE_TRANCHE_S == 0.5      # toutes les attentes par tranches de 0,5 s
 
 
 def test_mauvaise_seulement_apres_la_photo_image_jetee_et_reprise(faux, capsys):
@@ -170,7 +180,7 @@ def test_jamais_remise_askcdp_apres_cinq_remises(faux, capsys):
     assert d.photos == 0 and f10.fenetre_remises == 0
     ls = [LIGNE.match(l) for l in lignes(capsys)]
     assert [m.group(4, 5) for m in ls] == [('echec', str(i)) for i in range(1, 6)]
-    assert d.horloge.pauses == [1.0] * 5
+    assert sum(d.horloge.pauses) == 5.0 and max(d.horloge.pauses) <= 0.5
 
 
 def test_fenetre_a_peine_decalee_est_mauvaise(faux):
@@ -220,7 +230,9 @@ def test_sans_cle_fenetre_qui_ne_couvre_pas_askcdp_tout_de_suite(faux, rect, cap
     assert msg == (f'ARRET : fenetre de DCS {rect[0]},{rect[1]},{rect[2]},{rect[3]} ne couvre pas l\'ecran principal '
                    f'(poser "fenetre_dcs" dans config.json)')
     ls = lignes(capsys)
-    assert len(ls) == 1 and 'attendue ecran principal' in ls[0] and LIGNE.match(ls[0])
+    assert len(ls) == 1
+    m = LIGNE_SANS_CLE.match(ls[0])
+    assert m and m.group(2) == f'{rect[0]},{rect[1]},{rect[2]},{rect[3]}'
 
 
 def test_sans_cle_mauvaise_seulement_apres_la_photo(faux):
@@ -257,13 +269,16 @@ class FauxUser32:
 
     def __init__(self, vivantes, rect=(10, 20, 4816, 1460)):
         self.vivantes, self.rect, self.deplacements, self.lectures = set(vivantes), rect, [], []
+        self.retours = []                      # codes rendus par GetWindowRect, dans l'ordre (1 ensuite)
         self.IsWindow = lambda h: h in self.vivantes
 
     def GetWindowRect(self, hwnd, ref):
         self.lectures.append(hwnd)
-        r = ref._obj
-        r.left, r.top, r.right, r.bottom = self.rect
-        return 1
+        code = self.retours.pop(0) if self.retours else 1
+        if code:
+            r = ref._obj
+            r.left, r.top, r.right, r.bottom = self.rect
+        return code
 
     def MoveWindow(self, *args):
         self.deplacements.append(args)
@@ -402,6 +417,187 @@ def test_grab_reel_dans_une_prise_la_remise_compte_et_rejoue(faux, monkeypatch, 
     img, delai, n, ok, cmd = f10.move_and_stabilize(1.0, 2.0, 3.0, expect_change=False)
     assert ok and f10.fenetre_remises == 1 and len(debuts) == 2 and debuts == [None, None]
     assert d.remises == [(0, 0, 740, 300)] and len(lignes(capsys)) == 1
+
+
+# ------------------------------------------------------------------ addendum 1
+
+class FauxSocket:
+    """Connexion au crochet : note (heure simulee, ligne) de chaque envoi, repond `ok`."""
+
+    def __init__(self, envois, horloge):
+        self.envois, self.horloge = envois, horloge
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def settimeout(self, t):
+        pass
+
+    def sendall(self, data):
+        self.envois.append((self.horloge.t, data.decode().strip()))
+
+    def recv(self, n):
+        return b'ok 1 2 3\n'
+
+
+def crochet_factice(monkeypatch, horloge):
+    envois = []
+    monkeypatch.setattr(f10, 'socket', types.SimpleNamespace(
+        create_connection=lambda adresse, timeout=None: FauxSocket(envois, horloge)))
+    return envois
+
+
+def test_a1_camera_tenue_pendant_une_remise_en_deux_essais(faux, monkeypatch):
+    d = faux(rect=SUR_ECRAN_MFD)
+    essais = []
+    d.remise = lambda demande: (essais.append(1), demande if len(essais) == 2 else SUR_ECRAN_MFD)[1]
+    envois = crochet_factice(monkeypatch, d.horloge)
+    f10.hook('cam 1.000 2.000 30.0 90.0 -10.00')           # la derniere ligne du crochet, a t = 0
+    f10.grab()
+    assert len(d.remises) == 2 and f10.fenetre_remises == 1
+    fin = d.horloge.t
+    assert fin == 4.0                                       # 1 s + 1 s + 2 s
+    assert {ligne for _, ligne in envois} == {'cam 1.000 2.000 30.0 90.0 -10.00'}    # toujours la derniere ligne
+    heures = [t for t, _ in envois]
+    assert len(heures) >= 4
+    ecarts = [b - a for a, b in zip(heures, heures[1:])] + [fin - heures[-1]]
+    assert min(ecarts[:-1]) >= 1.0                          # jamais deux fois en moins d'1 s
+    assert max(ecarts) <= 2.0                               # au moins une fois par tranche de 2 s
+    assert f10._last_send == heures[-1]                     # l'entretien de _move_and_stabilize en tient compte
+
+
+def test_a1_sans_ligne_envoyee_on_attend_sans_rien_renvoyer(faux, monkeypatch):
+    d = faux(rect=SUR_ECRAN_MFD)
+    envois = crochet_factice(monkeypatch, d.horloge)
+    f10.grab()
+    assert envois == [] and d.horloge.t == 3.0
+
+
+def test_a1_une_camera_relachee_n_est_pas_reprise(faux, monkeypatch):
+    d = faux(rect=SUR_ECRAN_MFD)
+    envois = crochet_factice(monkeypatch, d.horloge)
+    f10.hook('xz 1.000 2.000 1500.0')
+    f10.hook('release')
+    f10.grab()
+    assert [ligne for _, ligne in envois] == ['xz 1.000 2.000 1500.0', 'release']
+    assert f10._derniere_requete is None
+
+
+def test_a1_la_ligne_est_renvoyee_par_hook_et_memorisee(faux, monkeypatch):
+    d = faux()
+    crochet_factice(monkeypatch, d.horloge)
+    d.horloge.t = 7.0
+    assert f10.hook('xz 5.000 6.000 1500.0') == 'ok 1 2 3'
+    assert f10._derniere_requete == 'xz 5.000 6.000 1500.0' and f10._derniere_requete_t == 7.0
+
+
+def test_a2_prise_rejouee_sans_attendre_un_changement_deja_fait(monkeypatch):
+    p = Prise(monkeypatch, [True, False])
+    appels = []
+    reel = f10._move_and_stabilize
+    monkeypatch.setattr(f10, '_move_and_stabilize', lambda *a, **k: (appels.append(a), reel(*a, **k))[1])
+    img, delai, n, ok, cmd = f10.move_and_stabilize(1.0, 2.0, 3.0, expect_change=True, calme_s=None)
+    assert [a[3] for a in appels] == [True, False]          # la relance n'attend plus de changement
+    assert ok is True and delai < f10.TIMEOUT_S / 10        # rendue stable en bien moins de TIMEOUT_S
+
+
+def test_a2_expect_change_reste_vrai_tant_qu_il_n_y_a_pas_eu_de_remise(monkeypatch):
+    p = Prise(monkeypatch, [False])
+    appels = []
+    reel = f10._move_and_stabilize
+    monkeypatch.setattr(f10, '_move_and_stabilize', lambda *a, **k: (appels.append(a), reel(*a, **k))[1])
+    f10.move_and_stabilize(1.0, 2.0, 3.0, expect_change=True, calme_s=None)    # rien ne change : plafond, ok False
+    assert [a[3] for a in appels] == [True]
+
+
+def test_a3_au_plus_cinq_remises_reussies_de_suite_dans_un_grab(faux, capsys):
+    d = faux()
+    d.forcer = lambda n: SUR_ECRAN_MFD if n % 2 == 1 else ATTENDUE     # Windows redeplace la fenetre apres chaque remise
+    with pytest.raises(f10.AskCdP) as e:
+        f10.grab()
+    assert str(e.value) == "ARRET : fenetre de DCS remise 5 fois de suite pendant une prise d'ecran"
+    assert f10.FENETRE_ESSAIS == 5
+    assert len(d.remises) == 6 and f10.fenetre_remises == 6      # la sixieme remise reussie arrete
+    assert d.photos == 0
+    assert len(lignes(capsys)) == 6
+
+
+def test_a3_cinq_remises_reussies_de_suite_restent_permises(faux):
+    d = faux()
+    d.forcer = lambda n: SUR_ECRAN_MFD if n % 2 == 1 and n <= 9 else ATTENDUE
+    img = f10.grab()
+    assert len(d.remises) == 5 and d.photos == 1 and (img == 1).all()
+
+
+def test_a3_la_limite_compte_aussi_les_remises_apres_la_photo(faux):
+    d = faux()
+    d.apres_photo = lambda n: setattr(d, 'rect', RETRECIE)       # DCS retreci pendant chaque prise
+    with pytest.raises(f10.AskCdP, match='remise 5 fois de suite pendant une prise d\'ecran'):
+        f10.grab()
+    assert d.photos == 6 and len(d.remises) == 6
+
+
+def test_a4_1_sans_cle_la_ligne_dit_pas_de_remise(faux, capsys):
+    d = faux(fenetre_dcs=None, rect=SUR_ECRAN_MFD)
+    with pytest.raises(f10.AskCdP):
+        f10.grab()
+    ls = lignes(capsys)
+    assert len(ls) == 1 and 'remise echec' not in ls[0]
+    assert LIGNE_SANS_CLE.match(ls[0]).group(2) == '3440,0,1366,768'
+    assert ls[0].endswith('attendue ecran principal : pas de remise (fenetre_dcs absente)')
+
+
+def test_a4_2_getwindowrect_qui_rend_zero_cherche_la_fenetre_et_relit_une_fois(monkeypatch):
+    u32 = FauxUser32({111, 222})
+    u32.retours = [0]
+    cherches = []
+    monkeypatch.setattr(f10, '_u32', u32)
+    monkeypatch.setattr(f10, '_dcs_hwnd', 111)
+    monkeypatch.setattr(f10, 'find_dcs_window', lambda: (cherches.append(1), 222)[1])
+    assert LIRE_REELLE() == (10, 20, 4806, 1440)
+    assert u32.lectures == [111, 222] and len(cherches) == 1     # le handle garde est oublie, la fenetre cherchee de nouveau
+    assert f10._dcs_hwnd == 222
+
+
+def test_a4_2_getwindowrect_qui_rend_encore_zero_askcdp_introuvable(monkeypatch):
+    u32 = FauxUser32({111, 222})
+    u32.retours = [0, 0]
+    cherches = []
+    monkeypatch.setattr(f10, '_u32', u32)
+    monkeypatch.setattr(f10, '_dcs_hwnd', 111)
+    monkeypatch.setattr(f10, 'find_dcs_window', lambda: (cherches.append(1), 222)[1])
+    with pytest.raises(f10.AskCdP, match='introuvable'):
+        LIRE_REELLE()
+    assert u32.lectures == [111, 222] and len(cherches) == 1     # une relecture, pas davantage
+
+
+class SortieFactice:
+    """Sortie standard factice : note chaque ecriture et chaque appel de flush."""
+
+    def __init__(self):
+        self.evenements = []
+
+    def write(self, texte):
+        self.evenements.append(('write', texte))
+        return len(texte)
+
+    def flush(self):
+        self.evenements.append(('flush', None))
+
+
+def test_a4_3_la_ligne_est_videe_tout_de_suite(faux, monkeypatch):
+    d = faux(rect=SUR_ECRAN_MFD)
+    sortie = SortieFactice()
+    monkeypatch.setattr(sys, 'stdout', sortie)
+    f10.grab()
+    ev = sortie.evenements
+    ecritures = [i for i, e in enumerate(ev) if e[0] == 'write' and 'FENETRE' in e[1]]
+    assert len(ecritures) == 1
+    assert any(e[0] == 'flush' for e in ev[ecritures[0]:])          # un flush apres l'ecriture de la ligne
+    assert ev[-1][0] == 'flush'                                     # et rien n'est reste dans le tampon
 
 
 # ------------------------------------------------------------------ le module, les fichiers
